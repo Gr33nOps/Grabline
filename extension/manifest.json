@@ -41,6 +41,11 @@
       "matches": ["<all_urls>"],
       "js": ["content/overlay.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content/sites/youtube.js"],
+      "run_at": "document_idle"
     }
   ]
 }

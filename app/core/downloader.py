@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import threading
 from enum import Enum
 from pathlib import Path
@@ -27,6 +28,7 @@ from app.core import naming
 from app.core.errors import DownloadError
 from app.core.models import Job, JobStatus, Segment
 from app.core.probe import ProbeResult, probe
+from app.core.ratelimit import RateLimiter
 from app.db.database import Database
 
 log = logging.getLogger(__name__)
@@ -111,6 +113,7 @@ class SegmentedDownload:
         max_retries: int = 5,
         retry_backoff: float = 0.25,
         checkpoint_interval: float = 0.3,
+        limiter: RateLimiter | None = None,
     ) -> None:
         self.db = db
         self.job = job
@@ -118,6 +121,7 @@ class SegmentedDownload:
         self.chunk_size = chunk_size
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
+        self.limiter = limiter
         self._client = httpx.Client(
             follow_redirects=True,
             timeout=httpx.Timeout(30.0, connect=15.0),
@@ -228,11 +232,22 @@ class SegmentedDownload:
             return job.total_size != result.total_size
         return False
 
+    #: Refuse to fill the disk to the brim (S6).
+    DISK_SPACE_MARGIN = 64 * 1024 * 1024
+
     def _preallocate(self, part: Path) -> None:
         part.parent.mkdir(parents=True, exist_ok=True)
+        total = self.job.total_size
+        if total:
+            already = part.stat().st_size if part.exists() else 0
+            free = shutil.disk_usage(part.parent).free
+            if free < total - already + self.DISK_SPACE_MARGIN:
+                raise DownloadError(
+                    "not enough free disk space for this download "
+                    f"(need {total} bytes plus headroom)"
+                )
         if not part.exists():
             part.touch()
-        total = self.job.total_size
         if total:
             with open(part, "r+b") as handle:
                 handle.seek(0, os.SEEK_END)
@@ -305,6 +320,8 @@ class SegmentedDownload:
                 self._write_at(handle, data, segment.start + segment.downloaded)
                 segment.downloaded += len(data)
                 self._checkpointer.report(segment.id, segment.downloaded)
+                if self.limiter is not None:
+                    self.limiter.throttle(len(data))
         if segment.start + segment.downloaded <= end:
             raise _Retry("server closed the connection early")
 
@@ -327,6 +344,8 @@ class SegmentedDownload:
                 self._write_at(handle, chunk, segment.start + segment.downloaded)
                 segment.downloaded += len(chunk)
                 self._checkpointer.report(segment.id, segment.downloaded)
+                if self.limiter is not None:
+                    self.limiter.throttle(len(chunk))
         if segment.end is None:
             # Stream ended cleanly: now we finally know the size.
             segment.end = segment.downloaded - 1

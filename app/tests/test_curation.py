@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.engines.smart import curate_formats, friendly_error
+from app.engines.smart import (
+    curate_formats,
+    friendly_error,
+    generic_quality_options,
+    parse_playlist,
+)
 
 MB = 1024 * 1024
 
@@ -100,6 +105,45 @@ def test_audio_only_source_still_offers_audio():
 
 def test_empty_formats_yield_no_options():
     assert curate_formats({"formats": []}) == ()
+
+
+def test_parse_playlist_flat_listing():
+    info = {
+        "_type": "playlist",
+        "title": "Lecture Series",
+        "uploader": "Prof X",
+        "webpage_url": "https://tube.example/playlist?list=1",
+        "entries": [
+            {"url": "https://tube.example/watch?v=a", "title": "Intro", "duration": 60},
+            None,  # deleted video
+            {"url": "abc123", "ie_key": "Youtube", "title": "Part 2"},
+            {"url": "notaurl", "ie_key": "Other", "title": "skipped"},
+        ],
+    }
+    playlist = parse_playlist(info)
+    assert playlist is not None
+    assert playlist.title == "Lecture Series"
+    assert playlist.uploader == "Prof X"
+    assert [entry.url for entry in playlist.entries] == [
+        "https://tube.example/watch?v=a",
+        "https://www.youtube.com/watch?v=abc123",
+    ]
+    assert playlist.entries[0].duration == 60
+    # original positions survive the gaps
+    assert [entry.index for entry in playlist.entries] == [1, 3]
+
+
+def test_parse_playlist_returns_none_for_videos():
+    assert parse_playlist({"_type": "video", "formats": []}) is None
+    assert parse_playlist({"id": "x", "formats": []}) is None
+
+
+def test_generic_quality_options_shape():
+    options = generic_quality_options()
+    labels = [option.label for option in options]
+    assert labels == ["Best", "1080p", "720p", "480p", "MP3", "M4A"]
+    assert options[-2].audio_format == "mp3"
+    assert all(option.format_spec for option in options)
 
 
 def test_friendly_errors():

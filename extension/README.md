@@ -50,8 +50,15 @@ right-click / ⬇ / popup → background.js → Native Messaging host
     → quality panel (Smart Engine) or straight into the queue
 ```
 
+## Site modules
+
+`content/sites/youtube.js` adds a hover ⬇ to video thumbnails (home, search,
+channels, Shorts shelf) so a video can be grabbed without opening it — the
+desktop app pops its quality panel. Every selector lives in one constant at
+the top of that file; when YouTube's DOM churns, that file is the whole blast
+radius, and right-click + paste keep working regardless.
+
 ## Still to come in this phase
 
-- YouTube site module: thumbnail/player-bar buttons + in-page quality panel
-  (F1.3) — isolated in `content/sites/youtube/` when it lands
-- Playlist selection UI (F1.7)
+- In-page quality panel + live progress pill on YouTube (the full F1.3 —
+  currently the quality choice happens in the desktop app's panel)

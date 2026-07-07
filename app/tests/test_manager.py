@@ -84,6 +84,58 @@ def test_manager_dispatches_smart_jobs(
     assert sha256_file(dest / "Manager Clip.mp4") == sha256(data)
 
 
+def test_add_smart_entry_for_playlist_items(db: Database, dest: Path):
+    from app.engines.smart import generic_quality_options
+
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        option = generic_quality_options()[0]
+        job = manager.add_smart_entry(
+            "https://tube.example/watch?v=xyz", "Episode 12", option, dest_dir=dest
+        )
+        assert job.kind is JobKind.SMART
+        assert job.title == "Episode 12"
+        assert job.filename == "Episode 12.mp4"
+        assert job.options["format_spec"] == option.format_spec
+    finally:
+        manager.shutdown()
+
+
+def test_remove_deletes_row_but_keeps_completed_file(db: Database, dest: Path):
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        job = db.create_job("http://x.test/keep.bin", str(dest), "keep.bin")
+        db.set_job_status(job.id, JobStatus.COMPLETED)
+        artifact = dest / "keep.bin"
+        artifact.write_bytes(b"data")
+        manager.remove(job.id)
+        assert db.get_job(job.id) is None
+        assert artifact.exists()  # history removal never deletes finished files
+    finally:
+        manager.shutdown()
+
+
+def test_reload_settings_applies_speed_cap(db: Database):
+    from app.core.settings import Settings
+
+    settings = Settings(db)
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        assert manager.limiter.rate == 0
+        settings.speed_limit_kbps = 512
+        manager.reload_settings()
+        assert manager.limiter.rate == 512 * 1024
+        # dynamic concurrency: no override given at construction
+        dynamic = DownloadManager(db, settings=settings)
+        try:
+            settings.max_concurrent = 7
+            assert dynamic.max_concurrent == 7
+        finally:
+            dynamic.shutdown()
+    finally:
+        manager.shutdown()
+
+
 def test_add_url_sorts_into_categories(server: MediaServer, db: Database, tmp_path: Path):
     url = server.add("/report.pdf", payload(10_000, 23))
     settings = Settings(db)

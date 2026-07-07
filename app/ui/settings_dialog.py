@@ -74,6 +74,13 @@ class SettingsDialog(QDialog):
         self.connections_spin.setRange(1, 16)
         self.connections_spin.setValue(settings.connections)
         form.addRow("Connections per download:", self.connections_spin)
+        self.speed_spin = QSpinBox()
+        self.speed_spin.setRange(0, 1_000_000)
+        self.speed_spin.setSingleStep(256)
+        self.speed_spin.setSuffix(" KB/s")
+        self.speed_spin.setSpecialValueText("Unlimited")
+        self.speed_spin.setValue(settings.speed_limit_kbps)
+        form.addRow("Speed limit:", self.speed_spin)
         self.clipboard_check = QCheckBox("Offer to download URLs copied to the clipboard")
         self.clipboard_check.setChecked(settings.clipboard_watcher)
         form.addRow("", self.clipboard_check)
@@ -175,6 +182,7 @@ class SettingsDialog(QDialog):
         self.settings.session_browser = self.browser_combo.currentData()
         self.settings.max_concurrent = self.concurrent_spin.value()
         self.settings.connections = self.connections_spin.value()
+        self.settings.speed_limit_kbps = self.speed_spin.value()
         self.accept()
 
     def done(self, result: int) -> None:

@@ -76,6 +76,59 @@ def test_main_window_lists_jobs(db: Database, tmp_path: Path):
         manager.shutdown()
 
 
+def test_playlist_panel_selection(db: Database):
+    from PySide6.QtCore import Qt
+
+    from app.engines.smart import PlaylistEntry, PlaylistInfo
+    from app.ui.playlist_panel import PlaylistPanel
+
+    _qapp()
+    playlist = PlaylistInfo(
+        url="https://tube.example/playlist?list=1",
+        title="Big Course",
+        uploader="Prof",
+        entries=tuple(
+            PlaylistEntry(
+                url=f"https://tube.example/watch?v={i}",
+                title=f"Lesson {i}",
+                duration=60,
+                index=i,
+            )
+            for i in range(1, 41)
+        ),
+    )
+    panel = PlaylistPanel(playlist, preselect_cap=30)
+    assert panel.entry_list.count() == 40
+    assert len(panel.selected_entries()) == 30  # cap preselects the first 30
+    panel._set_all(Qt.CheckState.Checked)
+    assert len(panel.selected_entries()) == 40
+    panel._set_all(Qt.CheckState.Unchecked)
+    panel.entry_list.item(2).setCheckState(Qt.CheckState.Checked)
+    selected = panel.selected_entries()
+    assert [entry.title for entry in selected] == ["Lesson 3"]
+    assert panel.selected_option().label == "Best"
+
+
+def test_main_window_search_filter(db: Database, tmp_path: Path):
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        db.create_job("http://example.invalid/report.pdf", str(tmp_path), "report.pdf")
+        db.create_job("http://example.invalid/movie.mkv", str(tmp_path), "movie.mkv")
+        window = MainWindow(manager, settings)
+        window.refresh()
+        assert window.table.rowCount() == 2
+        window.search_box.setText("movie")
+        assert window.table.isRowHidden(0)
+        assert not window.table.isRowHidden(1)
+        window.search_box.setText("")
+        assert not window.table.isRowHidden(0)
+    finally:
+        manager.shutdown()
+
+
 def test_quality_panel_selection_and_trim(db: Database):
     _qapp()
     media = MediaInfo(

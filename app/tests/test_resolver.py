@@ -5,7 +5,13 @@ import pytest
 from app.core.errors import DownloadError
 from app.core.models import JobKind
 from app.core.resolver import Resolver
-from app.engines.smart import MediaInfo, QualityOption, SmartEngine
+from app.engines.smart import (
+    MediaInfo,
+    PlaylistEntry,
+    PlaylistInfo,
+    QualityOption,
+    SmartEngine,
+)
 from app.tests.media_server import MediaServer, payload
 
 FAKE_MEDIA = MediaInfo(
@@ -18,20 +24,37 @@ FAKE_MEDIA = MediaInfo(
     options=(QualityOption(label="Best", kind="video", format_spec="bv*+ba/b"),),
 )
 
+FAKE_PLAYLIST = PlaylistInfo(
+    url="https://tube.example/playlist?list=1",
+    title="A Playlist",
+    uploader="Someone",
+    entries=(
+        PlaylistEntry(url="https://tube.example/watch?v=1", title="One", duration=60, index=1),
+        PlaylistEntry(url="https://tube.example/watch?v=2", title="Two", duration=90, index=2),
+    ),
+)
+
 
 class FakeSmart(SmartEngine):
-    def __init__(self, *, match: bool, error: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        match: bool,
+        error: str | None = None,
+        playlist: PlaylistInfo | None = None,
+    ) -> None:
         super().__init__()
         self._match = match
         self._error = error
+        self._playlist = playlist
 
     def matches(self, url: str) -> bool:
         return self._match
 
-    def inspect(self, url: str, **kwargs) -> MediaInfo:
+    def inspect(self, url: str, **kwargs) -> MediaInfo | PlaylistInfo:
         if self._error:
             raise DownloadError(self._error)
-        return FAKE_MEDIA
+        return self._playlist if self._playlist is not None else FAKE_MEDIA
 
 
 def test_direct_file_routes_to_segmenter(server: MediaServer):
@@ -61,6 +84,14 @@ def test_smart_match_wins(server: MediaServer):
     resolution = Resolver(FakeSmart(match=True)).resolve("https://tube.example/watch?v=1")
     assert resolution.kind is JobKind.SMART
     assert resolution.media is FAKE_MEDIA
+
+
+def test_playlist_resolution(server: MediaServer):
+    resolver = Resolver(FakeSmart(match=True, playlist=FAKE_PLAYLIST))
+    resolution = resolver.resolve("https://tube.example/playlist?list=1")
+    assert resolution.kind is JobKind.SMART
+    assert resolution.playlist is FAKE_PLAYLIST
+    assert resolution.media is None
 
 
 def test_smart_error_is_final_and_friendly():

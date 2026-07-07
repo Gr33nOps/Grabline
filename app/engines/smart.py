@@ -108,6 +108,76 @@ class MediaInfo:
     auto_caption_languages: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class PlaylistEntry:
+    url: str
+    title: str
+    duration: float | None
+    index: int
+
+
+@dataclass(frozen=True)
+class PlaylistInfo:
+    """A fast flat listing of a playlist (F1.7): titles and URLs, no formats."""
+
+    url: str
+    title: str
+    uploader: str | None
+    entries: tuple[PlaylistEntry, ...]
+
+
+def generic_quality_options() -> tuple[QualityOption, ...]:
+    """Static picker for playlist batches, where per-video sizes are unknown.
+    yt-dlp resolves the actual formats per entry at download time."""
+    options = [QualityOption(label="Best", kind="video", format_spec="bv*+ba/b")]
+    for tier in (1080, 720, 480):
+        options.append(
+            QualityOption(
+                label=f"{tier}p",
+                kind="video",
+                format_spec=f"bv*[height<={tier}]+ba/b[height<={tier}]",
+                height=tier,
+            )
+        )
+    options.append(QualityOption(label="MP3", kind="audio", format_spec="ba/b", audio_format="mp3"))
+    options.append(
+        QualityOption(label="M4A", kind="audio", format_spec="ba[ext=m4a]/ba/b", audio_format="m4a")
+    )
+    return tuple(options)
+
+
+def parse_playlist(info: dict[str, Any]) -> PlaylistInfo | None:
+    """Turn a flat-extracted yt-dlp info dict into a PlaylistInfo, or None."""
+    if info.get("_type") != "playlist":
+        return None
+    entries: list[PlaylistEntry] = []
+    for position, raw in enumerate(info.get("entries") or [], start=1):
+        if not raw:
+            continue  # deleted/private items come through as None
+        url = raw.get("url") or raw.get("webpage_url")
+        if url and not str(url).startswith(("http://", "https://")):
+            # Some flat extractions yield bare video IDs.
+            url = (
+                f"https://www.youtube.com/watch?v={url}" if raw.get("ie_key") == "Youtube" else None
+            )
+        if not url:
+            continue
+        entries.append(
+            PlaylistEntry(
+                url=str(url),
+                title=str(raw.get("title") or f"Item {position}"),
+                duration=raw.get("duration"),
+                index=position,
+            )
+        )
+    return PlaylistInfo(
+        url=str(info.get("webpage_url") or info.get("original_url") or ""),
+        title=str(info.get("title") or "Playlist"),
+        uploader=info.get("uploader") or info.get("channel"),
+        entries=tuple(entries),
+    )
+
+
 def _format_size(fmt: dict[str, Any]) -> int | None:
     size = fmt.get("filesize") or fmt.get("filesize_approx")
     return int(size) if size else None
@@ -226,13 +296,20 @@ class SmartEngine:
         *,
         use_session: bool = False,
         session_browser: str = "chrome",
-    ) -> MediaInfo:
+    ) -> MediaInfo | PlaylistInfo:
+        """Metadata for a single video, or a fast flat listing for a playlist.
+
+        ``noplaylist`` keeps watch-URLs-with-a-list-param as single videos;
+        pure playlist URLs still come back as playlists. ``extract_flat``
+        makes the playlist case one cheap request instead of hundreds.
+        """
         import yt_dlp
 
         opts: dict[str, Any] = {
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
+            "extract_flat": "in_playlist",
             "skip_download": True,
         }
         if use_session:
@@ -242,13 +319,20 @@ class SmartEngine:
                 info = ydl.extract_info(url, download=False)
         except yt_dlp.utils.DownloadError as exc:
             raise DownloadError(friendly_error(str(exc))) from exc
-        if info is None:
+        if not isinstance(info, dict):
             raise DownloadError("No downloadable media was found at this address.")
-        if info.get("_type") == "playlist":  # noplaylist still yields playlists sometimes
-            entries = info.get("entries") or []
-            if not entries:
+        playlist = parse_playlist(info)
+        if playlist is not None:
+            if not playlist.entries:
                 raise DownloadError("This playlist appears to be empty.")
-            info = entries[0]
+            if len(playlist.entries) == 1:
+                # A one-item playlist deserves the full single-video panel.
+                return self.inspect(
+                    playlist.entries[0].url,
+                    use_session=use_session,
+                    session_browser=session_browser,
+                )
+            return playlist
         return MediaInfo(
             url=url,
             id=str(info.get("id") or ""),
@@ -290,11 +374,13 @@ class SmartDownload:
         *,
         ffmpeg_path: str | None = None,
         persist_interval: float = 0.3,
+        ratelimit: int | None = None,
     ) -> None:
         self.db = db
         self.job = job
         self.ffmpeg_path = ffmpeg_path
         self.persist_interval = persist_interval
+        self.ratelimit = ratelimit
         self._stop_event = threading.Event()
         self._cancelled = False
         self._live = _LiveProgress()
@@ -358,6 +444,8 @@ class SmartDownload:
         }
         if self.ffmpeg_path:
             ydl_opts["ffmpeg_location"] = self.ffmpeg_path
+        if self.ratelimit:
+            ydl_opts["ratelimit"] = float(self.ratelimit)
         # Postprocessing (audio extraction, tags, subtitle conversion) needs
         # FFmpeg. Without it, plain video downloads still work untouched.
         has_ffmpeg = bool(self.ffmpeg_path)

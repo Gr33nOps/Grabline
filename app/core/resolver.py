@@ -16,7 +16,7 @@ import httpx
 from app.core.errors import DownloadError
 from app.core.models import JobKind
 from app.core.probe import ProbeResult, probe
-from app.engines.smart import MediaInfo, SmartEngine
+from app.engines.smart import MediaInfo, PlaylistInfo, SmartEngine
 
 _MANIFEST_SUFFIXES = (".m3u8", ".mpd")
 _MANIFEST_CONTENT_TYPES = (
@@ -33,7 +33,8 @@ class Resolution:
 
     url: str
     kind: JobKind | None
-    media: MediaInfo | None = None  # set for SMART
+    media: MediaInfo | None = None  # set for SMART single videos
+    playlist: PlaylistInfo | None = None  # set for SMART playlists (F1.7)
     probe: ProbeResult | None = None  # set for DIRECT
     message: str | None = None  # set when kind is None
 
@@ -60,14 +61,16 @@ class Resolver:
 
         if self.smart.matches(url):
             try:
-                media = self.smart.inspect(
+                inspected = self.smart.inspect(
                     url, use_session=use_session, session_browser=session_browser
                 )
             except DownloadError as exc:
                 # A site extractor claimed the URL; its verdict is final —
                 # falling through to sniffing would just fail less clearly.
                 return Resolution(url=url, kind=None, message=str(exc))
-            return Resolution(url=url, kind=JobKind.SMART, media=media)
+            if isinstance(inspected, PlaylistInfo):
+                return Resolution(url=url, kind=JobKind.SMART, playlist=inspected)
+            return Resolution(url=url, kind=JobKind.SMART, media=inspected)
 
         path = urlsplit(url).path.lower()
         if path.endswith(_MANIFEST_SUFFIXES):

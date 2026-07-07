@@ -220,6 +220,12 @@ class Database:
                 (filename, job_id),
             )
 
+    def delete_job(self, job_id: int) -> None:
+        """Remove a job from the list/history; its segments cascade away.
+        Never touches files on disk."""
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+
     def update_job_downloaded(self, job_id: int, downloaded: int) -> None:
         """Progress mirror for smart/hls jobs (direct jobs checkpoint segments)."""
         with self._lock, self._conn:

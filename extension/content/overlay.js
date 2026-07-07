@@ -9,6 +9,9 @@
   const api = globalThis.browser ?? globalThis.chrome;
   const MIN_IMAGE_SIZE = 200;
   const HIDE_DELAY_MS = 350;
+  // Hosts where a site module owns thumbnails: skip plain-image overlays
+  // there so two buttons never fight over the same element.
+  const SITE_MODULE_HOSTS = /(^|\.)youtube\.com$/;
 
   let enabled = true;
   let currentTarget = null;
@@ -68,6 +71,7 @@
   function eligible(element) {
     if (element instanceof HTMLMediaElement) return true;
     if (element instanceof HTMLImageElement) {
+      if (SITE_MODULE_HOSTS.test(location.hostname)) return false;
       return (
         element.naturalWidth >= MIN_IMAGE_SIZE && element.naturalHeight >= MIN_IMAGE_SIZE
       );

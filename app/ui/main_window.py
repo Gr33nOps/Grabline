@@ -5,12 +5,15 @@ routes it in a background thread, and Smart Engine hits get the quality panel.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
+from PySide6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QInputDialog,
+    QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QTableWidget,
@@ -18,11 +21,13 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
+from app.core import naming
 from app.core.manager import DownloadManager, JobView
 from app.core.models import JobKind, JobStatus
 from app.core.resolver import Resolution, Resolver
 from app.core.settings import Settings
 from app.ui.format import human_bytes
+from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
 from app.ui.settings_dialog import SettingsDialog
 
@@ -30,12 +35,15 @@ _COLUMNS = ("Name", "Size", "Progress", "Speed", "Status")
 
 
 class _ResolveThread(QThread):
-    resolved = Signal(object)
+    resolved = Signal(object, object)  # Resolution, page_title (str | None)
 
-    def __init__(self, resolver: Resolver, url: str, settings: Settings) -> None:
+    def __init__(
+        self, resolver: Resolver, url: str, settings: Settings, page_title: str | None
+    ) -> None:
         super().__init__()
         self._resolver = resolver
         self._url = url
+        self._page_title = page_title
         self._use_session = settings.use_browser_session
         self._browser = settings.session_browser
 
@@ -43,7 +51,7 @@ class _ResolveThread(QThread):
         resolution = self._resolver.resolve(
             self._url, use_session=self._use_session, session_browser=self._browser
         )
-        self.resolved.emit(resolution)
+        self.resolved.emit(resolution, self._page_title)
 
 
 class MainWindow(QMainWindow):
@@ -70,12 +78,20 @@ class MainWindow(QMainWindow):
             action = QAction(label, self)
             action.triggered.connect(handler)
             toolbar.addAction(action)
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Search downloads…")
+        self.search_box.setClearButtonEnabled(True)
+        self.search_box.setMaximumWidth(220)
+        self.search_box.textChanged.connect(lambda _text: self._apply_filter())
+        toolbar.addWidget(self.search_box)
 
         self.table = QTableWidget(0, len(_COLUMNS), self)
         self.table.setHorizontalHeaderLabels(_COLUMNS)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_row_menu)
         self.table.verticalHeader().setVisible(False)
         self.table.setColumnWidth(0, 320)
         self.table.setColumnWidth(1, 100)
@@ -86,6 +102,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready")
 
         self._row_job_ids: list[int] = []
+        self._last_views: dict[int, JobView] = {}
         self._rates: dict[int, tuple[float, int]] = {}
         self._resolve_threads: list[_ResolveThread] = []
         self._timer = QTimer(self)
@@ -99,7 +116,7 @@ class MainWindow(QMainWindow):
 
     def _poll_handoffs(self) -> None:
         for handoff in self.manager.db.claim_handoffs():
-            self.begin_add_url(handoff.url)
+            self.begin_add_url(handoff.url, page_title=handoff.page_title)
 
     # ------------------------------------------------------------- actions
 
@@ -108,43 +125,67 @@ class MainWindow(QMainWindow):
         if accepted and url.strip():
             self.begin_add_url(url.strip())
 
-    def begin_add_url(self, url: str) -> None:
-        """Entry point shared by the toolbar, tray, and clipboard watcher."""
+    def begin_add_url(self, url: str, page_title: str | None = None) -> None:
+        """Entry point shared by the toolbar, tray, clipboard, and extension."""
         self.statusBar().showMessage(f"Analyzing {url} …")
-        thread = _ResolveThread(self.resolver, url, self.settings)
+        thread = _ResolveThread(self.resolver, url, self.settings, page_title)
         thread.resolved.connect(self._on_resolved)
         thread.finished.connect(lambda: self._resolve_threads.remove(thread))
         self._resolve_threads.append(thread)
         thread.start()
 
-    def _on_resolved(self, resolution: Resolution) -> None:
+    def _on_resolved(self, resolution: Resolution, page_title: str | None) -> None:
         self.statusBar().showMessage("Ready")
         if resolution.kind is None:
             QMessageBox.information(self, "Grabline", resolution.message or "No media found.")
             return
-        if resolution.kind is JobKind.SMART and resolution.media is not None:
-            panel = QualityPanel(resolution.media, self)
-            if panel.exec() != QualityPanel.DialogCode.Accepted:
+        if resolution.kind is JobKind.SMART and resolution.playlist is not None:
+            playlist_panel = PlaylistPanel(
+                resolution.playlist,
+                preselect_cap=self.settings.playlist_batch_cap,
+                parent=self,
+            )
+            if playlist_panel.exec() != PlaylistPanel.DialogCode.Accepted:
                 return
-            option = panel.selected_option()
+            batch_option = playlist_panel.selected_option()
+            for entry in playlist_panel.selected_entries():
+                self.manager.add_smart_entry(
+                    entry.url,
+                    entry.title,
+                    batch_option,
+                    use_session=self.settings.use_browser_session,
+                    session_browser=self.settings.session_browser,
+                )
+        elif resolution.kind is JobKind.SMART and resolution.media is not None:
+            quality_panel = QualityPanel(resolution.media, self)
+            if quality_panel.exec() != QualityPanel.DialogCode.Accepted:
+                return
+            option = quality_panel.selected_option()
             if option is None:
                 return
             self.manager.add_smart(
                 resolution.url,
                 resolution.media,
                 option,
-                subtitles=panel.subtitles_config(),
-                trim=panel.trim_range(),
+                subtitles=quality_panel.subtitles_config(),
+                trim=quality_panel.trim_range(),
                 use_session=self.settings.use_browser_session,
                 session_browser=self.settings.session_browser,
             )
         elif resolution.kind is JobKind.HLS:
-            self.manager.add_hls(resolution.url)
+            self.manager.add_hls(resolution.url, title=page_title)
         else:
+            # F1.8 name fixer: prefer Content-Disposition, then rescue ugly
+            # URL names (videoplayback.mp4 …) with the page title.
+            probe = resolution.probe
             filename = (
-                resolution.probe.filename
-                if resolution.probe is not None and resolution.probe.filename
-                else None
+                probe.filename
+                if probe is not None and probe.filename
+                else naming.improved_filename(
+                    resolution.url,
+                    page_title,
+                    probe.content_type if probe is not None else None,
+                )
             )
             self.manager.add_url(resolution.url, filename=filename)
         self.refresh()
@@ -174,17 +215,66 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.settings.download_dir)))
 
     def _open_settings(self) -> None:
-        SettingsDialog(self.settings, self).exec()
+        if SettingsDialog(self.settings, self).exec() == SettingsDialog.DialogCode.Accepted:
+            self.manager.reload_settings()
+
+    # -------------------------------------------------------- row actions
+
+    def _view_for_row(self, row: int) -> JobView | None:
+        if 0 <= row < len(self._row_job_ids):
+            return self._last_views.get(self._row_job_ids[row])
+        return None
+
+    def _show_row_menu(self, position: QPoint) -> None:
+        row = self.table.rowAt(position.y())
+        view = self._view_for_row(row)
+        if view is None:
+            return
+        self.table.selectRow(row)
+        menu = QMenu(self)
+        file_path = Path(view.dest_dir) / view.filename
+        open_file = menu.addAction("Open file")
+        open_file.setEnabled(view.status is JobStatus.COMPLETED and file_path.exists())
+        open_folder = menu.addAction("Open folder")
+        copy_url = menu.addAction("Copy URL")
+        redownload = menu.addAction("Download again")
+        menu.addSeparator()
+        remove = menu.addAction("Remove from list")
+        remove.setEnabled(view.status is not JobStatus.DOWNLOADING)
+        chosen = menu.exec(self.table.viewport().mapToGlobal(position))
+        if chosen is open_file:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path)))
+        elif chosen is open_folder:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
+        elif chosen is copy_url:
+            QGuiApplication.clipboard().setText(view.url)
+        elif chosen is redownload:
+            self.begin_add_url(view.url)
+        elif chosen is remove:
+            self.manager.remove(view.id)
+            self.refresh()
 
     # ------------------------------------------------------------- refresh
 
     def refresh(self) -> None:
         views = self.manager.snapshot()
+        self._last_views = {view.id: view for view in views}
         ids = [view.id for view in views]
         if ids != self._row_job_ids:
             self._rebuild_rows(views)
         for row, view in enumerate(views):
             self._update_row(row, view)
+        self._apply_filter()
+
+    def _apply_filter(self) -> None:
+        needle = self.search_box.text().strip().lower()
+        for row in range(self.table.rowCount()):
+            view = self._view_for_row(row)
+            visible = not needle or (
+                view is not None
+                and (needle in view.display_name.lower() or needle in view.url.lower())
+            )
+            self.table.setRowHidden(row, not visible)
 
     def _rebuild_rows(self, views: list[JobView]) -> None:
         self.table.setRowCount(len(views))

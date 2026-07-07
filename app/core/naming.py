@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 import os.path
 import posixpath
 import re
@@ -37,6 +38,46 @@ def sanitize_filename(name: str, max_length: int = MAX_NAME_LENGTH) -> str:
 def filename_from_url(url: str) -> str:
     name = unquote(posixpath.basename(urlsplit(url).path))
     return sanitize_filename(name) if name else FALLBACK_NAME
+
+
+#: Stems servers hand out that say nothing about the content (F1.8).
+_UGLY_STEMS = frozenset(
+    {
+        "videoplayback",
+        "download",
+        "index",
+        "file",
+        "video",
+        "audio",
+        "media",
+        "stream",
+        "content",
+        "item",
+        "untitled",
+        "attachment",
+        "get",
+        "fetch",
+        FALLBACK_NAME,
+    }
+)
+
+
+def is_ugly_name(name: str) -> bool:
+    """Would a human curse this filename? (videoplayback.mp4, index, 1234…)"""
+    stem = Path(name).stem.lower()
+    return len(stem) < 3 or stem.isdigit() or stem in _UGLY_STEMS
+
+
+def improved_filename(url: str, page_title: str | None, content_type: str | None = None) -> str:
+    """The ugly-name fixer (F1.8): keep good URL names, replace junk with the
+    page title, keeping (or guessing) the file extension."""
+    from_url = filename_from_url(url)
+    if not page_title or not is_ugly_name(from_url):
+        return from_url
+    extension = Path(from_url).suffix
+    if not extension and content_type:
+        extension = mimetypes.guess_extension(content_type.split(";")[0].strip()) or ""
+    return sanitize_filename(page_title.strip() + extension)
 
 
 def unique_path(path: Path) -> Path:

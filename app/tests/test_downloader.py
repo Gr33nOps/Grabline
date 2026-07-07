@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import itertools
 import threading
+import time
 from pathlib import Path
+
+import pytest
 
 from app.core.downloader import SegmentedDownload, plan_segments
 from app.core.models import JobStatus
@@ -175,6 +178,43 @@ def test_cancel_removes_partial_file(server: MediaServer, db: Database, dest: Pa
     assert not (dest / "cancel.bin.gl-part").exists()
     assert not (dest / "cancel.bin").exists()
     assert db.job_downloaded(job.id) == 0
+
+
+def test_speed_limiter_caps_throughput(server: MediaServer, db: Database, dest: Path):
+    from app.core.ratelimit import RateLimiter
+
+    data = payload(2 * MB, 41)
+    url = server.add("/capped.bin", data)
+    job = db.create_job(url, str(dest), "capped.bin")
+
+    # 2 MB at 1 MB/s with a 1 MB starting burst: at least ~1 s of throttling.
+    limiter = RateLimiter(1 * MB)
+    started = time.monotonic()
+    status = SegmentedDownload(db, job, connections=4, limiter=limiter).run()
+    elapsed = time.monotonic() - started
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "capped.bin") == sha256(data)
+    assert elapsed >= 0.8
+
+
+def test_insufficient_disk_space_fails_cleanly(
+    server: MediaServer, db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import shutil as real_shutil
+
+    fake_usage = real_shutil.disk_usage(dest)._replace(free=1024)
+    monkeypatch.setattr("app.core.downloader.shutil.disk_usage", lambda _p: fake_usage)
+    url = server.add("/huge.bin", payload(1 * MB, 43))
+    job = db.create_job(url, str(dest), "huge.bin")
+
+    status = SegmentedDownload(db, job).run()
+
+    assert status is JobStatus.FAILED
+    fresh = db.get_job(job.id)
+    assert fresh is not None
+    assert fresh.error is not None and "disk space" in fresh.error
+    assert not (dest / "huge.bin.gl-part").exists()
 
 
 def test_never_overwrites_existing_file(server: MediaServer, db: Database, dest: Path):

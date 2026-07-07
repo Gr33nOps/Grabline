@@ -3,10 +3,13 @@
 Usage:
     python -m app.cli <url> <dest_dir> [--db PATH] [--connections N]
                       [--quality LABEL] [--list-formats] [--session BROWSER]
+                      [--playlist] [--limit N]
 
 Smart Engine URLs get the curated quality list (--list-formats to see it,
---quality to pick: best / 1080p / 720p / mp3 / m4a ...). Direct files use the
-segmented downloader; HLS manifests are reassembled by FFmpeg.
+--quality to pick: best / 1080p / 720p / mp3 / m4a ...). Playlist URLs are
+listed and refused unless --playlist is given (downloads up to --limit
+entries at the chosen quality). Direct files use the segmented downloader;
+HLS manifests are reassembled by FFmpeg.
 
 Exit code 0 means the file completed and was verified/renamed into place.
 """
@@ -27,7 +30,12 @@ from app.core.resolver import Resolution, Resolver
 from app.core.settings import SESSION_BROWSERS, Settings
 from app.db.database import Database
 from app.engines.hls import HlsDownload
-from app.engines.smart import MediaInfo, QualityOption, SmartDownload
+from app.engines.smart import (
+    MediaInfo,
+    QualityOption,
+    SmartDownload,
+    generic_quality_options,
+)
 
 
 def _pick_option(media: MediaInfo, quality: str) -> QualityOption | None:
@@ -46,6 +54,42 @@ def _print_formats(media: MediaInfo) -> None:
         size = f"~{option.estimated_size / 1024 / 1024:.1f} MB" if option.estimated_size else "?"
         suffix = " (audio only)" if option.kind == "audio" else ""
         print(f"  {option.label:<8} {size}{suffix}")
+
+
+def _run_playlist(
+    db: Database, resolution: Resolution, dest_dir: Path, args: argparse.Namespace
+) -> int:
+    assert resolution.playlist is not None
+    playlist = resolution.playlist
+    entries = playlist.entries[: args.limit]
+    option = next(
+        (o for o in generic_quality_options() if o.label.lower() == args.quality.lower()),
+        generic_quality_options()[0],
+    )
+    print(f"PLAYLIST {playlist.title} — downloading {len(entries)} item(s)", flush=True)
+    failures = 0
+    for entry in entries:
+        extension = option.audio_format if option.kind == "audio" else "mp4"
+        filename = f"{naming.sanitize_filename(entry.title)}.{extension}"
+        job = db.create_job(
+            entry.url,
+            str(dest_dir),
+            filename,
+            kind=JobKind.SMART,
+            title=entry.title,
+            options={
+                "format_spec": option.format_spec,
+                "quality_label": option.label,
+                "audio_format": option.audio_format,
+                "use_session": bool(args.session),
+                "session_browser": args.session or "chrome",
+            },
+        )
+        status = _create_task(db, job, args).run()
+        print(f"[{entry.index}/{len(playlist.entries)}] {entry.title}: {status.value}", flush=True)
+        if status is not JobStatus.COMPLETED:
+            failures += 1
+    return 1 if failures else 0
 
 
 def _create_job(
@@ -112,6 +156,14 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="use this browser's login session (your own accounts only)",
     )
+    parser.add_argument(
+        "--playlist",
+        action="store_true",
+        help="download every playlist entry (up to --limit) instead of refusing",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=30, help="maximum playlist entries (default 30)"
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -134,6 +186,21 @@ def main(argv: list[str] | None = None) -> int:
             if resolution.kind is None:
                 print(f"ERROR {resolution.message}", flush=True)
                 return 2
+            if resolution.playlist is not None:
+                if args.list_formats:
+                    print(f"PLAYLIST {resolution.playlist.title}")
+                    for entry in resolution.playlist.entries:
+                        print(f"  {entry.index:>3}. {entry.title}")
+                    return 0
+                if not args.playlist:
+                    count = len(resolution.playlist.entries)
+                    print(
+                        f"PLAYLIST detected ({count} items) — rerun with --playlist "
+                        "to download them",
+                        flush=True,
+                    )
+                    return 2
+                return _run_playlist(db, resolution, dest_dir, args)
             maybe_job = _create_job(db, resolution, dest_dir, args)
             if maybe_job is None:  # --list-formats
                 return 0

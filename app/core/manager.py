@@ -15,6 +15,7 @@ from app.core import categories, naming
 from app.core.downloader import SegmentedDownload
 from app.core.ffmpeg import find_ffmpeg
 from app.core.models import Job, JobKind, JobStatus
+from app.core.ratelimit import RateLimiter
 from app.core.settings import Settings
 from app.db.database import Database
 from app.engines.hls import HlsDownload
@@ -64,16 +65,34 @@ class DownloadManager:
     ) -> None:
         self.db = db
         self.settings = settings or Settings(db)
-        self.max_concurrent = (
-            max_concurrent if max_concurrent is not None else self.settings.max_concurrent
-        )
-        self.connections = connections if connections is not None else self.settings.connections
+        # Explicit constructor values pin the knob; otherwise settings apply
+        # live (reload_settings / next scheduler pass), no restart needed.
+        self._max_concurrent_override = max_concurrent
+        self._connections_override = connections
+        self.limiter = RateLimiter(self.settings.speed_limit_kbps * 1024)
         self._cond = threading.Condition()
         self._active: dict[int, DownloadTask] = {}
         self._threads: dict[int, threading.Thread] = {}
         self._running = True
         self._scheduler = threading.Thread(target=self._loop, name="gl-scheduler", daemon=True)
         self._scheduler.start()
+
+    @property
+    def max_concurrent(self) -> int:
+        if self._max_concurrent_override is not None:
+            return self._max_concurrent_override
+        return self.settings.max_concurrent
+
+    @property
+    def connections(self) -> int:
+        if self._connections_override is not None:
+            return self._connections_override
+        return self.settings.connections
+
+    def reload_settings(self) -> None:
+        """Apply settings changes to live state (speed cap now, slots next pass)."""
+        self.limiter.set_rate(self.settings.speed_limit_kbps * 1024)
+        self._kick()
 
     # ------------------------------------------------------------- adding
 
@@ -113,8 +132,34 @@ class DownloadManager:
         session_browser: str = "chrome",
     ) -> Job:
         """Queue a Smart Engine (yt-dlp) download with a chosen quality option."""
+        return self.add_smart_entry(
+            url,
+            media.title,
+            option,
+            dest_dir=dest_dir,
+            subtitles=subtitles,
+            trim=trim,
+            use_session=use_session,
+            session_browser=session_browser,
+        )
+
+    def add_smart_entry(
+        self,
+        url: str,
+        title: str,
+        option: QualityOption,
+        *,
+        dest_dir: str | Path | None = None,
+        subtitles: Mapping[str, Any] | None = None,
+        trim: tuple[float, float] | None = None,
+        use_session: bool = False,
+        session_browser: str = "chrome",
+    ) -> Job:
+        """Queue one Smart Engine job from just a URL and title — the playlist
+        path (F1.7), where entries were listed flat and formats resolve at
+        download time."""
         extension = option.audio_format if option.kind == "audio" else "mp4"
-        base = naming.sanitize_filename(media.title)
+        base = naming.sanitize_filename(title)
         filename = f"{base}.{extension}"
         options: dict[str, Any] = {
             "format_spec": option.format_spec,
@@ -130,7 +175,7 @@ class DownloadManager:
             self._dest_for(filename, dest_dir),
             filename,
             kind=JobKind.SMART,
-            title=media.title,
+            title=title,
             options=options,
         )
         self._kick()
@@ -195,6 +240,21 @@ class DownloadManager:
             self.db.clear_segments(job_id)
             self.db.set_job_status(job_id, JobStatus.CANCELLED)
 
+    def remove(self, job_id: int) -> None:
+        """Drop a job from the list/history. Running jobs are cancelled first;
+        completed files stay on disk."""
+        with self._cond:
+            active = self._active.get(job_id)
+        if active is not None:
+            active.cancel()
+            return  # scheduler clears it; the row can be removed afterwards
+        job = self.db.get_job(job_id)
+        if job is None:
+            return
+        if job.status is not JobStatus.COMPLETED:
+            job.part_path.unlink(missing_ok=True)
+        self.db.delete_job(job_id)
+
     def snapshot(self) -> list[JobView]:
         with self._cond:
             active = dict(self._active)
@@ -236,10 +296,16 @@ class DownloadManager:
 
     def _create_task(self, job: Job) -> DownloadTask:
         if job.kind is JobKind.SMART:
-            return SmartDownload(self.db, job, ffmpeg_path=find_ffmpeg(self.settings))
+            return SmartDownload(
+                self.db,
+                job,
+                ffmpeg_path=find_ffmpeg(self.settings),
+                ratelimit=self.limiter.rate or None,
+            )
         if job.kind is JobKind.HLS:
+            # FFmpeg-driven jobs are not rate-limited (Phase 3 polish).
             return HlsDownload(self.db, job, ffmpeg_path=find_ffmpeg(self.settings))
-        return SegmentedDownload(self.db, job, connections=self.connections)
+        return SegmentedDownload(self.db, job, connections=self.connections, limiter=self.limiter)
 
     def _kick(self) -> None:
         with self._cond:

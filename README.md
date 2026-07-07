@@ -30,7 +30,10 @@ tier, no ads, no telemetry.
 
 **Around the engine:**
 - **Queue** with concurrency limit, pause/resume/cancel/retry, live speed,
-  system tray, close-to-tray.
+  search, per-row actions (open file/folder, copy URL, re-download, remove),
+  a global speed limiter, system tray, close-to-tray.
+- **Playlists** (F1.7): paste a playlist URL → fast flat listing → checkbox
+  selection with a batch quality choice (`--playlist` in the CLI).
 - **Clipboard watcher** (F0.5): copy a URL anywhere → an unobtrusive
   "Download with Grabline?" offer. Snooze/disable built in.
 - **Categories** (F0.6): downloads auto-sort into Video / Music / Images /
@@ -103,8 +106,9 @@ packaging/      PyInstaller spec + release workflow (installers on tags)
   subtitles, trimming), HLS reassembly, FFmpeg pinned fetch, clipboard
   watcher, categories, browser session, installers on tag
 - **Phase 2 — v1.0** (in progress): Native Messaging pairing ✅, right-click
-  ✅, hover overlays ✅, per-tab sniffer list ✅, interception ✅ — YouTube
-  in-page quality panel and playlist selection still to come
+  ✅, hover overlays ✅, per-tab sniffer list ✅, interception ✅, playlists
+  ✅, YouTube thumbnail buttons ✅, ugly-name fixer ✅, speed limiter ✅,
+  history search & row actions ✅ — the in-page YouTube quality panel remains
 - **Phase 3 — v2.0**: HLS/DASH robustness, gallery grid, GIF tools, batch
   import, store publication
 

@@ -97,6 +97,20 @@ class Settings:
         self._db.set_setting("connections", str(value))
 
     @property
+    def speed_limit_kbps(self) -> int:
+        """Global download cap in KB/s (F1.8). 0 means unlimited."""
+        return max(0, self._get_int("speed_limit_kbps", 0))
+
+    @speed_limit_kbps.setter
+    def speed_limit_kbps(self, value: int) -> None:
+        self._db.set_setting("speed_limit_kbps", str(max(0, value)))
+
+    @property
+    def playlist_batch_cap(self) -> int:
+        """How many playlist entries get preselected (F1.7)."""
+        return max(1, min(500, self._get_int("playlist_batch_cap", 30)))
+
+    @property
     def ffmpeg_path(self) -> str | None:
         """Manual override; normally FFmpeg is found automatically."""
         return self._db.get_setting("ffmpeg_path") or None
