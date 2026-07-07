@@ -1,0 +1,194 @@
+from __future__ import annotations
+
+import itertools
+import threading
+from pathlib import Path
+
+from app.core.downloader import SegmentedDownload, plan_segments
+from app.core.models import JobStatus
+from app.db.database import Database
+from app.tests.conftest import sha256_file, wait_for
+from app.tests.media_server import MediaServer, payload, sha256
+
+MB = 1024 * 1024
+
+
+def test_plan_segments_covers_range_exactly():
+    spans = plan_segments(10 * MB, 8)
+    assert len(spans) == 8
+    assert spans[0][0] == 0
+    assert spans[-1][1] == 10 * MB - 1
+    for (_, prev_end), (next_start, _) in itertools.pairwise(spans):
+        assert prev_end is not None and next_start == prev_end + 1
+
+
+def test_plan_segments_small_file_fewer_segments():
+    assert len(plan_segments(100_000, 8)) == 1
+    assert plan_segments(100_000, 8) == [(0, 99_999)]
+
+
+def test_segmented_download_completes_with_checksum(server: MediaServer, db: Database, dest: Path):
+    data = payload(4 * MB, 7)
+    url = server.add("/big.bin", data)
+    job = db.create_job(url, str(dest), "big.bin")
+
+    status = SegmentedDownload(db, job, connections=8).run()
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "big.bin") == sha256(data)
+    assert not (dest / "big.bin.gl-part").exists()
+    segments = db.segments_for(job.id)
+    assert len(segments) == 8
+    assert all(segment.is_complete for segment in segments)
+    assert server.request_count("/big.bin") >= 9  # probe + 8 range requests
+
+
+def test_single_connection_fallback_when_no_ranges(server: MediaServer, db: Database, dest: Path):
+    data = payload(1 * MB, 11)
+    url = server.add("/legacy.bin", data, supports_ranges=False)
+    job = db.create_job(url, str(dest), "legacy.bin")
+
+    status = SegmentedDownload(db, job, connections=8).run()
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "legacy.bin") == sha256(data)
+    assert len(db.segments_for(job.id)) == 1
+
+
+def test_unknown_content_length(server: MediaServer, db: Database, dest: Path):
+    data = payload(700_000, 13)
+    url = server.add("/stream.bin", data, supports_ranges=False, send_content_length=False)
+    job = db.create_job(url, str(dest), "stream.bin")
+
+    status = SegmentedDownload(db, job, connections=8).run()
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "stream.bin") == sha256(data)
+    fresh = db.get_job(job.id)
+    assert fresh is not None
+    assert fresh.total_size == len(data)
+
+
+def test_download_follows_redirects(server: MediaServer, db: Database, dest: Path):
+    data = payload(2 * MB, 17)
+    server.add("/actual.bin", data)
+    url = server.add("/jump", redirect_to="/actual.bin")
+    job = db.create_job(url, str(dest), "actual.bin")
+
+    status = SegmentedDownload(db, job, connections=8).run()
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "actual.bin") == sha256(data)
+
+
+def test_flaky_server_connection_drops_are_retried(server: MediaServer, db: Database, dest: Path):
+    data = payload(2 * MB, 19)
+    # Requests 2..9 (the first attempt of every segment) get cut mid-body.
+    url = server.add("/flaky.bin", data, cut_after=100_000, cut_from=2, cut_until=9)
+    job = db.create_job(url, str(dest), "flaky.bin")
+
+    status = SegmentedDownload(db, job, connections=8, retry_backoff=0.05).run()
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "flaky.bin") == sha256(data)
+    assert server.request_count("/flaky.bin") > 9  # retries actually happened
+
+
+def test_permanently_broken_server_fails_cleanly(server: MediaServer, db: Database, dest: Path):
+    data = payload(1 * MB, 23)
+    # Every request after the probe drops before sending a single byte.
+    url = server.add("/dead.bin", data, cut_after=0, cut_from=2, cut_until=10**9)
+    job = db.create_job(url, str(dest), "dead.bin")
+
+    status = SegmentedDownload(db, job, connections=4, max_retries=1, retry_backoff=0.05).run()
+
+    assert status is JobStatus.FAILED
+    fresh = db.get_job(job.id)
+    assert fresh is not None
+    assert fresh.error is not None and "giving up" in fresh.error
+    assert not (dest / "dead.bin").exists()
+
+
+def test_http_error_fails_with_friendly_message(db: Database, dest: Path, server: MediaServer):
+    job = db.create_job(server.url("/nope.bin"), str(dest), "nope.bin")
+    status = SegmentedDownload(db, job).run()
+    assert status is JobStatus.FAILED
+    fresh = db.get_job(job.id)
+    assert fresh is not None
+    assert fresh.error is not None and "404" in fresh.error
+
+
+def test_zero_byte_file(server: MediaServer, db: Database, dest: Path):
+    url = server.add("/empty.bin", b"")
+    job = db.create_job(url, str(dest), "empty.bin")
+    status = SegmentedDownload(db, job).run()
+    assert status is JobStatus.COMPLETED
+    assert (dest / "empty.bin").stat().st_size == 0
+
+
+def test_pause_persists_and_resume_completes(server: MediaServer, db: Database, dest: Path):
+    data = payload(6 * MB, 29)
+    url = server.add("/slow.bin", data, chunk_size=32 * 1024, delay_per_chunk=0.03)
+    job = db.create_job(url, str(dest), "slow.bin")
+
+    download = SegmentedDownload(db, job, connections=8)
+    results: list[JobStatus] = []
+    thread = threading.Thread(target=lambda: results.append(download.run()))
+    thread.start()
+    wait_for(lambda: download.bytes_downloaded > 1 * MB)
+    download.pause()
+    thread.join(timeout=30)
+    assert not thread.is_alive()
+
+    assert results == [JobStatus.PAUSED]
+    persisted = db.job_downloaded(job.id)
+    assert persisted > 0
+    assert (dest / "slow.bin.gl-part").exists()
+    assert not (dest / "slow.bin").exists()
+
+    served_before_resume = server.served_bytes("/slow.bin")
+    resumed_job = db.get_job(job.id)
+    assert resumed_job is not None
+    status = SegmentedDownload(db, resumed_job, connections=8).run()
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "slow.bin") == sha256(data)
+    resumed_bytes = server.served_bytes("/slow.bin") - served_before_resume
+    assert resumed_bytes < len(data)  # it resumed; it did not start over
+
+
+def test_cancel_removes_partial_file(server: MediaServer, db: Database, dest: Path):
+    data = payload(6 * MB, 31)
+    url = server.add("/cancel.bin", data, chunk_size=32 * 1024, delay_per_chunk=0.03)
+    job = db.create_job(url, str(dest), "cancel.bin")
+
+    download = SegmentedDownload(db, job, connections=8)
+    results: list[JobStatus] = []
+    thread = threading.Thread(target=lambda: results.append(download.run()))
+    thread.start()
+    wait_for(lambda: download.bytes_downloaded > 256 * 1024)
+    download.cancel()
+    thread.join(timeout=30)
+    assert not thread.is_alive()
+
+    assert results == [JobStatus.CANCELLED]
+    assert not (dest / "cancel.bin.gl-part").exists()
+    assert not (dest / "cancel.bin").exists()
+    assert db.job_downloaded(job.id) == 0
+
+
+def test_never_overwrites_existing_file(server: MediaServer, db: Database, dest: Path):
+    existing = dest / "taken.bin"
+    existing.write_bytes(b"precious user data")
+    data = payload(400_000, 37)
+    url = server.add("/taken.bin", data)
+    job = db.create_job(url, str(dest), "taken.bin")
+
+    status = SegmentedDownload(db, job).run()
+
+    assert status is JobStatus.COMPLETED
+    assert existing.read_bytes() == b"precious user data"
+    assert sha256_file(dest / "taken (1).bin") == sha256(data)
+    fresh = db.get_job(job.id)
+    assert fresh is not None
+    assert fresh.filename == "taken (1).bin"

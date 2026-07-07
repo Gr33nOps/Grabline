@@ -1,0 +1,221 @@
+"""SQLite persistence for jobs and segment checkpoints.
+
+WAL journaling keeps the database consistent across a kill -9 or power-style
+interruption of the process, which is what makes resume-after-crash (F0.2)
+trustworthy. A single connection is shared behind a lock so worker threads,
+the checkpointer, and the UI thread can all talk to one Database instance.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+import threading
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+
+from app.core.models import RESUMABLE_STATUSES, Job, JobStatus, Segment
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS jobs (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    url           TEXT NOT NULL,
+    final_url     TEXT,
+    dest_dir      TEXT NOT NULL,
+    filename      TEXT NOT NULL,
+    total_size    INTEGER,
+    resumable     INTEGER NOT NULL DEFAULT 0,
+    etag          TEXT,
+    last_modified TEXT,
+    status        TEXT NOT NULL DEFAULT 'queued',
+    error         TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS segments (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    seg_index  INTEGER NOT NULL,
+    start_byte INTEGER NOT NULL,
+    end_byte   INTEGER,
+    downloaded INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_segments_job_id ON segments(job_id);
+"""
+
+
+def _job_from_row(row: sqlite3.Row) -> Job:
+    return Job(
+        id=row["id"],
+        url=row["url"],
+        final_url=row["final_url"],
+        dest_dir=row["dest_dir"],
+        filename=row["filename"],
+        total_size=row["total_size"],
+        resumable=bool(row["resumable"]),
+        etag=row["etag"],
+        last_modified=row["last_modified"],
+        status=JobStatus(row["status"]),
+        error=row["error"],
+    )
+
+
+def _segment_from_row(row: sqlite3.Row) -> Segment:
+    return Segment(
+        id=row["id"],
+        job_id=row["job_id"],
+        index=row["seg_index"],
+        start=row["start_byte"],
+        end=row["end_byte"],
+        downloaded=row["downloaded"],
+    )
+
+
+class Database:
+    def __init__(self, path: str | Path) -> None:
+        self._path = Path(path)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
+        self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        with self._lock:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA synchronous=NORMAL")
+            self._conn.execute("PRAGMA foreign_keys=ON")
+            self._conn.execute("PRAGMA busy_timeout=5000")
+            self._conn.executescript(_SCHEMA)
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
+
+    # ------------------------------------------------------------- jobs
+
+    def create_job(self, url: str, dest_dir: str, filename: str) -> Job:
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO jobs (url, dest_dir, filename) VALUES (?, ?, ?)",
+                (url, dest_dir, filename),
+            )
+            job_id = cur.lastrowid
+        if job_id is None:  # pragma: no cover - sqlite always sets it
+            raise RuntimeError("INSERT did not produce a row id")
+        job = self.get_job(job_id)
+        if job is None:  # pragma: no cover
+            raise RuntimeError("job vanished right after INSERT")
+        return job
+
+    def get_job(self, job_id: int) -> Job | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        return _job_from_row(row) if row else None
+
+    def list_jobs(self) -> list[Job]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM jobs ORDER BY id").fetchall()
+        return [_job_from_row(row) for row in rows]
+
+    def find_resumable_job(self, url: str, dest_dir: str) -> Job | None:
+        placeholders = ", ".join("?" for _ in RESUMABLE_STATUSES)
+        params = (url, dest_dir, *[status.value for status in RESUMABLE_STATUSES])
+        with self._lock:
+            row = self._conn.execute(
+                f"SELECT * FROM jobs WHERE url = ? AND dest_dir = ? "
+                f"AND status IN ({placeholders}) ORDER BY id DESC LIMIT 1",
+                params,
+            ).fetchone()
+        return _job_from_row(row) if row else None
+
+    def set_job_status(self, job_id: int, status: JobStatus, error: str | None = None) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE jobs SET status = ?, error = ?, updated_at = datetime('now') WHERE id = ?",
+                (status.value, error, job_id),
+            )
+
+    def update_job_probe(self, job: Job) -> None:
+        """Persist what the probe learned (size, validators, better filename)."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE jobs SET final_url = ?, filename = ?, total_size = ?, resumable = ?, "
+                "etag = ?, last_modified = ?, updated_at = datetime('now') WHERE id = ?",
+                (
+                    job.final_url,
+                    job.filename,
+                    job.total_size,
+                    int(job.resumable),
+                    job.etag,
+                    job.last_modified,
+                    job.id,
+                ),
+            )
+
+    def update_job_total(self, job_id: int, total_size: int) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE jobs SET total_size = ?, updated_at = datetime('now') WHERE id = ?",
+                (total_size, job_id),
+            )
+
+    def update_job_filename(self, job_id: int, filename: str) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE jobs SET filename = ?, updated_at = datetime('now') WHERE id = ?",
+                (filename, job_id),
+            )
+
+    def mark_interrupted(self) -> int:
+        """Flip jobs a dead process left 'downloading' to 'paused'. Run at startup."""
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE status = ?",
+                (JobStatus.PAUSED.value, JobStatus.DOWNLOADING.value),
+            )
+        return cur.rowcount
+
+    # --------------------------------------------------------- segments
+
+    def replace_segments(
+        self, job_id: int, spans: Sequence[tuple[int, int | None]]
+    ) -> list[Segment]:
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM segments WHERE job_id = ?", (job_id,))
+            self._conn.executemany(
+                "INSERT INTO segments (job_id, seg_index, start_byte, end_byte) "
+                "VALUES (?, ?, ?, ?)",
+                [(job_id, i, start, end) for i, (start, end) in enumerate(spans)],
+            )
+        return self.segments_for(job_id)
+
+    def segments_for(self, job_id: int) -> list[Segment]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM segments WHERE job_id = ? ORDER BY seg_index", (job_id,)
+            ).fetchall()
+        return [_segment_from_row(row) for row in rows]
+
+    def update_segment_progress(self, progress: Mapping[int, int]) -> None:
+        if not progress:
+            return
+        with self._lock, self._conn:
+            self._conn.executemany(
+                "UPDATE segments SET downloaded = ? WHERE id = ?",
+                [(downloaded, segment_id) for segment_id, downloaded in progress.items()],
+            )
+
+    def set_segment_end(self, segment_id: int, end: int) -> None:
+        with self._lock, self._conn:
+            self._conn.execute("UPDATE segments SET end_byte = ? WHERE id = ?", (end, segment_id))
+
+    def clear_segments(self, job_id: int) -> None:
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM segments WHERE job_id = ?", (job_id,))
+
+    def job_downloaded(self, job_id: int) -> int:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COALESCE(SUM(downloaded), 0) AS total FROM segments WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+        return int(row["total"])
