@@ -1,17 +1,17 @@
-"""Minimal queue window (F0.4): one list for everything, with pause/resume/
-cancel/retry, live progress and speed, driven by a 500 ms refresh timer.
+"""The queue window (F0.4) and the add-URL flow: paste a URL, the resolver
+routes it in a background thread, and Smart Engine hits get the quality panel.
 """
 
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QInputDialog,
     QMainWindow,
+    QMessageBox,
     QProgressBar,
     QTableWidget,
     QTableWidgetItem,
@@ -19,24 +19,39 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.manager import DownloadManager, JobView
-from app.core.models import JobStatus
+from app.core.models import JobKind, JobStatus
+from app.core.resolver import Resolution, Resolver
+from app.core.settings import Settings
+from app.ui.format import human_bytes
+from app.ui.quality_panel import QualityPanel
+from app.ui.settings_dialog import SettingsDialog
 
 _COLUMNS = ("Name", "Size", "Progress", "Speed", "Status")
 
 
-def human_bytes(count: float) -> str:
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if count < 1024 or unit == "TB":
-            return f"{count:.0f} {unit}" if unit == "B" else f"{count:.1f} {unit}"
-        count /= 1024
-    return f"{count:.1f} TB"  # pragma: no cover - unreachable
+class _ResolveThread(QThread):
+    resolved = Signal(object)
+
+    def __init__(self, resolver: Resolver, url: str, settings: Settings) -> None:
+        super().__init__()
+        self._resolver = resolver
+        self._url = url
+        self._use_session = settings.use_browser_session
+        self._browser = settings.session_browser
+
+    def run(self) -> None:
+        resolution = self._resolver.resolve(
+            self._url, use_session=self._use_session, session_browser=self._browser
+        )
+        self.resolved.emit(resolution)
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, manager: DownloadManager, download_dir: Path) -> None:
+    def __init__(self, manager: DownloadManager, settings: Settings) -> None:
         super().__init__()
         self.manager = manager
-        self.download_dir = download_dir
+        self.settings = settings
+        self.resolver = Resolver()
         self.close_to_tray = False
         self.setWindowTitle("Grabline")
         self.resize(880, 440)
@@ -50,6 +65,7 @@ class MainWindow(QMainWindow):
             ("Resume", self._resume_selected),
             ("Cancel", self._cancel_selected),
             ("Open Folder", self._open_folder),
+            ("Settings", self._open_settings),
         ):
             action = QAction(label, self)
             action.triggered.connect(handler)
@@ -61,17 +77,17 @@ class MainWindow(QMainWindow):
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        header = self.table.horizontalHeader()
-        header.setStretchLastSection(False)
         self.table.setColumnWidth(0, 320)
         self.table.setColumnWidth(1, 100)
         self.table.setColumnWidth(2, 160)
         self.table.setColumnWidth(3, 110)
         self.table.setColumnWidth(4, 120)
         self.setCentralWidget(self.table)
+        self.statusBar().showMessage("Ready")
 
         self._row_job_ids: list[int] = []
         self._rates: dict[int, tuple[float, int]] = {}
+        self._resolve_threads: list[_ResolveThread] = []
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(500)
@@ -82,8 +98,48 @@ class MainWindow(QMainWindow):
     def _add_url(self) -> None:
         url, accepted = QInputDialog.getText(self, "Add download", "URL:")
         if accepted and url.strip():
-            self.manager.add_url(url.strip(), self.download_dir)
-            self.refresh()
+            self.begin_add_url(url.strip())
+
+    def begin_add_url(self, url: str) -> None:
+        """Entry point shared by the toolbar, tray, and clipboard watcher."""
+        self.statusBar().showMessage(f"Analyzing {url} …")
+        thread = _ResolveThread(self.resolver, url, self.settings)
+        thread.resolved.connect(self._on_resolved)
+        thread.finished.connect(lambda: self._resolve_threads.remove(thread))
+        self._resolve_threads.append(thread)
+        thread.start()
+
+    def _on_resolved(self, resolution: Resolution) -> None:
+        self.statusBar().showMessage("Ready")
+        if resolution.kind is None:
+            QMessageBox.information(self, "Grabline", resolution.message or "No media found.")
+            return
+        if resolution.kind is JobKind.SMART and resolution.media is not None:
+            panel = QualityPanel(resolution.media, self)
+            if panel.exec() != QualityPanel.DialogCode.Accepted:
+                return
+            option = panel.selected_option()
+            if option is None:
+                return
+            self.manager.add_smart(
+                resolution.url,
+                resolution.media,
+                option,
+                subtitles=panel.subtitles_config(),
+                trim=panel.trim_range(),
+                use_session=self.settings.use_browser_session,
+                session_browser=self.settings.session_browser,
+            )
+        elif resolution.kind is JobKind.HLS:
+            self.manager.add_hls(resolution.url)
+        else:
+            filename = (
+                resolution.probe.filename
+                if resolution.probe is not None and resolution.probe.filename
+                else None
+            )
+            self.manager.add_url(resolution.url, filename=filename)
+        self.refresh()
 
     def _selected_job_id(self) -> int | None:
         row = self.table.currentRow()
@@ -107,7 +163,10 @@ class MainWindow(QMainWindow):
             self.manager.cancel(job_id)
 
     def _open_folder(self) -> None:
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.download_dir)))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.settings.download_dir)))
+
+    def _open_settings(self) -> None:
+        SettingsDialog(self.settings, self).exec()
 
     # ------------------------------------------------------------- refresh
 
@@ -138,7 +197,7 @@ class MainWindow(QMainWindow):
 
     def _update_row(self, row: int, view: JobView) -> None:
         name_item = self._cell(row, 0)
-        name_item.setText(view.filename)
+        name_item.setText(view.display_name)
         name_item.setToolTip(view.url)
 
         size_text = human_bytes(view.total_size) if view.total_size is not None else "?"

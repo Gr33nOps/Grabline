@@ -8,12 +8,14 @@ the checkpointer, and the UI thread can all talk to one Database instance.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
-from app.core.models import RESUMABLE_STATUSES, Job, JobStatus, Segment
+from app.core.models import RESUMABLE_STATUSES, Job, JobKind, JobStatus, Segment
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -28,6 +30,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     last_modified TEXT,
     status        TEXT NOT NULL DEFAULT 'queued',
     error         TEXT,
+    kind          TEXT NOT NULL DEFAULT 'direct',
+    title         TEXT,
+    options       TEXT NOT NULL DEFAULT '{}',
+    downloaded    INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -42,7 +48,20 @@ CREATE TABLE IF NOT EXISTS segments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_segments_job_id ON segments(job_id);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
+
+#: Columns added after Phase 0, applied to pre-existing databases on open.
+_JOBS_MIGRATIONS = {
+    "kind": "ALTER TABLE jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'direct'",
+    "title": "ALTER TABLE jobs ADD COLUMN title TEXT",
+    "options": "ALTER TABLE jobs ADD COLUMN options TEXT NOT NULL DEFAULT '{}'",
+    "downloaded": "ALTER TABLE jobs ADD COLUMN downloaded INTEGER NOT NULL DEFAULT 0",
+}
 
 
 def _job_from_row(row: sqlite3.Row) -> Job:
@@ -58,6 +77,10 @@ def _job_from_row(row: sqlite3.Row) -> Job:
         last_modified=row["last_modified"],
         status=JobStatus(row["status"]),
         error=row["error"],
+        kind=JobKind(row["kind"]),
+        title=row["title"],
+        options=json.loads(row["options"] or "{}"),
+        downloaded=row["downloaded"],
     )
 
 
@@ -85,6 +108,15 @@ class Database:
             self._conn.execute("PRAGMA foreign_keys=ON")
             self._conn.execute("PRAGMA busy_timeout=5000")
             self._conn.executescript(_SCHEMA)
+            self._migrate()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after Phase 0 to databases created before them."""
+        existing = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)").fetchall()}
+        with self._conn:
+            for column, statement in _JOBS_MIGRATIONS.items():
+                if column not in existing:
+                    self._conn.execute(statement)
 
     def close(self) -> None:
         with self._lock:
@@ -92,11 +124,21 @@ class Database:
 
     # ------------------------------------------------------------- jobs
 
-    def create_job(self, url: str, dest_dir: str, filename: str) -> Job:
+    def create_job(
+        self,
+        url: str,
+        dest_dir: str,
+        filename: str,
+        *,
+        kind: JobKind = JobKind.DIRECT,
+        title: str | None = None,
+        options: Mapping[str, Any] | None = None,
+    ) -> Job:
         with self._lock, self._conn:
             cur = self._conn.execute(
-                "INSERT INTO jobs (url, dest_dir, filename) VALUES (?, ?, ?)",
-                (url, dest_dir, filename),
+                "INSERT INTO jobs (url, dest_dir, filename, kind, title, options) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (url, dest_dir, filename, kind.value, title, json.dumps(dict(options or {}))),
             )
             job_id = cur.lastrowid
         if job_id is None:  # pragma: no cover - sqlite always sets it
@@ -165,6 +207,17 @@ class Database:
                 (filename, job_id),
             )
 
+    def update_job_downloaded(self, job_id: int, downloaded: int) -> None:
+        """Progress mirror for smart/hls jobs (direct jobs checkpoint segments)."""
+        with self._lock, self._conn:
+            self._conn.execute("UPDATE jobs SET downloaded = ? WHERE id = ?", (downloaded, job_id))
+
+    def stored_progress(self, job: Job) -> int:
+        """Bytes on record for a job that is not currently running."""
+        if job.kind is JobKind.DIRECT:
+            return self.job_downloaded(job.id)
+        return job.downloaded
+
     def mark_interrupted(self) -> int:
         """Flip jobs a dead process left 'downloading' to 'paused'. Run at startup."""
         with self._lock, self._conn:
@@ -173,6 +226,21 @@ class Database:
                 (JobStatus.PAUSED.value, JobStatus.DOWNLOADING.value),
             )
         return cur.rowcount
+
+    # --------------------------------------------------------- settings
+
+    def get_setting(self, key: str) -> str | None:
+        with self._lock:
+            row = self._conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
 
     # --------------------------------------------------------- segments
 

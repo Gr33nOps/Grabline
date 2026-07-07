@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 PART_SUFFIX = ".gl-part"
 
@@ -16,6 +17,14 @@ class JobStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+class JobKind(StrEnum):
+    """Which engine runs the job (decided once, by the resolver)."""
+
+    DIRECT = "direct"  # segmented downloader (app.core.downloader)
+    SMART = "smart"  # yt-dlp in-process (app.engines.smart)
+    HLS = "hls"  # FFmpeg stream reassembly (app.engines.hls)
 
 
 #: Statuses a job can be picked up from again (used by "find unfinished").
@@ -53,6 +62,12 @@ class Job:
     last_modified: str | None
     status: JobStatus
     error: str | None
+    kind: JobKind = JobKind.DIRECT
+    title: str | None = None
+    #: Engine options (smart jobs: format spec, audio mode, subtitles, trim, session).
+    options: dict[str, Any] = field(default_factory=dict)
+    #: Progress mirror for non-segmented jobs (smart/hls); direct jobs use segments.
+    downloaded: int = 0
 
     @property
     def dest_path(self) -> Path:

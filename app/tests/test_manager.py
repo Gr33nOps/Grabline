@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from app.core.manager import DownloadManager
-from app.core.models import JobStatus
+from app.core.models import JobKind, JobStatus
+from app.core.settings import Settings
 from app.db.database import Database
+from app.engines.smart import MediaInfo, QualityOption
 from app.tests.conftest import sha256_file, wait_for
 from app.tests.media_server import MediaServer, payload, sha256
 
@@ -49,6 +53,50 @@ def test_manager_pause_and_resume(server: MediaServer, db: Database, dest: Path)
     finally:
         manager.shutdown()
     assert sha256_file(dest / "s.bin") == sha256(data)
+
+
+def test_manager_dispatches_smart_jobs(
+    server: MediaServer, db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Force ffmpeg_path=None: no postprocessing, so served bytes come through
+    # untouched and the checksum must match.
+    monkeypatch.setattr("app.core.manager.find_ffmpeg", lambda settings: None)
+    data = payload(600_000, 21)
+    url = server.add("/tube.mp4", data, content_type="video/mp4")
+    media = MediaInfo(
+        url=url,
+        id="x",
+        title="Manager Clip",
+        uploader=None,
+        duration=None,
+        thumbnail_url=None,
+        options=(QualityOption(label="Best", kind="video", format_spec="b"),),
+    )
+    manager = DownloadManager(db, max_concurrent=1)
+    try:
+        job = manager.add_smart(url, media, media.options[0], dest_dir=dest)
+        assert job.kind is JobKind.SMART
+        wait_for(lambda: _status(db, job.id) is JobStatus.COMPLETED, timeout=60)
+        views = {view.id: view for view in manager.snapshot()}
+        assert views[job.id].display_name == "Manager Clip"
+    finally:
+        manager.shutdown()
+    assert sha256_file(dest / "Manager Clip.mp4") == sha256(data)
+
+
+def test_add_url_sorts_into_categories(server: MediaServer, db: Database, tmp_path: Path):
+    url = server.add("/report.pdf", payload(10_000, 23))
+    settings = Settings(db)
+    settings.download_dir = tmp_path / "base"
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        job = manager.add_url(url)
+        assert job.dest_dir == str(tmp_path / "base" / "Documents")
+        settings.categories_enabled = False
+        job2 = manager.add_url(url)
+        assert job2.dest_dir == str(tmp_path / "base")
+    finally:
+        manager.shutdown()
 
 
 def test_snapshot_reports_progress(server: MediaServer, db: Database, dest: Path):

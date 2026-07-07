@@ -1,4 +1,4 @@
-"""Offscreen smoke test: the queue window builds and renders job rows."""
+"""Offscreen smoke tests: widgets build, render job rows, and validate input."""
 
 from __future__ import annotations
 
@@ -13,8 +13,13 @@ pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication, QProgressBar
 
 from app.core.manager import DownloadManager
+from app.core.settings import Settings
 from app.db.database import Database
-from app.ui.main_window import MainWindow, human_bytes
+from app.engines.smart import MediaInfo, QualityOption
+from app.ui.clipboard import is_probable_url
+from app.ui.format import duration_text, human_bytes
+from app.ui.main_window import MainWindow
+from app.ui.quality_panel import QualityPanel, parse_timestamp
 
 
 def _qapp() -> QApplication:
@@ -28,14 +33,38 @@ def test_human_bytes():
     assert human_bytes(5 * 1024 * 1024) == "5.0 MB"
 
 
+def test_duration_text():
+    assert duration_text(None) == ""
+    assert duration_text(75) == "1:15"
+    assert duration_text(3671) == "1:01:11"
+
+
+def test_parse_timestamp():
+    assert parse_timestamp("") is None
+    assert parse_timestamp("90") == 90.0
+    assert parse_timestamp("1:30") == 90.0
+    assert parse_timestamp("1:02:03") == 3723.0
+    with pytest.raises(ValueError):
+        parse_timestamp("abc")
+
+
+def test_is_probable_url():
+    assert is_probable_url("https://example.com/video.mp4")
+    assert not is_probable_url("just some text")
+    assert not is_probable_url("https://example.com/with space")
+    assert not is_probable_url("ftp://example.com/f")
+
+
 def test_main_window_lists_jobs(db: Database, tmp_path: Path):
     _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
     # max_concurrent=0 keeps the scheduler idle: the row renders without any
     # network activity.
-    manager = DownloadManager(db, max_concurrent=0)
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         db.create_job("http://example.invalid/x.bin", str(tmp_path), "x.bin")
-        window = MainWindow(manager, tmp_path)
+        window = MainWindow(manager, settings)
         window.refresh()
         assert window.table.rowCount() == 1
         name_item = window.table.item(0, 0)
@@ -45,3 +74,46 @@ def test_main_window_lists_jobs(db: Database, tmp_path: Path):
         assert isinstance(window.table.cellWidget(0, 2), QProgressBar)
     finally:
         manager.shutdown()
+
+
+def test_quality_panel_selection_and_trim(db: Database):
+    _qapp()
+    media = MediaInfo(
+        url="https://tube.example/watch?v=1",
+        id="1",
+        title="Panel Video",
+        uploader="Someone",
+        duration=125.0,
+        thumbnail_url=None,
+        options=(
+            QualityOption(label="Best", kind="video", format_spec="bv*+ba/b"),
+            QualityOption(
+                label="1080p",
+                kind="video",
+                format_spec="bv*[height<=1080]+ba/b[height<=1080]",
+                estimated_size=84 * 1024 * 1024,
+            ),
+            QualityOption(label="MP3", kind="audio", format_spec="ba/b", audio_format="mp3"),
+        ),
+        subtitle_languages=("en",),
+        auto_caption_languages=("en", "de"),
+    )
+    panel = QualityPanel(media)
+    assert panel.options_list.count() == 3
+    assert panel.selected_option() is media.options[0]
+    panel.options_list.setCurrentRow(2)
+    selected = panel.selected_option()
+    assert selected is not None and selected.audio_format == "mp3"
+
+    # subtitles: None + en + de (auto); en (manual) wins over its auto twin
+    assert panel.subtitle_combo.count() == 3
+    panel.subtitle_combo.setCurrentIndex(1)
+    config = panel.subtitles_config()
+    assert config == {"lang": "en", "auto": False, "embed": False}
+
+    panel.trim_start.setText("1:00")
+    panel.trim_end.setText("2:05")
+    assert panel.trim_range() == (60.0, 125.0)
+    panel.trim_start.setText("")
+    panel.trim_end.setText("")
+    assert panel.trim_range() is None

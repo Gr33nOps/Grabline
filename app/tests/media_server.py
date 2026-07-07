@@ -34,6 +34,7 @@ class Resource:
     supports_ranges: bool = True
     etag: str | None = None
     content_disposition: str | None = None
+    content_type: str | None = None
     send_content_length: bool = True
     chunk_size: int = 64 * 1024
     delay_per_chunk: float = 0.0
@@ -104,6 +105,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("ETag", resource.etag)
         if resource.content_disposition:
             self.send_header("Content-Disposition", resource.content_disposition)
+        if resource.content_type:
+            self.send_header("Content-Type", resource.content_type)
         if status == 206:
             self.send_header("Content-Range", f"bytes {start}-{end}/{len(data)}")
         if resource.send_content_length:

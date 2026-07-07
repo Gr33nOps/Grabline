@@ -1,0 +1,113 @@
+from __future__ import annotations
+
+from typing import Any
+
+from app.engines.smart import curate_formats, friendly_error
+
+MB = 1024 * 1024
+
+
+def _youtube_like_info() -> dict[str, Any]:
+    """A trimmed-down but structurally faithful yt-dlp info dict."""
+    return {
+        "id": "abc123",
+        "title": "Test Video",
+        "formats": [
+            # audio-only
+            {
+                "format_id": "140",
+                "vcodec": "none",
+                "acodec": "mp4a.40.2",
+                "abr": 128,
+                "filesize": 3 * MB,
+                "ext": "m4a",
+            },
+            {
+                "format_id": "251",
+                "vcodec": "none",
+                "acodec": "opus",
+                "abr": 160,
+                "filesize": 4 * MB,
+                "ext": "webm",
+            },
+            # video-only (heights slightly off the ladder, as in real life)
+            {
+                "format_id": "248",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "height": 1088,
+                "tbr": 4000,
+                "filesize": 80 * MB,
+                "ext": "webm",
+            },
+            {
+                "format_id": "247",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "height": 720,
+                "tbr": 2000,
+                "filesize": 40 * MB,
+                "ext": "webm",
+            },
+            # combined (already has audio)
+            {
+                "format_id": "18",
+                "vcodec": "avc1",
+                "acodec": "mp4a.40.2",
+                "height": 360,
+                "tbr": 700,
+                "filesize": 20 * MB,
+                "ext": "mp4",
+            },
+        ],
+    }
+
+
+def test_curated_labels_and_order():
+    options = curate_formats(_youtube_like_info())
+    assert [o.label for o in options] == ["Best", "1080p", "720p", "360p", "MP3", "M4A"]
+
+
+def test_video_size_estimates_add_audio_when_needed():
+    options = {o.label: o for o in curate_formats(_youtube_like_info())}
+    # video-only 1080p (80 MB) + best audio (4 MB opus)
+    assert options["1080p"].estimated_size == 84 * MB
+    assert options["720p"].estimated_size == 44 * MB
+    # the 360p format already has audio: no double counting
+    assert options["360p"].estimated_size == 20 * MB
+    assert options["Best"].estimated_size == 84 * MB
+
+
+def test_format_specs():
+    options = {o.label: o for o in curate_formats(_youtube_like_info())}
+    assert options["Best"].format_spec == "bv*+ba/b"
+    assert options["1080p"].format_spec == "bv*[height<=1080]+ba/b[height<=1080]"
+    assert options["MP3"].format_spec == "ba/b"
+    assert options["MP3"].audio_format == "mp3"
+    assert options["M4A"].format_spec == "ba[ext=m4a]/ba/b"
+    assert options["MP3"].estimated_size == 4 * MB
+
+
+def test_audio_only_source_still_offers_audio():
+    info = {
+        "formats": [
+            {"format_id": "0", "vcodec": "none", "acodec": "mp3", "abr": 192, "filesize": 5 * MB}
+        ]
+    }
+    options = curate_formats(info)
+    assert [o.label for o in options] == ["MP3", "M4A"]
+
+
+def test_empty_formats_yield_no_options():
+    assert curate_formats({"formats": []}) == ()
+
+
+def test_friendly_errors():
+    assert "private" in friendly_error("ERROR: [youtube] abc: Private video").lower()
+    assert "age-restricted" in friendly_error("Sign in to confirm your age")
+    assert "DRM" in friendly_error("This video is DRM protected")
+    geo_message = "The uploader has not made this video available in your country"
+    assert "region-blocked" in friendly_error(geo_message)
+    assert "cookie" in friendly_error("Could not copy Chrome cookie database").lower()
+    # unknown errors: first line, ERROR: prefix stripped, no traceback
+    assert friendly_error("ERROR: something odd\nTraceback...") == "something odd"
