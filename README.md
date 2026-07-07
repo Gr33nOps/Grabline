@@ -9,9 +9,10 @@ fast, with a quality picker (4K → 144p, MP3/M4A) on the 1000+ sites the Smart
 Engine knows, and IDM-grade segmented downloading everywhere else. No paid
 tier, no ads, no telemetry.
 
-> **Status: Phase 1 (MVP app).** The desktop app is a complete
-> yt-dlp GUI + download manager. The browser extension ("Grabline Connect")
-> is Phase 2.
+> **Status: Phase 2 (the button) in progress.** The desktop app is a complete
+> yt-dlp GUI + download manager, and the first slice of the browser extension
+> ("Grabline Connect") is here: right-click download, hover ⬇ buttons,
+> per-tab stream sniffing, and Native Messaging pairing.
 
 ## What works today
 
@@ -45,6 +46,11 @@ tier, no ads, no telemetry.
   refuses to install, full stop.
 - **Headless CLI**: `python -m app.cli <url> <dest>` with `--list-formats`,
   `--quality 1080p`, `--quality mp3` — same engines, same database.
+- **Grabline Connect** (first slice): right-click "Download with Grabline",
+  hover ⬇ buttons on page media, a per-tab list of sniffed streams, and
+  optional download takeover — all over Native Messaging with pinned
+  extension IDs; no ports, no localhost server. Pairing guide:
+  [extension/README.md](extension/README.md).
 
 ## Install & run (development)
 
@@ -96,8 +102,9 @@ packaging/      PyInstaller spec + release workflow (installers on tags)
 - **Phase 1 — MVP app** ✅ resolver + Smart Engine (quality panel, MP3,
   subtitles, trimming), HLS reassembly, FFmpeg pinned fetch, clipboard
   watcher, categories, browser session, installers on tag
-- **Phase 2 — v1.0**: the browser extension — hover ⬇ buttons, Native
-  Messaging, YouTube quality panel, download interception, playlists
+- **Phase 2 — v1.0** (in progress): Native Messaging pairing ✅, right-click
+  ✅, hover overlays ✅, per-tab sniffer list ✅, interception ✅ — YouTube
+  in-page quality panel and playlist selection still to come
 - **Phase 3 — v2.0**: HLS/DASH robustness, gallery grid, GIF tools, batch
   import, store publication
 

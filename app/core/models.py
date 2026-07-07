@@ -49,6 +49,17 @@ class Segment:
         return self.end is not None and self.downloaded >= self.end - self.start + 1
 
 
+@dataclass(frozen=True)
+class Handoff:
+    """A URL delivered by Grabline Connect, waiting for the app to pick it up."""
+
+    id: int
+    url: str
+    page_url: str | None
+    page_title: str | None
+    source: str
+
+
 @dataclass
 class Job:
     id: int

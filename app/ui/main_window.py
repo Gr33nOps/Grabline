@@ -91,7 +91,15 @@ class MainWindow(QMainWindow):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(500)
+        # Grabline Connect drops URLs into the handoffs table; pick them up.
+        self._handoff_timer = QTimer(self)
+        self._handoff_timer.timeout.connect(self._poll_handoffs)
+        self._handoff_timer.start(1000)
         self.refresh()
+
+    def _poll_handoffs(self) -> None:
+        for handoff in self.manager.db.claim_handoffs():
+            self.begin_add_url(handoff.url)
 
     # ------------------------------------------------------------- actions
 

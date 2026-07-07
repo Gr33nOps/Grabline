@@ -7,7 +7,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from app.core import paths
+from app.core import instance, paths
 from app.core.ffmpeg import find_ffmpeg
 from app.core.manager import DownloadManager
 from app.core.settings import Settings
@@ -80,8 +80,10 @@ def main() -> int:
         tray.messageClicked.connect(on_message_clicked)
 
     window.show()
+    instance.write_pid()  # lets the Native Messaging host report "app running"
 
     def shutdown() -> None:
+        instance.clear_pid()
         manager.shutdown()
         db.close()
 

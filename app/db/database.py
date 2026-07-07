@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from app.core.models import RESUMABLE_STATUSES, Job, JobKind, JobStatus, Segment
+from app.core.models import RESUMABLE_STATUSES, Handoff, Job, JobKind, JobStatus, Segment
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -52,6 +52,19 @@ CREATE INDEX IF NOT EXISTS idx_segments_job_id ON segments(job_id);
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+-- URLs handed over by Grabline Connect (via the Native Messaging host).
+-- The host inserts; the running app claims and runs them through the
+-- resolver. This table IS the extension->app channel: no sockets exist.
+CREATE TABLE IF NOT EXISTS handoffs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    url        TEXT NOT NULL,
+    page_url   TEXT,
+    page_title TEXT,
+    source     TEXT NOT NULL DEFAULT 'extension',
+    claimed    INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
 
@@ -226,6 +239,48 @@ class Database:
                 (JobStatus.PAUSED.value, JobStatus.DOWNLOADING.value),
             )
         return cur.rowcount
+
+    # --------------------------------------------------------- handoffs
+
+    def add_handoff(
+        self,
+        url: str,
+        *,
+        page_url: str | None = None,
+        page_title: str | None = None,
+        source: str = "extension",
+    ) -> int:
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO handoffs (url, page_url, page_title, source) VALUES (?, ?, ?, ?)",
+                (url, page_url, page_title, source),
+            )
+        handoff_id = cur.lastrowid
+        if handoff_id is None:  # pragma: no cover - sqlite always sets it
+            raise RuntimeError("INSERT did not produce a row id")
+        return handoff_id
+
+    def claim_handoffs(self) -> list[Handoff]:
+        """Atomically take every unclaimed handoff (exactly-once processing)."""
+        with self._lock, self._conn:
+            rows = self._conn.execute(
+                "SELECT * FROM handoffs WHERE claimed = 0 ORDER BY id"
+            ).fetchall()
+            if rows:
+                self._conn.executemany(
+                    "UPDATE handoffs SET claimed = 1 WHERE id = ?",
+                    [(row["id"],) for row in rows],
+                )
+        return [
+            Handoff(
+                id=row["id"],
+                url=row["url"],
+                page_url=row["page_url"],
+                page_title=row["page_title"],
+                source=row["source"],
+            )
+            for row in rows
+        ]
 
     # --------------------------------------------------------- settings
 
