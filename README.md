@@ -64,6 +64,14 @@ pip install -e ".[dev]"
 python -m app          # the desktop app
 ```
 
+On Linux, Qt 6.5+ needs a few system X11 libraries that aren't always
+preinstalled — if the app aborts with *"Could not load the Qt platform plugin
+xcb"*, install them:
+
+```bash
+sudo apt install libxcb-cursor0 libegl1 libxkbcommon0   # Debian/Ubuntu
+```
+
 Try the CLI:
 
 ```bash
