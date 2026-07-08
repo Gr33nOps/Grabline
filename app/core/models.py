@@ -60,6 +60,8 @@ class Handoff:
     source: str
     #: Gallery handoffs (F2.2) carry the page's image URLs here.
     payload: tuple[str, ...] = ()
+    #: A quality label chosen in the in-page panel (F1.3), e.g. "1080p".
+    quality: str | None = None
 
 
 @dataclass

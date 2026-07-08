@@ -13,17 +13,19 @@ const MAX_ITEMS_PER_TAB = 30;
 
 // ---------------------------------------------------------------- native
 
-async function sendToGrabline(url, tab) {
+async function sendToGrabline(url, tab, quality = null) {
   const message = {
     type: "download",
     url,
     pageUrl: tab?.url ?? null,
     pageTitle: tab?.title ?? null,
     source: "extension",
+    quality,
   };
   try {
     const reply = await api.runtime.sendNativeMessage(HOST_NAME, message);
     await api.storage.session.set({ lastNativeError: null });
+    if (reply?.type === "queued" && tab?.id != null) track(url, tab.id);
     return reply ?? { type: "error", message: "empty reply from host" };
   } catch (error) {
     const detail = error?.message ?? String(error);
@@ -42,6 +44,102 @@ async function pingGrabline() {
     await api.storage.session.set({ lastNativeError: detail });
     return null;
   }
+}
+
+// ------------------------------------------------ progress tracking (F1.3)
+// Every URL grabbed from a tab is polled over a persistent native-messaging
+// port (the host answers straight from the jobs table) and the progress is
+// forwarded to that tab's content script, which renders the pill. The open
+// port keeps the service worker alive while downloads run; the tracked map
+// is mirrored to storage.session so a worker restart picks it back up.
+
+const TRACK_LIMIT = 20;
+const TRACK_TTL_MS = 30 * 60 * 1000;
+const FINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const tracked = new Map(); // url -> { tabId, addedAt }
+let pollTimer = null;
+let statusPort = null;
+
+api.storage.session.get("trackedDownloads").then(({ trackedDownloads }) => {
+  for (const [url, info] of trackedDownloads ?? []) tracked.set(url, info);
+  if (tracked.size) schedulePoll();
+});
+
+function saveTracked() {
+  void api.storage.session.set({ trackedDownloads: [...tracked.entries()] });
+}
+
+function track(url, tabId) {
+  if (tracked.size >= TRACK_LIMIT && !tracked.has(url)) return;
+  tracked.set(url, { tabId, addedAt: Date.now() });
+  saveTracked();
+  schedulePoll();
+}
+
+function schedulePoll() {
+  if (pollTimer == null && tracked.size) pollTimer = setTimeout(pollStatus, 1000);
+}
+
+function statusPortFor() {
+  if (!statusPort) {
+    statusPort = api.runtime.connectNative(HOST_NAME);
+    statusPort.onMessage.addListener(onStatusReply);
+    statusPort.onDisconnect.addListener(() => {
+      statusPort = null;
+    });
+  }
+  return statusPort;
+}
+
+function stopPolling() {
+  if (statusPort) {
+    statusPort.disconnect();
+    statusPort = null;
+  }
+}
+
+function pollStatus() {
+  pollTimer = null;
+  const now = Date.now();
+  for (const [url, info] of tracked) {
+    if (now - info.addedAt > TRACK_TTL_MS) tracked.delete(url);
+  }
+  if (!tracked.size) {
+    saveTracked();
+    stopPolling();
+    return;
+  }
+  try {
+    statusPortFor().postMessage({ type: "status", urls: [...tracked.keys()] });
+  } catch {
+    statusPort = null;
+    tracked.clear();
+    saveTracked();
+    return;
+  }
+  schedulePoll();
+}
+
+function onStatusReply(reply) {
+  if (reply?.type !== "status") return;
+  const byTab = new Map();
+  let changed = false;
+  for (const job of reply.jobs ?? []) {
+    const info = tracked.get(job.url);
+    if (!info) continue;
+    if (FINAL_STATUSES.has(job.status)) {
+      tracked.delete(job.url); // the final state still reaches the pill below
+      changed = true;
+    }
+    const list = byTab.get(info.tabId) ?? [];
+    list.push(job);
+    byTab.set(info.tabId, list);
+  }
+  for (const [tabId, items] of byTab) {
+    api.tabs.sendMessage(tabId, { cmd: "progress", items }).catch(() => {});
+  }
+  if (changed) saveTracked();
+  if (!tracked.size) stopPolling();
 }
 
 // ----------------------------------------------------- context menu (F1.6)
@@ -194,9 +292,21 @@ api.downloads.onCreated.addListener(async (item) => {
 
 // ------------------------------------------------------------- messages
 
+async function tabForMessage(sender, message) {
+  if (sender.tab) return sender.tab;
+  if (message.tabId == null) return null; // popup passes the active tab's id
+  try {
+    return await api.tabs.get(message.tabId);
+  } catch {
+    return null;
+  }
+}
+
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.cmd === "grab") {
-    sendToGrabline(message.url, sender.tab).then(sendResponse);
+    tabForMessage(sender, message)
+      .then((tab) => sendToGrabline(message.url, tab, message.quality ?? null))
+      .then(sendResponse);
     return true; // async response
   }
   if (message?.cmd === "ping") {

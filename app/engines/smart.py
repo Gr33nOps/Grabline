@@ -146,6 +146,22 @@ def generic_quality_options() -> tuple[QualityOption, ...]:
     return tuple(options)
 
 
+def option_for_label(
+    label: str, options: tuple[QualityOption, ...] | None = None
+) -> QualityOption | None:
+    """The quality option matching ``label`` (case-insensitive), for handoffs
+    that already carry a choice (F1.3 in-page panel). Tries a media's curated
+    ``options`` first, then the generic tiers; "best" falls back to the top."""
+    wanted = label.strip().lower()
+    for pool in (options or (), generic_quality_options()):
+        for option in pool:
+            if option.label.lower() == wanted:
+                return option
+        if wanted == "best" and pool:
+            return pool[0]
+    return None
+
+
 def parse_playlist(info: dict[str, Any]) -> PlaylistInfo | None:
     """Turn a flat-extracted yt-dlp info dict into a PlaylistInfo, or None."""
     if info.get("_type") != "playlist":

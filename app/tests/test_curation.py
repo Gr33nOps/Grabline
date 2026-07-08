@@ -6,6 +6,7 @@ from app.engines.smart import (
     curate_formats,
     friendly_error,
     generic_quality_options,
+    option_for_label,
     parse_playlist,
 )
 
@@ -144,6 +145,28 @@ def test_generic_quality_options_shape():
     assert labels == ["Best", "1080p", "720p", "480p", "MP3", "M4A"]
     assert options[-2].audio_format == "mp3"
     assert all(option.format_spec for option in options)
+
+
+def test_option_for_label_prefers_curated_options():
+    curated = curate_formats(_youtube_like_info())
+    option = option_for_label("1080p", curated)
+    assert option is not None and option in curated
+    assert option.height == 1080
+
+
+def test_option_for_label_falls_back_to_generic_tiers():
+    # No curated list at all (F1.3 handoff before inspection details exist).
+    option = option_for_label("720p")
+    assert option is not None and option.format_spec == "bv*[height<=720]+ba/b[height<=720]"
+    audio = option_for_label("mp3")
+    assert audio is not None and audio.audio_format == "mp3"
+
+
+def test_option_for_label_best_and_unknown():
+    curated = curate_formats(_youtube_like_info())
+    best = option_for_label("BEST", curated)
+    assert best is not None and best.label == "Best"
+    assert option_for_label("8888p", curated) is None
 
 
 def test_friendly_errors():

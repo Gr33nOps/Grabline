@@ -12,6 +12,7 @@
   const STATUS_PATH = /^\/[^/]+\/status\/\d+/;
 
   globalThis.grablineSiteButton({
+    qualityPanel: true,
     resolve(target) {
       const player = target.closest(PLAYER);
       if (!player) return null;

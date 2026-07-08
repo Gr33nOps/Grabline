@@ -7,6 +7,13 @@ readable in one sitting; that is a design goal.
 
 ## What it does
 
+- **In-page quality panel** (F1.3): click the ⬇ on a site-module page and
+  pick Best / 1080p / 720p / 480p / MP3 / M4A right there — the download
+  starts without touching the app window ("More options…" opens the app's
+  full panel with subtitles and trimming)
+- **Live progress pill** (F1.3): anything grabbed from a tab shows its
+  percentage bottom-right in that tab, streamed over Native Messaging from
+  the app's jobs table — still no sockets, no ports
 - **Right-click → "Download with Grabline"** on any link, image, video,
   audio, selection, or page (F1.6)
 - **Right-click → "Download all images with Grabline"** (F2.2): every
@@ -78,7 +85,10 @@ and Firefox (each store wants a slightly different manifest); the listing
 text, permission justifications, and reviewer notes are prewritten in
 [docs/store-listing.md](../docs/store-listing.md).
 
-## Still to come
+## How the pill works (no sockets, still)
 
-- In-page quality panel + live progress pill on YouTube (the full F1.3 —
-  currently the quality choice happens in the desktop app's panel)
+The background script keeps a persistent Native Messaging port open while
+downloads it started are running, asks the host for status once a second,
+and the host answers straight from the app's SQLite jobs table. The open
+port also keeps the MV3 service worker alive for exactly as long as there
+is something to report.

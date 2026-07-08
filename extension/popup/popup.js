@@ -72,7 +72,7 @@ async function renderMediaList(tab) {
     grab.addEventListener("click", async () => {
       grab.disabled = true;
       grab.textContent = "Sent ✓";
-      const reply = await api.runtime.sendMessage({ cmd: "grab", url: item.url });
+      const reply = await api.runtime.sendMessage({ cmd: "grab", url: item.url, tabId: tab.id });
       if (reply?.type === "error") {
         grab.textContent = "Failed";
         grab.disabled = false;

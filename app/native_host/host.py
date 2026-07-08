@@ -16,11 +16,18 @@ from app.native_host.protocol import ProtocolError, read_message, write_message
 
 log = logging.getLogger(__name__)
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
 _MAX_URL_LENGTH = 8192
 _MAX_TEXT_LENGTH = 512
 _MAX_GALLERY_ITEMS = 300
+_MAX_STATUS_ITEMS = 50
+
+#: Labels the in-page quality panel (F1.3) may pin; anything else is dropped
+#: and the app shows its own panel instead.
+_QUALITY_LABELS = frozenset(
+    {"best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "mp3", "m4a"}
+)
 
 
 def _clean_text(value: object, limit: int = _MAX_TEXT_LENGTH) -> str | None:
@@ -52,17 +59,44 @@ def handle_message(db: Database, message: dict[str, Any]) -> dict[str, Any]:
         url = _valid_url(message.get("url"))
         if url is None:
             return {"type": "error", "message": "only http(s) URLs can be downloaded"}
+        quality = _clean_text(message.get("quality"), limit=8)
+        if quality is not None and quality.lower() not in _QUALITY_LABELS:
+            quality = None
         handoff_id = db.add_handoff(
             url,
             page_url=_valid_url(message.get("pageUrl")),
             page_title=_clean_text(message.get("pageTitle")),
             source=_clean_text(message.get("source")) or "extension",
+            quality=quality,
         )
         return {
             "type": "queued",
             "handoffId": handoff_id,
             "appRunning": instance.app_is_running(),
         }
+    if kind == "status":
+        # F1.3 progress pill: latest job per URL, straight from the jobs table.
+        raw = message.get("urls")
+        jobs: list[dict[str, Any]] = []
+        if isinstance(raw, list):
+            for item in raw[:_MAX_STATUS_ITEMS]:
+                url = _valid_url(item)
+                if url is None:
+                    continue
+                job = db.latest_job_for_url(url)
+                if job is None:
+                    jobs.append({"url": url, "status": "pending"})
+                    continue
+                jobs.append(
+                    {
+                        "url": url,
+                        "status": job.status.value,
+                        "downloaded": db.stored_progress(job),
+                        "total": job.total_size,
+                        "name": job.title or job.filename,
+                    }
+                )
+        return {"type": "status", "jobs": jobs, "appRunning": instance.app_is_running()}
     if kind == "gallery":
         # F2.2: every image URL the content script collected on one page.
         raw = message.get("urls")

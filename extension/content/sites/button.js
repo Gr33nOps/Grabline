@@ -13,8 +13,11 @@
   const api = globalThis.browser ?? globalThis.chrome;
   const SHOW_DELAY_MS = 150;
   const RECT_MARGIN = 8;
+  // The in-page quality panel (F1.3). Labels the app resolves at download
+  // time (same trick as playlist batches) — instant, no metadata fetch.
+  const QUALITY_LABELS = ["Best", "1080p", "720p", "480p", "MP3", "M4A"];
 
-  globalThis.grablineSiteButton = ({ resolve }) => {
+  globalThis.grablineSiteButton = ({ resolve, qualityPanel = false }) => {
     let enabled = true;
     api.storage.local.get("disabledSites").then(({ disabledSites = [] }) => {
       if (disabledSites.includes(location.hostname)) enabled = false;
@@ -47,6 +50,21 @@
     ].join(";");
     shadow.appendChild(button);
 
+    const panel = document.createElement("div");
+    panel.style.cssText = [
+      "position: fixed",
+      "z-index: 2147483647",
+      "display: none",
+      "flex-direction: column",
+      "gap: 2px",
+      "padding: 6px",
+      "border-radius: 10px",
+      "background: rgba(17,24,39,.96)",
+      "box-shadow: 0 4px 14px rgba(0,0,0,.45)",
+    ].join(";");
+    shadow.appendChild(panel);
+    let panelOpen = false;
+
     let currentUrl = null;
     let currentRect = null;
     let hideTimer = 0;
@@ -59,9 +77,66 @@
     function hide() {
       clearTimeout(showTimer);
       button.style.display = "none";
+      closePanel();
       currentUrl = null;
       currentRect = null;
     }
+
+    function closePanel() {
+      panel.style.display = "none";
+      panelOpen = false;
+    }
+
+    function feedback(reply) {
+      button.textContent = reply?.type === "error" ? "!" : "✓";
+      button.style.background = reply?.type === "error" ? "#b91c1c" : "#15803d";
+      setTimeout(hide, 900);
+    }
+
+    function openPanel() {
+      panel.textContent = "";
+      const url = currentUrl;
+      for (const label of [...QUALITY_LABELS, "More options…"]) {
+        const choice = document.createElement("button");
+        choice.textContent = label;
+        choice.style.cssText = [
+          "border: none",
+          "border-radius: 6px",
+          "padding: 5px 14px",
+          "background: transparent",
+          "color: #fff",
+          "font: 500 12px/1.2 system-ui, sans-serif",
+          "cursor: pointer",
+          "text-align: left",
+        ].join(";");
+        choice.addEventListener("mouseenter", () => (choice.style.background = "#2563eb"));
+        choice.addEventListener("mouseleave", () => (choice.style.background = "transparent"));
+        choice.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          closePanel();
+          // "More options…" sends no quality: the desktop panel opens instead.
+          const quality = QUALITY_LABELS.includes(label) ? label : null;
+          feedback(await api.runtime.sendMessage({ cmd: "grab", url, quality }));
+        });
+        panel.appendChild(choice);
+      }
+      const rect = button.getBoundingClientRect();
+      panel.style.left = `${Math.max(4, Math.min(rect.left, window.innerWidth - 130))}px`;
+      panel.style.top = `${rect.bottom + 4}px`;
+      panel.style.display = "flex";
+      panelOpen = true;
+    }
+
+    // A click anywhere outside the button/panel dismisses the panel. Events
+    // inside the closed shadow root retarget to `host`, so this stays simple.
+    document.addEventListener(
+      "mousedown",
+      (event) => {
+        if (panelOpen && event.target !== host) hide();
+      },
+      { capture: true },
+    );
 
     function scheduleHide() {
       clearTimeout(hideTimer);
@@ -93,7 +168,7 @@
     document.addEventListener(
       "mouseover",
       (event) => {
-        if (!enabled || !(event.target instanceof Element)) return;
+        if (!enabled || panelOpen || !(event.target instanceof Element)) return;
         let hit = null;
         try {
           hit = resolve(event.target);
@@ -116,15 +191,19 @@
     document.addEventListener("scroll", hide, { passive: true, capture: true });
 
     button.addEventListener("mouseenter", () => clearTimeout(hideTimer));
-    button.addEventListener("mouseleave", scheduleHide);
+    button.addEventListener("mouseleave", () => {
+      if (!panelOpen) scheduleHide();
+    });
     button.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
       if (!currentUrl) return;
-      const reply = await api.runtime.sendMessage({ cmd: "grab", url: currentUrl });
-      button.textContent = reply?.type === "error" ? "!" : "✓";
-      button.style.background = reply?.type === "error" ? "#b91c1c" : "#15803d";
-      setTimeout(hide, 900);
+      if (qualityPanel) {
+        if (panelOpen) closePanel();
+        else openPanel();
+        return;
+      }
+      feedback(await api.runtime.sendMessage({ cmd: "grab", url: currentUrl }));
     });
   };
 })();

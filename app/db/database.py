@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS handoffs (
     page_title TEXT,
     source     TEXT NOT NULL DEFAULT 'extension',
     payload    TEXT NOT NULL DEFAULT '[]',
+    quality    TEXT,
     claimed    INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -79,6 +80,7 @@ _JOBS_MIGRATIONS = {
 
 _HANDOFFS_MIGRATIONS = {
     "payload": "ALTER TABLE handoffs ADD COLUMN payload TEXT NOT NULL DEFAULT '[]'",
+    "quality": "ALTER TABLE handoffs ADD COLUMN quality TEXT",
 }
 
 
@@ -179,6 +181,15 @@ class Database:
             rows = self._conn.execute("SELECT * FROM jobs ORDER BY id").fetchall()
         return [_job_from_row(row) for row in rows]
 
+    def latest_job_for_url(self, url: str) -> Job | None:
+        """The most recent job for a URL — how the extension's progress pill
+        (F1.3) finds "its" download without any job-id round trip."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM jobs WHERE url = ? ORDER BY id DESC LIMIT 1", (url,)
+            ).fetchone()
+        return _job_from_row(row) if row else None
+
     def find_resumable_job(self, url: str, dest_dir: str) -> Job | None:
         placeholders = ", ".join("?" for _ in RESUMABLE_STATUSES)
         params = (url, dest_dir, *[status.value for status in RESUMABLE_STATUSES])
@@ -264,12 +275,13 @@ class Database:
         page_title: str | None = None,
         source: str = "extension",
         payload: Sequence[str] = (),
+        quality: str | None = None,
     ) -> int:
         with self._lock, self._conn:
             cur = self._conn.execute(
-                "INSERT INTO handoffs (url, page_url, page_title, source, payload) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (url, page_url, page_title, source, json.dumps(list(payload))),
+                "INSERT INTO handoffs (url, page_url, page_title, source, payload, quality) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (url, page_url, page_title, source, json.dumps(list(payload)), quality),
             )
         handoff_id = cur.lastrowid
         if handoff_id is None:  # pragma: no cover - sqlite always sets it
@@ -295,6 +307,7 @@ class Database:
                 page_title=row["page_title"],
                 source=row["source"],
                 payload=tuple(json.loads(row["payload"] or "[]")),
+                quality=row["quality"],
             )
             for row in rows
         ]

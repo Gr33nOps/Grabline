@@ -9,10 +9,11 @@ fast, with a quality picker (4K → 144p, MP3/M4A) on the 1000+ sites the Smart
 Engine knows, and IDM-grade segmented downloading everywhere else. No paid
 tier, no ads, no telemetry.
 
-> **Status: Phase 2 (the button) in progress.** The desktop app is a complete
-> yt-dlp GUI + download manager, and the first slice of the browser extension
-> ("Grabline Connect") is here: right-click download, hover ⬇ buttons,
-> per-tab stream sniffing, and Native Messaging pairing.
+> **Status: feature-complete through Phase 3, heading to v1.0.** The desktop
+> app is a complete download manager + yt-dlp GUI, and the browser extension
+> ("Grabline Connect") does right-click download, hover ⬇ buttons with an
+> in-page quality panel, a live progress pill, per-tab stream sniffing,
+> gallery grabbing, and Native Messaging pairing.
 
 ## What works today
 
@@ -122,10 +123,10 @@ packaging/      PyInstaller spec + release workflow (installers on tags)
 - **Phase 1 — MVP app** ✅ resolver + Smart Engine (quality panel, MP3,
   subtitles, trimming), HLS reassembly, FFmpeg pinned fetch, clipboard
   watcher, categories, browser session, installers on tag
-- **Phase 2 — v1.0** (in progress): Native Messaging pairing ✅, right-click
-  ✅, hover overlays ✅, per-tab sniffer list ✅, interception ✅, playlists
-  ✅, YouTube thumbnail buttons ✅, ugly-name fixer ✅, speed limiter ✅,
-  history search & row actions ✅ — the in-page YouTube quality panel remains
+- **Phase 2 — v1.0** ✅ Native Messaging pairing, right-click, hover
+  overlays, per-tab sniffer list, interception, playlists, site thumbnail
+  buttons, ugly-name fixer, speed limiter, history search & row actions,
+  and the in-page quality panel + live progress pill (F1.3)
 - **Phase 3 — v2.0** (in progress): HLS/DASH robustness ✅ (variant picker,
   separate audio renditions, duration progress, auto-retry), gallery grid ✅,
   GIF tools ✅, batch import ✅, Vimeo + X site modules ✅, store publication

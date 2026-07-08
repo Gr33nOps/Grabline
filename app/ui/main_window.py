@@ -28,6 +28,7 @@ from app.core.manager import DownloadManager, JobView
 from app.core.models import JobKind, JobStatus
 from app.core.resolver import Resolution, Resolver
 from app.core.settings import Settings
+from app.engines.smart import option_for_label
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.format import human_bytes
 from app.ui.gallery_panel import GalleryPanel
@@ -41,15 +42,22 @@ _VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
 
 
 class _ResolveThread(QThread):
-    resolved = Signal(object, object)  # Resolution, page_title (str | None)
+    # Resolution, page_title (str | None), quality label (str | None, F1.3)
+    resolved = Signal(object, object, object)
 
     def __init__(
-        self, resolver: Resolver, url: str, settings: Settings, page_title: str | None
+        self,
+        resolver: Resolver,
+        url: str,
+        settings: Settings,
+        page_title: str | None,
+        quality: str | None = None,
     ) -> None:
         super().__init__()
         self._resolver = resolver
         self._url = url
         self._page_title = page_title
+        self._quality = quality
         self._use_session = settings.use_browser_session
         self._browser = settings.session_browser
 
@@ -57,7 +65,7 @@ class _ResolveThread(QThread):
         resolution = self._resolver.resolve(
             self._url, use_session=self._use_session, session_browser=self._browser
         )
-        self.resolved.emit(resolution, self._page_title)
+        self.resolved.emit(resolution, self._page_title, self._quality)
 
 
 class MainWindow(QMainWindow):
@@ -126,7 +134,9 @@ class MainWindow(QMainWindow):
             if handoff.source == "gallery" and handoff.payload:
                 self._open_gallery(list(handoff.payload), handoff.page_title)
             else:
-                self.begin_add_url(handoff.url, page_title=handoff.page_title)
+                self.begin_add_url(
+                    handoff.url, page_title=handoff.page_title, quality=handoff.quality
+                )
 
     def _open_gallery(self, urls: list[str], page_title: str | None) -> None:
         """F2.2: the extension collected a page's images — pick and batch."""
@@ -172,19 +182,41 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Grabline — import finished", f"{message}.\n\n{detail}")
         self.refresh()
 
-    def begin_add_url(self, url: str, page_title: str | None = None) -> None:
-        """Entry point shared by the toolbar, tray, clipboard, and extension."""
+    def begin_add_url(
+        self, url: str, page_title: str | None = None, quality: str | None = None
+    ) -> None:
+        """Entry point shared by the toolbar, tray, clipboard, and extension.
+        A ``quality`` label (F1.3 in-page panel) skips the quality dialog."""
         self.statusBar().showMessage(f"Analyzing {url} …")
-        thread = _ResolveThread(self.resolver, url, self.settings, page_title)
+        thread = _ResolveThread(self.resolver, url, self.settings, page_title, quality)
         thread.resolved.connect(self._on_resolved)
         thread.finished.connect(lambda: self._resolve_threads.remove(thread))
         self._resolve_threads.append(thread)
         thread.start()
 
-    def _on_resolved(self, resolution: Resolution, page_title: str | None) -> None:
+    def _on_resolved(
+        self, resolution: Resolution, page_title: str | None, quality: str | None = None
+    ) -> None:
         self.statusBar().showMessage("Ready")
         if resolution.kind is None:
             QMessageBox.information(self, "Grabline", resolution.message or "No media found.")
+            return
+        if (
+            quality
+            and resolution.kind is JobKind.SMART
+            and resolution.media is not None
+            and (option := option_for_label(quality, resolution.media.options)) is not None
+        ):
+            # F1.3: the quality was already chosen in the page — no dialog.
+            self.manager.add_smart(
+                resolution.url,
+                resolution.media,
+                option,
+                use_session=self.settings.use_browser_session,
+                session_browser=self.settings.session_browser,
+            )
+            self.statusBar().showMessage(f"Queued {resolution.media.title} ({option.label})", 5000)
+            self.refresh()
             return
         if resolution.kind is JobKind.SMART and resolution.playlist is not None:
             playlist_panel = PlaylistPanel(

@@ -114,6 +114,53 @@ def test_unknown_type_is_an_error_reply(db: Database):
     assert reply["type"] == "error"
 
 
+# -------------------------------------------- quality + status (F1.3)
+
+
+def test_download_carries_a_valid_quality_label(db: Database):
+    handle_message(
+        db, {"type": "download", "url": "https://example.com/watch?v=1", "quality": "1080p"}
+    )
+    assert db.claim_handoffs()[0].quality == "1080p"
+
+
+def test_bogus_quality_labels_are_dropped(db: Database):
+    for quality in ("4320p", "<script>", "", 42, "x" * 100):
+        handle_message(db, {"type": "download", "url": "https://example.com/v", "quality": quality})
+    assert all(handoff.quality is None for handoff in db.claim_handoffs())
+
+
+def test_status_reports_pending_and_job_progress(db: Database):
+    job = db.create_job("https://example.com/v.mp4", "/tmp", "v.mp4")
+    db.update_job_total(job.id, 1000)
+    db.replace_segments(job.id, [(0, 999)])
+    db.update_segment_progress({db.segments_for(job.id)[0].id: 250})
+
+    reply = handle_message(
+        db,
+        {
+            "type": "status",
+            "urls": ["https://example.com/v.mp4", "https://example.com/unknown", "ftp://x"],
+        },
+    )
+    assert reply["type"] == "status"
+    assert len(reply["jobs"]) == 2  # the ftp URL is dropped, not echoed
+    known, unknown = reply["jobs"]
+    assert known["status"] == "queued"
+    assert known["downloaded"] == 250
+    assert known["total"] == 1000
+    assert known["name"] == "v.mp4"
+    assert unknown == {"url": "https://example.com/unknown", "status": "pending"}
+
+
+def test_latest_job_for_url_prefers_the_newest(db: Database):
+    db.create_job("https://example.com/f", "/tmp", "old.bin")
+    newer = db.create_job("https://example.com/f", "/tmp", "new.bin")
+    found = db.latest_job_for_url("https://example.com/f")
+    assert found is not None and found.id == newer.id
+    assert db.latest_job_for_url("https://example.com/other") is None
+
+
 # -------------------------------------------------------- gallery (F2.2)
 
 

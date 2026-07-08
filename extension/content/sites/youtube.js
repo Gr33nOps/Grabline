@@ -20,6 +20,7 @@
   ].join(", ");
 
   globalThis.grablineSiteButton({
+    qualityPanel: true, // F1.3: pick a quality right in the page
     resolve(target) {
       const anchor = target.closest(THUMBNAIL_ANCHORS);
       const href = anchor?.getAttribute("href");

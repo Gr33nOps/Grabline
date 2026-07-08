@@ -157,9 +157,104 @@
     return urls;
   }
 
+  // ------------------------------------------------ progress pill (F1.3)
+  // The background script polls the app (over Native Messaging) for every
+  // download grabbed from this tab and forwards updates here. One stack of
+  // pills, bottom-right; finished downloads linger briefly, then fade.
+
+  const pillHost = document.createElement("div");
+  const pillShadow = pillHost.attachShadow({ mode: "closed" });
+  const pillStack = document.createElement("div");
+  pillStack.style.cssText = [
+    "position: fixed",
+    "right: 16px",
+    "bottom: 16px",
+    "z-index: 2147483647",
+    "display: none",
+    "flex-direction: column",
+    "align-items: flex-end",
+    "gap: 6px",
+  ].join(";");
+  pillShadow.appendChild(pillStack);
+  const pillRows = new Map(); // url -> { row, timer }
+
+  function humanBytes(count) {
+    const units = ["B", "KB", "MB", "GB"];
+    let value = count;
+    let index = 0;
+    while (value >= 1024 && index < units.length - 1) {
+      value /= 1024;
+      index += 1;
+    }
+    return `${value.toFixed(index ? 1 : 0)} ${units[index]}`;
+  }
+
+  function pillRowFor(url) {
+    let entry = pillRows.get(url);
+    if (!entry) {
+      const row = document.createElement("div");
+      row.style.cssText = [
+        "max-width: 340px",
+        "padding: 8px 14px",
+        "border-radius: 999px",
+        "background: rgba(17,24,39,.94)",
+        "color: #fff",
+        "font: 500 12px/1.3 system-ui, sans-serif",
+        "box-shadow: 0 2px 8px rgba(0,0,0,.35)",
+        "overflow: hidden",
+        "text-overflow: ellipsis",
+        "white-space: nowrap",
+      ].join(";");
+      pillStack.appendChild(row);
+      entry = { row, timer: 0 };
+      pillRows.set(url, entry);
+    }
+    return entry;
+  }
+
+  function dropPill(url, delayMs) {
+    const entry = pillRows.get(url);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => {
+      entry.row.remove();
+      pillRows.delete(url);
+      if (!pillRows.size) pillStack.style.display = "none";
+    }, delayMs);
+  }
+
+  function pillText(job) {
+    const name = job.name ?? "download";
+    if (job.status === "completed") return `✓ ${name}`;
+    if (job.status === "failed") return `✗ failed — ${name}`;
+    if (job.total && job.downloaded != null) {
+      return `⬇ ${Math.min(100, Math.round((job.downloaded / job.total) * 100))}% · ${name}`;
+    }
+    if (job.downloaded) return `⬇ ${humanBytes(job.downloaded)} · ${name}`;
+    return `⬇ starting · ${name}`;
+  }
+
+  function renderProgress(items) {
+    if (document.body && !pillHost.isConnected) document.body.appendChild(pillHost);
+    for (const job of items) {
+      if (job.status === "cancelled") {
+        dropPill(job.url, 0);
+        continue;
+      }
+      const entry = pillRowFor(job.url);
+      entry.row.textContent = pillText(job);
+      entry.row.title = job.url;
+      if (job.status === "completed") dropPill(job.url, 5000);
+      if (job.status === "failed") dropPill(job.url, 8000);
+    }
+    if (pillRows.size) pillStack.style.display = "flex";
+  }
+
   api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.cmd === "collectImages") {
       sendResponse({ urls: collectImages() });
+    } else if (message?.cmd === "progress" && Array.isArray(message.items)) {
+      renderProgress(message.items);
     }
     return false;
   });
