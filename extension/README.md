@@ -87,8 +87,9 @@ logic — lives once in `content/sites/button.js`.
 
 - **youtube.js** — hover ⬇ on video thumbnails (home, search, channels,
   Shorts shelf) *and on the player itself* on watch/Shorts pages; both
-  open the in-page quality panel. The generic overlay stands back on
-  YouTube entirely.
+  open the in-page quality panel. Also covers **YouTube Music** (song
+  links and the bottom player bar — MP3 is one hover away). The generic
+  overlay stands back on YouTube entirely.
 - **vimeo.js** (F2.6) — hover ⬇ on links to `vimeo.com/<id>` videos.
 - **x.js** (F2.6) — hover ⬇ on videos inside tweets; sends the tweet's
   permalink (timeline videos are blob-backed, so the permalink is the only

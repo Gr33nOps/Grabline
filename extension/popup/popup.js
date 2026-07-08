@@ -99,6 +99,13 @@ async function wireToggles(tab) {
     void api.storage.local.set({ overlayImages: images.checked });
   });
 
+  const cornerSelect = document.getElementById("button-corner");
+  const { buttonCorner = "top-right" } = await api.storage.local.get("buttonCorner");
+  cornerSelect.value = buttonCorner;
+  cornerSelect.addEventListener("change", () => {
+    void api.storage.local.set({ buttonCorner: cornerSelect.value });
+  });
+
   const hostname = tab?.url ? new URL(tab.url).hostname : null;
   if (!hostname) {
     overlay.disabled = true;

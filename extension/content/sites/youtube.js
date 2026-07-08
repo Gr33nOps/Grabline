@@ -23,9 +23,26 @@
   const PLAYERS = "#movie_player, .html5-video-player";
   const MEDIA_PAGES = /^\/(watch|shorts\/|live\/)/;
 
+  // music.youtube.com is a different app on the same domain: song links use
+  // relative "watch?v=…" hrefs, and the bottom player bar plays whatever
+  // /watch URL the page is on. MP3 in the quality panel is the point here.
+  const IS_MUSIC = location.hostname === "music.youtube.com";
+  const MUSIC_ANCHORS = "a[href*='watch?v=']";
+  const MUSIC_PLAYER = "ytmusic-player-bar, ytmusic-player";
+
   globalThis.grablineSiteButton({
     qualityPanel: true, // F1.3: pick a quality right in the page
     resolve(target) {
+      if (IS_MUSIC) {
+        const anchor = target.closest(MUSIC_ANCHORS);
+        const href = anchor?.getAttribute("href");
+        if (href) return { anchor, url: new URL(href, location.origin).toString() };
+        const bar = target.closest(MUSIC_PLAYER);
+        if (bar && /^\/watch/.test(location.pathname)) {
+          return { anchor: bar, url: location.href };
+        }
+        return null;
+      }
       const anchor = target.closest(THUMBNAIL_ANCHORS);
       const href = anchor?.getAttribute("href");
       if (href) return { anchor, url: new URL(href, location.origin).toString() };

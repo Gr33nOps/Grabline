@@ -39,10 +39,14 @@
   let currentTarget = null;
   let hideTimer = 0;
 
-  api.storage.local.get(["disabledSites", "overlayImages"]).then(
-    ({ disabledSites = [], overlayImages = false }) => {
+  // Which corner of the hovered element the ⬇ sits in (popup setting).
+  let corner = "top-right";
+
+  api.storage.local.get(["disabledSites", "overlayImages", "buttonCorner"]).then(
+    ({ disabledSites = [], overlayImages = false, buttonCorner = "top-right" }) => {
       if (disabledSites.includes(location.hostname)) enabled = false;
       imagesEnabled = overlayImages;
+      corner = buttonCorner;
     },
   );
   api.storage.onChanged.addListener((changes, area) => {
@@ -54,6 +58,9 @@
     if (changes.overlayImages) {
       imagesEnabled = Boolean(changes.overlayImages.newValue);
       if (!imagesEnabled) hideButton();
+    }
+    if (changes.buttonCorner) {
+      corner = changes.buttonCorner.newValue ?? "top-right";
     }
   });
 
@@ -120,8 +127,11 @@
     const rect = element.getBoundingClientRect();
     if (rect.width < 40 || rect.height < 40) return;
     currentTarget = element;
-    button.style.left = `${Math.max(4, rect.right - 42)}px`;
-    button.style.top = `${Math.max(4, rect.top + 8)}px`;
+    const size = 34;
+    const left = corner.endsWith("left") ? rect.left + 8 : rect.right - size - 8;
+    const top = corner.startsWith("bottom") ? rect.bottom - size - 8 : rect.top + 8;
+    button.style.left = `${Math.min(Math.max(4, left), window.innerWidth - size - 4)}px`;
+    button.style.top = `${Math.min(Math.max(4, top), window.innerHeight - size - 4)}px`;
     button.style.display = "block";
     button.style.background = "#2563eb";
     button.textContent = "⬇";

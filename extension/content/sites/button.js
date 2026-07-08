@@ -13,9 +13,31 @@
   const api = globalThis.browser ?? globalThis.chrome;
   const SHOW_DELAY_MS = 150;
   const RECT_MARGIN = 8;
+  const BUTTON_SIZE = 30;
   // The in-page quality panel (F1.3). Labels the app resolves at download
   // time (same trick as playlist batches) — instant, no metadata fetch.
   const QUALITY_LABELS = ["Best", "1080p", "720p", "480p", "MP3", "M4A"];
+
+  // Which corner of the hovered element the ⬇ sits in — user-settable in
+  // the popup (some sites put their own controls exactly where we default).
+  let corner = "top-right";
+  api.storage.local.get("buttonCorner").then(({ buttonCorner = "top-right" }) => {
+    corner = buttonCorner;
+  });
+  api.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.buttonCorner) {
+      corner = changes.buttonCorner.newValue ?? "top-right";
+    }
+  });
+
+  function buttonPosition(rect, size) {
+    const left = corner.endsWith("left") ? rect.left + 8 : rect.right - size - 8;
+    const top = corner.startsWith("bottom") ? rect.bottom - size - 6 : rect.top + 6;
+    return {
+      left: Math.min(Math.max(4, left), window.innerWidth - size - 4),
+      top: Math.min(Math.max(4, top), window.innerHeight - size - 4),
+    };
+  }
 
   globalThis.grablineSiteButton = ({ resolve, qualityPanel = false }) => {
     let enabled = true;
@@ -136,6 +158,12 @@
       panel.style.left = `${Math.max(4, Math.min(rect.left, window.innerWidth - 130))}px`;
       panel.style.top = `${rect.bottom + 4}px`;
       panel.style.display = "flex";
+      // Flip above the button when there is no room below (bottom corners,
+      // play bars at the bottom of the window).
+      const height = panel.getBoundingClientRect().height;
+      if (rect.bottom + 4 + height > window.innerHeight - 4) {
+        panel.style.top = `${Math.max(4, rect.top - height - 4)}px`;
+      }
       panelOpen = true;
     }
 
@@ -171,8 +199,9 @@
       if (rect === null) return; // anchor re-rendered away and we lost it
       currentUrl = url;
       currentRect = rect;
-      button.style.left = `${Math.max(4, rect.right - 38)}px`;
-      button.style.top = `${Math.max(4, rect.top + 6)}px`;
+      const position = buttonPosition(rect, BUTTON_SIZE);
+      button.style.left = `${position.left}px`;
+      button.style.top = `${position.top}px`;
       button.style.display = "block";
       button.style.background = "#2563eb";
       button.textContent = "⬇";
