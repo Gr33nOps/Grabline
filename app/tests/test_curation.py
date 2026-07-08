@@ -176,5 +176,10 @@ def test_friendly_errors():
     geo_message = "The uploader has not made this video available in your country"
     assert "region-blocked" in friendly_error(geo_message)
     assert "cookie" in friendly_error("Could not copy Chrome cookie database").lower()
+    browse_404 = (
+        "ERROR: [soundcloud:user] discover: Unable to download JSON metadata: "
+        "HTTP Error 404: Not Found"
+    )
+    assert "browse" in friendly_error(browse_404)
     # unknown errors: first line, ERROR: prefix stripped, no traceback
     assert friendly_error("ERROR: something odd\nTraceback...") == "something odd"

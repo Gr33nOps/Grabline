@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -33,6 +34,41 @@ _HTML_MESSAGE = (
     "on it, let it play for a moment, then use the Grabline button on the "
     "player or the toolbar popup — Grabline grabs the stream the page loads."
 )
+
+#: Services whose media is DRM-protected end to end. Refused up front with an
+#: honest, named message (proposal: no DRM circumvention, clear refusal) —
+#: better than the confusing failure yt-dlp or the probe would produce.
+_DRM_SERVICES: tuple[tuple[str, str], ...] = (
+    (r"(^|\.)netflix\.com$", "Netflix"),
+    (r"(^|\.)primevideo\.com$", "Prime Video"),
+    (r"(^|\.)disneyplus\.com$", "Disney+"),
+    (r"(^|\.)max\.com$", "Max"),
+    (r"(^|\.)hulu\.com$", "Hulu"),
+    (r"(^|\.)peacocktv\.com$", "Peacock"),
+    (r"(^|\.)paramountplus\.com$", "Paramount+"),
+    (r"(^|\.)crunchyroll\.com$", "Crunchyroll"),
+    (r"(^|\.)spotify\.com$", "Spotify"),
+    (r"(^|\.)music\.apple\.com$", "Apple Music"),
+    (r"(^|\.)tidal\.com$", "TIDAL"),
+    (r"(^|\.)deezer\.com$", "Deezer"),
+    (r"^music\.amazon\.", "Amazon Music"),
+)
+#: Spotify podcasts are not DRM-protected; yt-dlp downloads them fine.
+_SPOTIFY_PODCAST_PATHS = re.compile(r"^/(episode|show)/")
+
+
+def _drm_refusal(url: str) -> str | None:
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    for pattern, service in _DRM_SERVICES:
+        if re.search(pattern, host):
+            if service == "Spotify" and _SPOTIFY_PODCAST_PATHS.match(parts.path):
+                return None
+            return (
+                f"{service} protects its media with DRM. Grabline cannot and will "
+                "not bypass DRM, so there is nothing it can download here."
+            )
+    return None
 
 
 @dataclass(frozen=True)
@@ -80,6 +116,10 @@ class Resolver:
                 kind=None,
                 message="Only http:// and https:// addresses can be downloaded.",
             )
+
+        refusal = _drm_refusal(url)
+        if refusal is not None:
+            return Resolution(url=url, kind=None, message=refusal)
 
         if self.smart.matches(url):
             try:

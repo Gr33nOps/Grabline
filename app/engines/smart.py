@@ -52,6 +52,12 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
     ),
     ("is not a valid URL", "That does not look like a valid address."),
     (
+        "Unable to download JSON metadata: HTTP Error 404",
+        "This does not look like a track or video page — it may be a browse "
+        "page, or the item was removed. Open the track/video itself and grab "
+        "it there, or right-click its title link.",
+    ),
+    (
         "Unsupported URL",
         "No downloadable media was found at this address.",
     ),

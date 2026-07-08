@@ -110,6 +110,33 @@ def test_html_page_is_refused_with_guidance(server: MediaServer):
     assert resolution.message is not None and "web page" in resolution.message
 
 
+def test_drm_services_are_refused_by_name():
+    resolver = Resolver(FakeSmart(match=False))
+    for url, service in (
+        ("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", "Spotify"),
+        ("https://www.netflix.com/watch/81234567", "Netflix"),
+        ("https://music.apple.com/us/album/x/12345", "Apple Music"),
+        ("https://tidal.com/browse/track/12345", "TIDAL"),
+    ):
+        resolution = resolver.resolve(url)
+        assert resolution.kind is None
+        assert resolution.message is not None
+        assert service in resolution.message and "DRM" in resolution.message
+
+
+def test_spotify_podcasts_are_not_drm_blocked():
+    """Spotify episodes/shows are plain audio; yt-dlp downloads them."""
+    resolver = Resolver(FakeSmart(match=True))
+    resolution = resolver.resolve("https://open.spotify.com/episode/abc123")
+    assert resolution.kind is JobKind.SMART
+
+
+def test_soundcloud_is_not_drm_blocked():
+    resolver = Resolver(FakeSmart(match=True))
+    resolution = resolver.resolve("https://soundcloud.com/artist/track")
+    assert resolution.kind is JobKind.SMART
+
+
 def test_non_http_scheme_refused():
     resolution = Resolver(FakeSmart(match=False)).resolve("ftp://host/file")
     assert resolution.kind is None

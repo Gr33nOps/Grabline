@@ -77,6 +77,9 @@ logic — lives once in `content/sites/button.js`.
 - **x.js** (F2.6) — hover ⬇ on videos inside tweets; sends the tweet's
   permalink (timeline videos are blob-backed, so the permalink is the only
   URL worth handing over).
+- **soundcloud.js** (F2.6) — hover ⬇ on the bottom play bar (whatever is
+  playing now) and on track titles in lists; sends the track's permalink,
+  never the browse page you happen to be on.
 
 Every selector lives at the top of its module; when a site's DOM churns,
 that one file is the whole blast radius, and right-click + paste keep

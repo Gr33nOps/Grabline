@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Grabline Connect",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Thin connector for the Grabline download manager: right-click download, hover buttons on media, and a per-tab list of sniffed streams. All downloading happens in the desktop app.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtgFioXkw5jbChCgtX8mD0WJOFAyAnSnv4H77uqsLyV5ZR5d8fDTUQu6ppHXNggu/50Smx5RSVz4UzBrZPjm0krHwWnwzFAzSGs6IBHzM3uTTpb0aWYqReGftaqjDZTez3FhpNwP6r6UZtLKam1hdfcHwJA4F2nyd7g9EvTgdrCKRy6HzZW5Om5dUEQ0JJjwCZLrjAVmaBL8SsAPR87gyIi20CkAZ37QX5+jHwp6FvJqqEt8jtYsuj+7hOlrzED8YVDVZUE+L2Bj1SMqramz5YHefyfbozpIHKw4y9MbHld2GdkV3GabHZrLb8l1RCacldkMG32HblceGGZ28K7S6/wIDAQAB",
   "browser_specific_settings": {
@@ -55,6 +55,11 @@
     {
       "matches": ["*://*.x.com/*", "*://*.twitter.com/*"],
       "js": ["content/sites/button.js", "content/sites/x.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.soundcloud.com/*"],
+      "js": ["content/sites/button.js", "content/sites/soundcloud.js"],
       "run_at": "document_idle"
     }
   ]
