@@ -18,7 +18,7 @@
   const SITE_RULES = [
     {
       hosts: /(^|\.)youtube\.com$/,
-      videos: /^\/(watch|shorts\/|live\/)/,
+      videos: /^$/, // never — youtube.js owns thumbnails AND the player button
       images: true,
     },
     {
@@ -33,16 +33,27 @@
   }
 
   let enabled = true;
+  // Images are opt-in (popup toggle): a ⬇ on every profile picture and chat
+  // thumbnail is noise, and right-click + the gallery grabber cover images.
+  let imagesEnabled = false;
   let currentTarget = null;
   let hideTimer = 0;
 
-  api.storage.local.get("disabledSites").then(({ disabledSites = [] }) => {
-    if (disabledSites.includes(location.hostname)) enabled = false;
-  });
+  api.storage.local.get(["disabledSites", "overlayImages"]).then(
+    ({ disabledSites = [], overlayImages = false }) => {
+      if (disabledSites.includes(location.hostname)) enabled = false;
+      imagesEnabled = overlayImages;
+    },
+  );
   api.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.disabledSites) {
+    if (area !== "local") return;
+    if (changes.disabledSites) {
       enabled = !(changes.disabledSites.newValue ?? []).includes(location.hostname);
       if (!enabled) hideButton();
+    }
+    if (changes.overlayImages) {
+      imagesEnabled = Boolean(changes.overlayImages.newValue);
+      if (!imagesEnabled) hideButton();
     }
   });
 
@@ -94,7 +105,7 @@
       return true;
     }
     if (element instanceof HTMLImageElement) {
-      if (rule?.images) return false;
+      if (!imagesEnabled || rule?.images) return false;
       return (
         element.naturalWidth >= MIN_IMAGE_SIZE && element.naturalHeight >= MIN_IMAGE_SIZE
       );

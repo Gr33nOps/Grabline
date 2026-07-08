@@ -67,6 +67,11 @@
 
     let currentUrl = null;
     let currentRect = null;
+    // A show that is waiting out the dwell. Tracked with its own rect so DOM
+    // churn under the pointer (YouTube spawns preview chips the moment you
+    // hover) cannot cancel it while the pointer is still on the thumbnail.
+    let pendingUrl = null;
+    let pendingRect = null;
     let hideTimer = 0;
     let showTimer = 0;
 
@@ -74,8 +79,14 @@
       if (document.body && !host.isConnected) document.body.appendChild(host);
     }
 
-    function hide() {
+    function clearPending() {
       clearTimeout(showTimer);
+      pendingUrl = null;
+      pendingRect = null;
+    }
+
+    function hide() {
+      clearPending();
       button.style.display = "none";
       closePanel();
       currentUrl = null;
@@ -143,19 +154,21 @@
       hideTimer = setTimeout(hide, 300);
     }
 
-    function insideCurrentRect(event) {
+    function insideRect(event, rect) {
       return (
-        currentRect !== null &&
-        event.clientX >= currentRect.left - RECT_MARGIN &&
-        event.clientX <= currentRect.right + RECT_MARGIN &&
-        event.clientY >= currentRect.top - RECT_MARGIN &&
-        event.clientY <= currentRect.bottom + RECT_MARGIN
+        rect !== null &&
+        event.clientX >= rect.left - RECT_MARGIN &&
+        event.clientX <= rect.right + RECT_MARGIN &&
+        event.clientY >= rect.top - RECT_MARGIN &&
+        event.clientY <= rect.bottom + RECT_MARGIN
       );
     }
 
     function showFor(anchor, url) {
       attachHost();
-      const rect = anchor.getBoundingClientRect();
+      const rect = anchor.isConnected ? anchor.getBoundingClientRect() : pendingRect;
+      clearPending();
+      if (rect === null) return; // anchor re-rendered away and we lost it
       currentUrl = url;
       currentRect = rect;
       button.style.left = `${Math.max(4, rect.right - 38)}px`;
@@ -176,14 +189,19 @@
           hit = null; // a matcher must never break the page
         }
         if (!hit) {
-          if (currentUrl && insideCurrentRect(event)) return;
-          clearTimeout(showTimer);
+          // Pointer still inside the shown or pending target's box: the
+          // "miss" is just an overlay/preview stealing the hover — hold on.
+          if (insideRect(event, currentRect) || insideRect(event, pendingRect)) return;
+          clearPending();
           if (currentUrl) scheduleHide();
           return;
         }
         clearTimeout(hideTimer);
-        clearTimeout(showTimer);
         if (hit.url === currentUrl) return; // already shown for this target
+        if (hit.url === pendingUrl) return; // dwell in progress — let it fire
+        clearPending();
+        pendingUrl = hit.url;
+        pendingRect = hit.anchor.getBoundingClientRect();
         showTimer = setTimeout(() => showFor(hit.anchor, hit.url), SHOW_DELAY_MS);
       },
       { passive: true },

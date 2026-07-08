@@ -86,10 +86,17 @@ async function renderMediaList(tab) {
 async function wireToggles(tab) {
   const intercept = document.getElementById("toggle-intercept");
   const overlay = document.getElementById("toggle-overlay");
+  const images = document.getElementById("toggle-images");
   const { intercept: interceptOn = false } = await api.storage.local.get("intercept");
   intercept.checked = interceptOn;
   intercept.addEventListener("change", () => {
     void api.storage.local.set({ intercept: intercept.checked });
+  });
+
+  const { overlayImages = false } = await api.storage.local.get("overlayImages");
+  images.checked = overlayImages;
+  images.addEventListener("change", () => {
+    void api.storage.local.set({ overlayImages: images.checked });
   });
 
   const hostname = tab?.url ? new URL(tab.url).hostname : null;

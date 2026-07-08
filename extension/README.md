@@ -19,8 +19,10 @@ readable in one sitting; that is a design goal.
 - **Right-click → "Download all images with Grabline"** (F2.2): every
   big-enough image on the page lands in the app as a selectable thumbnail
   grid (a wrapping link to a full-size image wins over the thumbnail src)
-- **Hover ⬇ button** on videos, audio, and images ≥ 200×200 (F1.2);
-  per-site off switch in the popup
+- **Hover ⬇ button** on videos and audio (F1.2). Images are **opt-in** via
+  the popup — a button on every profile picture and chat thumbnail is
+  noise, and right-click + the gallery grabber already cover images.
+  Per-site off switch in the popup too.
 - **Toolbar popup** with everything the network sniffer saw in this tab —
   streams (.m3u8/.mpd) and media files, one-click download each (F1.4)
 - **Optional download takeover** (off by default): browser downloads of
@@ -68,7 +70,9 @@ out. The shared machinery — the shadow-root button, the show dwell, the
 logic — lives once in `content/sites/button.js`.
 
 - **youtube.js** — hover ⬇ on video thumbnails (home, search, channels,
-  Shorts shelf); sends the watch URL, the app pops its quality panel.
+  Shorts shelf) *and on the player itself* on watch/Shorts pages; both
+  open the in-page quality panel. The generic overlay stands back on
+  YouTube entirely.
 - **vimeo.js** (F2.6) — hover ⬇ on links to `vimeo.com/<id>` videos.
 - **x.js** (F2.6) — hover ⬇ on videos inside tweets; sends the tweet's
   permalink (timeline videos are blob-backed, so the permalink is the only

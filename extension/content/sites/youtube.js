@@ -18,14 +18,22 @@
     "a.yt-simple-endpoint[href^='/shorts/']",
     "a.reel-item-endpoint[href^='/shorts/']",
   ].join(", ");
+  // The player on a watch/Shorts page gets the same button — the page URL is
+  // the video URL there, and the quality panel beats a blind instant grab.
+  const PLAYERS = "#movie_player, .html5-video-player";
+  const MEDIA_PAGES = /^\/(watch|shorts\/|live\/)/;
 
   globalThis.grablineSiteButton({
     qualityPanel: true, // F1.3: pick a quality right in the page
     resolve(target) {
       const anchor = target.closest(THUMBNAIL_ANCHORS);
       const href = anchor?.getAttribute("href");
-      if (!href) return null;
-      return { anchor, url: new URL(href, location.origin).toString() };
+      if (href) return { anchor, url: new URL(href, location.origin).toString() };
+      if (MEDIA_PAGES.test(location.pathname)) {
+        const player = target.closest(PLAYERS);
+        if (player) return { anchor: player, url: location.href };
+      }
+      return null;
     },
   });
 })();
