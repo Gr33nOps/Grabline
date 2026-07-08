@@ -54,6 +54,22 @@ re-run step 1 and reload the extension. If it says *app not running*, that's
 fine — handed-off URLs queue in the database and the app picks them up the
 moment it starts.
 
+### How permanent is this?
+
+- **Chrome / Edge / Brave:** an unpacked extension **survives restarts** —
+  it stays installed until you remove it. The only cost is the "developer
+  mode" reminder on the extensions page. Fully permanent, banner-free
+  installs come with Chrome Web Store publication (kit in
+  [docs/store-listing.md](../docs/store-listing.md)).
+- **Firefox:** temporary add-ons are wiped on every restart — that's a
+  Firefox rule for unsigned extensions, not something Grabline can change.
+  The fix is free and doesn't require a public listing: upload
+  `dist/grabline-connect-firefox-*.zip` to addons.mozilla.org as
+  **unlisted** (Submit New Add-on → "On your own"), and AMO's automated
+  review signs it within minutes. The signed `.xpi` it gives back installs
+  permanently in normal Firefox (drag it onto the browser). Re-sign each
+  new version the same way.
+
 ## How a URL travels
 
 ```

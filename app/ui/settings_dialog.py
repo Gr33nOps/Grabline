@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import launcher
 from app.core.errors import DownloadError
 from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
 from app.core.settings import SESSION_BROWSERS, Settings
@@ -84,6 +85,9 @@ class SettingsDialog(QDialog):
         self.clipboard_check = QCheckBox("Offer to download URLs copied to the clipboard")
         self.clipboard_check.setChecked(settings.clipboard_watcher)
         form.addRow("", self.clipboard_check)
+        self.autostart_check = QCheckBox("Start Grabline when I log in (minimized to the tray)")
+        self.autostart_check.setChecked(launcher.autostart_enabled())
+        form.addRow("", self.autostart_check)
         layout.addWidget(general)
 
         session = QGroupBox("Browser session (advanced)")
@@ -183,6 +187,12 @@ class SettingsDialog(QDialog):
         self.settings.max_concurrent = self.concurrent_spin.value()
         self.settings.connections = self.connections_spin.value()
         self.settings.speed_limit_kbps = self.speed_spin.value()
+        try:
+            # The autostart file/registry entry IS the setting — no DB copy
+            # that could drift from what the OS will actually do at login.
+            launcher.set_autostart(self.autostart_check.isChecked())
+        except OSError as exc:
+            QMessageBox.warning(self, "Grabline", f"Could not update autostart: {exc}")
         self.accept()
 
     def done(self, result: int) -> None:

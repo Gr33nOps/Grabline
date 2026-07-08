@@ -82,6 +82,13 @@ xcb"*, install them:
 sudo apt install libxcb-cursor0 libegl1 libxkbcommon0   # Debian/Ubuntu
 ```
 
+**Run it like an app, not a command.** The first `python -m app` run adds
+Grabline to your application menu (Linux) — from then on launch it from the
+app grid/dock like anything else, no terminal needed. In **Settings**, tick
+*"Start Grabline when I log in"* and it starts minimized to the tray on
+every boot, IDM-style: always there, catching right-clicks and clipboard
+URLs. Closing the window keeps it in the tray; Quit lives in the tray menu.
+
 Try the CLI:
 
 ```bash
