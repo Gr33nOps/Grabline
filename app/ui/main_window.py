@@ -42,8 +42,9 @@ _VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
 
 
 class _ResolveThread(QThread):
-    # Resolution, page_title (str | None), quality label (str | None, F1.3)
-    resolved = Signal(object, object, object)
+    # Resolution, page_title (str | None), quality label (str | None, F1.3),
+    # fallback URLs (tuple[str, ...] — sniffed streams to try if this one dies)
+    resolved = Signal(object, object, object, object)
 
     def __init__(
         self,
@@ -52,12 +53,14 @@ class _ResolveThread(QThread):
         settings: Settings,
         page_title: str | None,
         quality: str | None = None,
+        fallbacks: tuple[str, ...] = (),
     ) -> None:
         super().__init__()
         self._resolver = resolver
         self._url = url
         self._page_title = page_title
         self._quality = quality
+        self._fallbacks = fallbacks
         self._use_session = settings.use_browser_session
         self._browser = settings.session_browser
 
@@ -65,7 +68,7 @@ class _ResolveThread(QThread):
         resolution = self._resolver.resolve(
             self._url, use_session=self._use_session, session_browser=self._browser
         )
-        self.resolved.emit(resolution, self._page_title, self._quality)
+        self.resolved.emit(resolution, self._page_title, self._quality, self._fallbacks)
 
 
 class MainWindow(QMainWindow):
@@ -135,7 +138,10 @@ class MainWindow(QMainWindow):
                 self._open_gallery(list(handoff.payload), handoff.page_title)
             else:
                 self.begin_add_url(
-                    handoff.url, page_title=handoff.page_title, quality=handoff.quality
+                    handoff.url,
+                    page_title=handoff.page_title,
+                    quality=handoff.quality,
+                    fallbacks=handoff.payload,
                 )
 
     def _open_gallery(self, urls: list[str], page_title: str | None) -> None:
@@ -183,22 +189,42 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def begin_add_url(
-        self, url: str, page_title: str | None = None, quality: str | None = None
+        self,
+        url: str,
+        page_title: str | None = None,
+        quality: str | None = None,
+        fallbacks: tuple[str, ...] = (),
     ) -> None:
         """Entry point shared by the toolbar, tray, clipboard, and extension.
-        A ``quality`` label (F1.3 in-page panel) skips the quality dialog."""
+        A ``quality`` label (F1.3 in-page panel) skips the quality dialog;
+        ``fallbacks`` are sniffed stream URLs tried in order if ``url``
+        resolves to nothing (blob players on streaming sites)."""
         self.statusBar().showMessage(f"Analyzing {url} …")
-        thread = _ResolveThread(self.resolver, url, self.settings, page_title, quality)
+        thread = _ResolveThread(self.resolver, url, self.settings, page_title, quality, fallbacks)
         thread.resolved.connect(self._on_resolved)
         thread.finished.connect(lambda: self._resolve_threads.remove(thread))
         self._resolve_threads.append(thread)
         thread.start()
 
     def _on_resolved(
-        self, resolution: Resolution, page_title: str | None, quality: str | None = None
+        self,
+        resolution: Resolution,
+        page_title: str | None,
+        quality: str | None = None,
+        fallbacks: tuple[str, ...] = (),
     ) -> None:
         self.statusBar().showMessage("Ready")
         if resolution.kind is None:
+            if fallbacks:
+                # The page itself had nothing — try the stream it played.
+                self.statusBar().showMessage("Page had no direct media — trying its stream …")
+                self.begin_add_url(
+                    fallbacks[0],
+                    page_title=page_title,
+                    quality=quality,
+                    fallbacks=tuple(fallbacks[1:]),
+                )
+                return
             QMessageBox.information(self, "Grabline", resolution.message or "No media found.")
             return
         if (
@@ -253,7 +279,14 @@ class MainWindow(QMainWindow):
             )
         elif resolution.kind is JobKind.HLS:
             variant = None
-            if len(resolution.variants) > 1:
+            if quality and resolution.variants:
+                # F1.3: a label from the in-page panel picks the variant too.
+                wanted = quality.strip().lower()
+                variant = next(
+                    (v for v in resolution.variants if v.label.lower() == wanted),
+                    resolution.variants[0],
+                )
+            elif len(resolution.variants) > 1:
                 labels = [v.description for v in resolution.variants]
                 choice, accepted = QInputDialog.getItem(
                     self, "Stream quality", "Pick a quality for this stream:", labels, 0, False

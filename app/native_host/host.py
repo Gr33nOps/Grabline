@@ -22,6 +22,7 @@ _MAX_URL_LENGTH = 8192
 _MAX_TEXT_LENGTH = 512
 _MAX_GALLERY_ITEMS = 300
 _MAX_STATUS_ITEMS = 50
+_MAX_FALLBACK_ITEMS = 5
 
 #: Labels the in-page quality panel (F1.3) may pin; anything else is dropped
 #: and the app shows its own panel instead.
@@ -62,12 +63,22 @@ def handle_message(db: Database, message: dict[str, Any]) -> dict[str, Any]:
         quality = _clean_text(message.get("quality"), limit=8)
         if quality is not None and quality.lower() not in _QUALITY_LABELS:
             quality = None
+        # Sniffed streams from the tab: tried in order if the URL itself
+        # resolves to nothing (blob players on no-name streaming sites).
+        raw_fallbacks = message.get("fallbackUrls")
+        fallbacks: list[str] = []
+        if isinstance(raw_fallbacks, list):
+            for item in raw_fallbacks[:_MAX_FALLBACK_ITEMS]:
+                valid = _valid_url(item)
+                if valid is not None and valid != url:
+                    fallbacks.append(valid)
         handoff_id = db.add_handoff(
             url,
             page_url=_valid_url(message.get("pageUrl")),
             page_title=_clean_text(message.get("pageTitle")),
             source=_clean_text(message.get("source")) or "extension",
             quality=quality,
+            payload=fallbacks,
         )
         return {
             "type": "queued",

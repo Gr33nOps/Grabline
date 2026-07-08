@@ -153,6 +153,27 @@ def test_status_reports_pending_and_job_progress(db: Database):
     assert unknown == {"url": "https://example.com/unknown", "status": "pending"}
 
 
+def test_download_stores_sniffed_fallbacks(db: Database):
+    handle_message(
+        db,
+        {
+            "type": "download",
+            "url": "https://movies.example/watch/123",
+            "fallbackUrls": [
+                "https://cdn.example/movie/master.m3u8",
+                "javascript:alert(1)",  # dropped
+                "https://movies.example/watch/123",  # same as url — dropped
+                "https://cdn.example/movie/720.mp4",
+            ],
+        },
+    )
+    handoff = db.claim_handoffs()[0]
+    assert handoff.payload == (
+        "https://cdn.example/movie/master.m3u8",
+        "https://cdn.example/movie/720.mp4",
+    )
+
+
 def test_latest_job_for_url_prefers_the_newest(db: Database):
     db.create_job("https://example.com/f", "/tmp", "old.bin")
     newer = db.create_job("https://example.com/f", "/tmp", "new.bin")

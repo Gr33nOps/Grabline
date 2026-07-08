@@ -27,6 +27,12 @@ _MANIFEST_CONTENT_TYPES = (
     "application/dash+xml",
 )
 _HLS_CONTENT_TYPES = _MANIFEST_CONTENT_TYPES[:3]  # dash+xml goes to FFmpeg unparsed
+_HTML_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
+_HTML_MESSAGE = (
+    "This address is a web page, not a downloadable file. If a video plays "
+    "on it, let it play for a moment, then use the Grabline button on the "
+    "player or the toolbar popup — Grabline grabs the stream the page loads."
+)
 
 
 @dataclass(frozen=True)
@@ -108,4 +114,7 @@ class Resolver:
         if content_type in _MANIFEST_CONTENT_TYPES:
             variants = _hls_variants(url) if content_type in _HLS_CONTENT_TYPES else ()
             return Resolution(url=url, kind=JobKind.HLS, probe=result, variants=variants)
+        if content_type in _HTML_CONTENT_TYPES:
+            # Saving a streaming site's page as lecture.html helps nobody.
+            return Resolution(url=url, kind=None, message=_HTML_MESSAGE)
         return Resolution(url=url, kind=JobKind.DIRECT, probe=result)

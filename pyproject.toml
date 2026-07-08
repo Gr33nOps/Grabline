@@ -13,7 +13,9 @@ authors = [{ name = "Zain" }]
 dependencies = [
     "httpx>=0.27",
     "PySide6>=6.6",
-    "yt-dlp>=2025.1.1",
+    # curl-cffi: yt-dlp's TLS-impersonation backend — Dailymotion (and a
+    # growing list of sites) refuse plain-python TLS fingerprints outright.
+    "yt-dlp[curl-cffi]>=2025.1.1",
 ]
 
 [project.optional-dependencies]

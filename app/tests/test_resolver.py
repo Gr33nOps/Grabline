@@ -101,6 +101,15 @@ def test_smart_error_is_final_and_friendly():
     assert resolution.message == "This video is private."
 
 
+def test_html_page_is_refused_with_guidance(server: MediaServer):
+    """A streaming site's page must never be saved as lecture.html (the
+    '123movies downloads HTML' bug); the message points at the sniffer."""
+    url = server.add("/movie/watch", b"<!doctype html><video src=blob:x>", content_type="text/html")
+    resolution = Resolver(FakeSmart(match=False)).resolve(url)
+    assert resolution.kind is None
+    assert resolution.message is not None and "web page" in resolution.message
+
+
 def test_non_http_scheme_refused():
     resolution = Resolver(FakeSmart(match=False)).resolve("ftp://host/file")
     assert resolution.kind is None

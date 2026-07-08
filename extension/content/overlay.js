@@ -92,10 +92,12 @@
       src = element.currentSrc || element.src;
       if (!src) src = element.querySelector("source")?.src ?? null;
     }
-    // blob:/data: sources can't be fetched outside the page; the page URL
-    // routes to the Smart Engine / network sniffer instead.
-    if (!src || !/^https?:/.test(src)) return location.href;
-    return src;
+    // blob:/data: sources can't be fetched outside the page. Send the page
+    // URL (the Smart Engine may know the site) and flag it so the background
+    // attaches the streams the sniffer saw in this tab as fallbacks — on
+    // no-name streaming sites the sniffed .m3u8 IS the movie.
+    if (!src || !/^https?:/.test(src)) return { url: location.href, fromPage: true };
+    return { url: src, fromPage: false };
   }
 
   function eligible(element) {
@@ -293,9 +295,11 @@
     event.preventDefault();
     event.stopPropagation();
     if (!currentTarget) return;
+    const media = mediaUrlFor(currentTarget);
     const reply = await api.runtime.sendMessage({
       cmd: "grab",
-      url: mediaUrlFor(currentTarget),
+      url: media.url,
+      sniff: media.fromPage,
     });
     // Quick inline feedback, then fade away.
     button.textContent = reply?.type === "error" ? "!" : "✓";

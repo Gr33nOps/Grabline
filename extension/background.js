@@ -13,7 +13,7 @@ const MAX_ITEMS_PER_TAB = 30;
 
 // ---------------------------------------------------------------- native
 
-async function sendToGrabline(url, tab, quality = null) {
+async function sendToGrabline(url, tab, quality = null, fallbackUrls = []) {
   const message = {
     type: "download",
     url,
@@ -21,6 +21,7 @@ async function sendToGrabline(url, tab, quality = null) {
     pageTitle: tab?.title ?? null,
     source: "extension",
     quality,
+    fallbackUrls,
   };
   try {
     const reply = await api.runtime.sendNativeMessage(HOST_NAME, message);
@@ -302,11 +303,25 @@ async function tabForMessage(sender, message) {
   }
 }
 
+// The streams/media the sniffer saw in a tab, best candidates first —
+// attached as fallbacks when a blob-backed player forced a page-URL grab.
+async function sniffedUrlsFor(tabId) {
+  if (tabId == null) return [];
+  const key = `tab:${tabId}`;
+  const stored = await api.storage.session.get(key);
+  const items = stored[key] ?? [];
+  const streams = items.filter((item) => item.kind === "stream");
+  const rest = items.filter((item) => item.kind !== "stream");
+  return [...streams, ...rest].slice(0, 3).map((item) => item.url);
+}
+
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.cmd === "grab") {
-    tabForMessage(sender, message)
-      .then((tab) => sendToGrabline(message.url, tab, message.quality ?? null))
-      .then(sendResponse);
+    (async () => {
+      const tab = await tabForMessage(sender, message);
+      const fallbackUrls = message.sniff ? await sniffedUrlsFor(tab?.id) : [];
+      return sendToGrabline(message.url, tab, message.quality ?? null, fallbackUrls);
+    })().then(sendResponse);
     return true; // async response
   }
   if (message?.cmd === "ping") {
