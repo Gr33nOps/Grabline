@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import cast
 
 from PySide6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QGuiApplication
@@ -22,16 +23,21 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import naming
+from app.core.ffmpeg import find_ffmpeg
 from app.core.manager import DownloadManager, JobView
 from app.core.models import JobKind, JobStatus
 from app.core.resolver import Resolution, Resolver
 from app.core.settings import Settings
+from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.format import human_bytes
+from app.ui.gallery_panel import GalleryPanel
+from app.ui.gif_dialog import GifDialog
 from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
 from app.ui.settings_dialog import SettingsDialog
 
 _COLUMNS = ("Name", "Size", "Progress", "Speed", "Status")
+_VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
 
 
 class _ResolveThread(QThread):
@@ -69,6 +75,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
         for label, handler in (
             ("Add URL", self._add_url),
+            ("Import Links", self._import_links),
             ("Pause", self._pause_selected),
             ("Resume", self._resume_selected),
             ("Cancel", self._cancel_selected),
@@ -116,7 +123,19 @@ class MainWindow(QMainWindow):
 
     def _poll_handoffs(self) -> None:
         for handoff in self.manager.db.claim_handoffs():
-            self.begin_add_url(handoff.url, page_title=handoff.page_title)
+            if handoff.source == "gallery" and handoff.payload:
+                self._open_gallery(list(handoff.payload), handoff.page_title)
+            else:
+                self.begin_add_url(handoff.url, page_title=handoff.page_title)
+
+    def _open_gallery(self, urls: list[str], page_title: str | None) -> None:
+        """F2.2: the extension collected a page's images — pick and batch."""
+        panel = GalleryPanel(urls, page_title=page_title, parent=self)
+        if panel.exec() != GalleryPanel.DialogCode.Accepted:
+            return
+        for url in panel.selected_urls():
+            self.manager.add_url(url)
+        self.refresh()
 
     # ------------------------------------------------------------- actions
 
@@ -124,6 +143,34 @@ class MainWindow(QMainWindow):
         url, accepted = QInputDialog.getText(self, "Add download", "URL:")
         if accepted and url.strip():
             self.begin_add_url(url.strip())
+
+    def _import_links(self) -> None:
+        """F2.4: paste/load many URLs; they queue at defaults, no panels."""
+        dialog = BatchImportDialog(self)
+        if dialog.exec() != BatchImportDialog.DialogCode.Accepted:
+            return
+        urls = dialog.urls()
+        if not urls:
+            return
+        thread = BatchImportThread(self.manager, self.settings, urls)
+        thread.progress.connect(
+            lambda done, total: self.statusBar().showMessage(f"Importing {done}/{total} …")
+        )
+        thread.summary.connect(self._on_batch_summary)
+        thread.start_tracked()
+
+    def _on_batch_summary(self, queued: int, skipped: object) -> None:
+        items = cast(list[tuple[str, str]], skipped)
+        message = f"Imported {queued} download(s)"
+        if items:
+            message += f", skipped {len(items)}"
+        self.statusBar().showMessage(message, 10000)
+        if items:
+            detail = "\n".join(f"• {url} — {reason}" for url, reason in items[:10])
+            if len(items) > 10:
+                detail += f"\n… and {len(items) - 10} more"
+            QMessageBox.information(self, "Grabline — import finished", f"{message}.\n\n{detail}")
+        self.refresh()
 
     def begin_add_url(self, url: str, page_title: str | None = None) -> None:
         """Entry point shared by the toolbar, tray, clipboard, and extension."""
@@ -173,7 +220,18 @@ class MainWindow(QMainWindow):
                 session_browser=self.settings.session_browser,
             )
         elif resolution.kind is JobKind.HLS:
-            self.manager.add_hls(resolution.url, title=page_title)
+            variant = None
+            if len(resolution.variants) > 1:
+                labels = [v.description for v in resolution.variants]
+                choice, accepted = QInputDialog.getItem(
+                    self, "Stream quality", "Pick a quality for this stream:", labels, 0, False
+                )
+                if not accepted:
+                    return
+                variant = resolution.variants[labels.index(choice)]
+            elif resolution.variants:
+                variant = resolution.variants[0]
+            self.manager.add_hls(resolution.url, title=page_title, variant=variant)
         else:
             # F1.8 name fixer: prefer Content-Disposition, then rescue ugly
             # URL names (videoplayback.mp4 …) with the page title.
@@ -238,6 +296,14 @@ class MainWindow(QMainWindow):
         open_folder = menu.addAction("Open folder")
         copy_url = menu.addAction("Copy URL")
         redownload = menu.addAction("Download again")
+        to_gif = menu.addAction("Convert to GIF…")
+        ffmpeg_path = find_ffmpeg(self.settings)
+        to_gif.setEnabled(
+            view.status is JobStatus.COMPLETED
+            and file_path.exists()
+            and file_path.suffix.lower() in _VIDEO_SUFFIXES
+            and ffmpeg_path is not None
+        )
         menu.addSeparator()
         remove = menu.addAction("Remove from list")
         remove.setEnabled(view.status is not JobStatus.DOWNLOADING)
@@ -250,6 +316,8 @@ class MainWindow(QMainWindow):
             QGuiApplication.clipboard().setText(view.url)
         elif chosen is redownload:
             self.begin_add_url(view.url)
+        elif chosen is to_gif and ffmpeg_path is not None:
+            GifDialog(ffmpeg_path, file_path, self).exec()
         elif chosen is remove:
             self.manager.remove(view.id)
             self.refresh()

@@ -22,7 +22,10 @@ tier, no ads, no telemetry.
    **MP3/M4A audio extraction** with tags and cover art, subtitle download
    (manual or auto, as .srt or embedded), and **clip trimming** (start/end
    timestamps).
-2. **HLS/DASH manifests:** reassembled into a clean .mp4 by FFmpeg.
+2. **HLS/DASH manifests:** reassembled into a clean .mp4 by FFmpeg — with a
+   **quality picker for master playlists** (separate audio renditions get
+   muxed in), duration-based progress, and an automatic retry on transient
+   failures (F2.1).
 3. **Direct files:** the Phase 0 segmented downloader — up to 8 parallel
    range connections, crash-proof checkpointed resume (kill -9 tested),
    automatic single-connection fallback.
@@ -34,6 +37,12 @@ tier, no ads, no telemetry.
   a global speed limiter, system tray, close-to-tray.
 - **Playlists** (F1.7): paste a playlist URL → fast flat listing → checkbox
   selection with a batch quality choice (`--playlist` in the CLI).
+- **Gallery grid** (F2.2): right-click → "Download all images" in the
+  browser → a checkable thumbnail grid in the app → batch download.
+- **GIF tools** (F2.3): any downloaded video → right-click → "Convert to
+  GIF…" with clip range, fps, and width (FFmpeg two-pass palette).
+- **Batch import** (F2.4): paste anything with links in it (or load a .txt)
+  — every URL queues at sensible defaults, no per-URL dialogs.
 - **Clipboard watcher** (F0.5): copy a URL anywhere → an unobtrusive
   "Download with Grabline?" offer. Snooze/disable built in.
 - **Categories** (F0.6): downloads auto-sort into Video / Music / Images /
@@ -117,8 +126,11 @@ packaging/      PyInstaller spec + release workflow (installers on tags)
   ✅, hover overlays ✅, per-tab sniffer list ✅, interception ✅, playlists
   ✅, YouTube thumbnail buttons ✅, ugly-name fixer ✅, speed limiter ✅,
   history search & row actions ✅ — the in-page YouTube quality panel remains
-- **Phase 3 — v2.0**: HLS/DASH robustness, gallery grid, GIF tools, batch
-  import, store publication
+- **Phase 3 — v2.0** (in progress): HLS/DASH robustness ✅ (variant picker,
+  separate audio renditions, duration progress, auto-retry), gallery grid ✅,
+  GIF tools ✅, batch import ✅, Vimeo + X site modules ✅, store publication
+  kit ✅ (`scripts/package_extension.py` + [docs/store-listing.md](docs/store-listing.md))
+  — actual store submission needs human-owned developer accounts
 
 ## Honest limits
 

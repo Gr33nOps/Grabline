@@ -19,6 +19,7 @@ from app.core.ratelimit import RateLimiter
 from app.core.settings import Settings
 from app.db.database import Database
 from app.engines.hls import HlsDownload
+from app.engines.manifest import HlsVariant
 from app.engines.smart import MediaInfo, QualityOption, SmartDownload
 
 log = logging.getLogger(__name__)
@@ -187,17 +188,27 @@ class DownloadManager:
         *,
         dest_dir: str | Path | None = None,
         title: str | None = None,
+        variant: HlsVariant | None = None,
     ) -> Job:
-        """Queue an HLS/DASH stream for FFmpeg reassembly."""
+        """Queue an HLS/DASH stream for FFmpeg reassembly; ``variant`` pins a
+        quality picked from the master playlist (F2.1)."""
         stem = Path(naming.filename_from_url(url)).stem or "stream"
         base = naming.sanitize_filename(title) if title else stem
         filename = f"{base}.mp4"
+        options: dict[str, Any] = {}
+        if variant is not None:
+            options = {
+                "variant_url": variant.url,
+                "audio_url": variant.audio_url,
+                "quality_label": variant.label,
+            }
         job = self.db.create_job(
             url,
             self._dest_for(filename, dest_dir),
             filename,
             kind=JobKind.HLS,
             title=title,
+            options=options,
         )
         self._kick()
         return job

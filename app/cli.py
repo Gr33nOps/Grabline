@@ -20,6 +20,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 from app.core import naming
 from app.core.downloader import DEFAULT_CONNECTIONS, SegmentedDownload
@@ -121,8 +122,28 @@ def _create_job(
             },
         )
     if resolution.kind is JobKind.HLS:
+        if args.list_formats:
+            for variant in resolution.variants:
+                print(f"  {variant.description}")
+            if not resolution.variants:
+                print("  (single-quality stream)")
+            return None
         stem = Path(naming.filename_from_url(resolution.url)).stem or "stream"
-        return db.create_job(resolution.url, str(dest_dir), f"{stem}.mp4", kind=JobKind.HLS)
+        options: dict[str, Any] = {}
+        if resolution.variants:
+            wanted = args.quality.strip().lower()
+            variant = next(
+                (v for v in resolution.variants if v.label.lower() == wanted),
+                resolution.variants[0],
+            )
+            options = {
+                "variant_url": variant.url,
+                "audio_url": variant.audio_url,
+                "quality_label": variant.label,
+            }
+        return db.create_job(
+            resolution.url, str(dest_dir), f"{stem}.mp4", kind=JobKind.HLS, options=options
+        )
     filename = (
         naming.sanitize_filename(resolution.probe.filename)
         if resolution.probe is not None and resolution.probe.filename

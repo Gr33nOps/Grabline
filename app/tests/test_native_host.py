@@ -114,6 +114,47 @@ def test_unknown_type_is_an_error_reply(db: Database):
     assert reply["type"] == "error"
 
 
+# -------------------------------------------------------- gallery (F2.2)
+
+
+def test_gallery_creates_one_handoff_with_payload(db: Database):
+    reply = handle_message(
+        db,
+        {
+            "type": "gallery",
+            "urls": [
+                "https://example.com/a.jpg",
+                "javascript:alert(1)",  # dropped
+                "https://example.com/b.png",
+            ],
+            "pageUrl": "https://example.com/gallery",
+            "pageTitle": "Holiday",
+        },
+    )
+    assert reply["type"] == "queued"
+    assert reply["count"] == 2
+    handoffs = db.claim_handoffs()
+    assert len(handoffs) == 1
+    handoff = handoffs[0]
+    assert handoff.source == "gallery"
+    assert handoff.url == "https://example.com/gallery"
+    assert handoff.payload == ("https://example.com/a.jpg", "https://example.com/b.png")
+
+
+def test_gallery_with_no_valid_urls_is_an_error(db: Database):
+    for urls in ([], ["ftp://x/y"], "not-a-list", None):
+        reply = handle_message(db, {"type": "gallery", "urls": urls})
+        assert reply["type"] == "error"
+    assert db.claim_handoffs() == []
+
+
+def test_gallery_is_capped(db: Database):
+    urls = [f"https://example.com/{i}.jpg" for i in range(500)]
+    reply = handle_message(db, {"type": "gallery", "urls": urls})
+    assert reply["count"] == 300
+    assert len(db.claim_handoffs()[0].payload) == 300
+
+
 # ---------------------------------------------------------------- serve
 
 

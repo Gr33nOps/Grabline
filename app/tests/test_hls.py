@@ -1,18 +1,29 @@
 from __future__ import annotations
 
+import stat
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from app.core.models import JobKind, JobStatus
 from app.db.database import Database
 from app.engines.hls import HlsDownload
-from app.tests.media_fixtures import FFMPEG, FFPROBE, make_hls, probe_duration
+from app.tests.media_fixtures import (
+    FFMPEG,
+    FFPROBE,
+    make_hls,
+    make_hls_audio,
+    probe_duration,
+    probe_streams,
+)
 from app.tests.media_server import MediaServer
 
 
-def _hls_job(db: Database, url: str, dest: Path):
-    return db.create_job(url, str(dest), "lecture.mp4", kind=JobKind.HLS, title="Lecture")
+def _hls_job(db: Database, url: str, dest: Path, options: dict[str, Any] | None = None):
+    return db.create_job(
+        url, str(dest), "lecture.mp4", kind=JobKind.HLS, title="Lecture", options=options
+    )
 
 
 def test_hls_requires_ffmpeg(db: Database, dest: Path):
@@ -57,6 +68,64 @@ def test_hls_broken_stream_fails_cleanly(server: MediaServer, db: Database, dest
     assert fresh is not None
     assert fresh.error is not None
     assert not (dest / "lecture.mp4").exists()
+    assert not (dest / "lecture.mp4.gl-part").exists()
+
+
+@pytest.mark.skipif(FFMPEG is None, reason="needs a real ffmpeg")
+def test_hls_variant_with_separate_audio(
+    server: MediaServer, db: Database, dest: Path, tmp_path: Path
+):
+    """F2.1: a chosen variant plus its audio rendition mux into one mp4."""
+    video_files = make_hls(tmp_path / "video", seconds=2)
+    audio_files = make_hls_audio(tmp_path / "audio", seconds=2)
+    for name, content in video_files.items():
+        content_type = "application/vnd.apple.mpegurl" if name.endswith(".m3u8") else "video/mp2t"
+        server.add(f"/video/{name}", content, content_type=content_type)
+    for name, content in audio_files.items():
+        content_type = "application/vnd.apple.mpegurl" if name.endswith(".m3u8") else "video/mp2t"
+        server.add(f"/audio/{name}", content, content_type=content_type)
+    master = (
+        "#EXTM3U\n"
+        '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Main",DEFAULT=YES,URI="audio/audio.m3u8"\n'
+        '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=128x72,AUDIO="aud"\n'
+        "video/index.m3u8\n"
+    )
+    server.add("/master.m3u8", master.encode(), content_type="application/vnd.apple.mpegurl")
+
+    job = _hls_job(
+        db,
+        server.url("/master.m3u8"),
+        dest,
+        options={
+            "variant_url": server.url("/video/index.m3u8"),
+            "audio_url": server.url("/audio/audio.m3u8"),
+            "quality_label": "72p",
+        },
+    )
+    status = HlsDownload(db, job, ffmpeg_path=FFMPEG).run()
+
+    assert status is JobStatus.COMPLETED
+    output = dest / "lecture.mp4"
+    assert output.exists() and output.stat().st_size > 0
+    if FFPROBE is not None:
+        kinds = probe_streams(output)
+        assert "video" in kinds and "audio" in kinds
+
+
+def test_transient_failure_is_retried_once(server: MediaServer, db: Database, dest: Path):
+    """A nonzero FFmpeg exit gets exactly one retry before failing the job."""
+    vod = b"#EXTM3U\n#EXTINF:2.0,\nseg000.ts\n#EXT-X-ENDLIST\n"
+    server.add("/vod.m3u8", vod, content_type="application/vnd.apple.mpegurl")
+    marker = dest / "invocations.txt"
+    stub = dest / "fake-ffmpeg.sh"
+    stub.write_text(f'#!/bin/sh\necho run >> "{marker}"\nexit 1\n')
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+
+    job = _hls_job(db, server.url("/vod.m3u8"), dest)
+    status = HlsDownload(db, job, ffmpeg_path=str(stub)).run()
+
+    assert status is JobStatus.FAILED
+    assert marker.read_text().count("run") == 2
     assert not (dest / "lecture.mp4.gl-part").exists()
 
 

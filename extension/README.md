@@ -9,6 +9,9 @@ readable in one sitting; that is a design goal.
 
 - **Right-click → "Download with Grabline"** on any link, image, video,
   audio, selection, or page (F1.6)
+- **Right-click → "Download all images with Grabline"** (F2.2): every
+  big-enough image on the page lands in the app as a selectable thumbnail
+  grid (a wrapping link to a full-size image wins over the thumbnail src)
 - **Hover ⬇ button** on videos, audio, and images ≥ 200×200 (F1.2);
   per-site off switch in the popup
 - **Toolbar popup** with everything the network sniffer saw in this tab —
@@ -52,13 +55,30 @@ right-click / ⬇ / popup → background.js → Native Messaging host
 
 ## Site modules
 
-`content/sites/youtube.js` adds a hover ⬇ to video thumbnails (home, search,
-channels, Shorts shelf) so a video can be grabbed without opening it — the
-desktop app pops its quality panel. Every selector lives in one constant at
-the top of that file; when YouTube's DOM churns, that file is the whole blast
-radius, and right-click + paste keep working regardless.
+A site module is a ~25-line matcher: hovered element in, `{anchor, url}`
+out. The shared machinery — the shadow-root button, the show dwell, the
+"keep the button alive while an inline preview player covers the thumbnail"
+logic — lives once in `content/sites/button.js`.
 
-## Still to come in this phase
+- **youtube.js** — hover ⬇ on video thumbnails (home, search, channels,
+  Shorts shelf); sends the watch URL, the app pops its quality panel.
+- **vimeo.js** (F2.6) — hover ⬇ on links to `vimeo.com/<id>` videos.
+- **x.js** (F2.6) — hover ⬇ on videos inside tweets; sends the tweet's
+  permalink (timeline videos are blob-backed, so the permalink is the only
+  URL worth handing over).
+
+Every selector lives at the top of its module; when a site's DOM churns,
+that one file is the whole blast radius, and right-click + paste keep
+working regardless.
+
+## Publishing to the stores (F2.5)
+
+`python scripts/package_extension.py` builds store-ready zips for Chrome
+and Firefox (each store wants a slightly different manifest); the listing
+text, permission justifications, and reviewer notes are prewritten in
+[docs/store-listing.md](../docs/store-listing.md).
+
+## Still to come
 
 - In-page quality panel + live progress pill on YouTube (the full F1.3 —
   currently the quality choice happens in the desktop app's panel)

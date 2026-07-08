@@ -1,6 +1,13 @@
-"""Basic HLS/DASH reassembly (Phase 1): FFmpeg copies the stream into a clean
-.mp4. Robustness for the manifest zoo (byte-range playlists, separate audio
-renditions, live detection) is Phase 3 work (F2.1) — this is the honest core.
+"""HLS/DASH reassembly (F2.1): FFmpeg copies the stream into a clean .mp4.
+
+Robustness beyond the Phase 1 core:
+- a chosen master-playlist variant (``options["variant_url"]``) is downloaded
+  instead of letting FFmpeg pick, and a separate audio rendition
+  (``options["audio_url"]``) is muxed in alongside it;
+- ``-progress`` output plus the playlist's summed #EXTINF durations give a
+  self-correcting total-size estimate, so the UI can show a real percentage;
+- one automatic retry on transient failures (nonzero exit or a stall), since
+  a CDN hiccup should not kill a 40-minute reassembly for good.
 
 No resume: an interrupted reassembly restarts from the beginning next run.
 """
@@ -13,14 +20,18 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from typing import IO
 
 import httpx
 
 from app.core import naming
 from app.core.models import Job, JobStatus
 from app.db.database import Database
+from app.engines.manifest import playlist_duration
 
 log = logging.getLogger(__name__)
+
+_ESTIMATE_MIN_SECONDS = 5.0  # muxed seconds before the size estimate is trusted
 
 
 class HlsDownload:
@@ -34,15 +45,24 @@ class HlsDownload:
         ffmpeg_path: str | None,
         persist_interval: float = 0.5,
         stall_timeout: float = 90.0,
+        max_attempts: int = 2,
     ) -> None:
         self.db = db
         self.job = job
         self.ffmpeg_path = ffmpeg_path
         self.persist_interval = persist_interval
         self.stall_timeout = stall_timeout
+        self.max_attempts = max_attempts
         self._stop_event = threading.Event()
         self._cancelled = False
         self._downloaded = 0
+        self._out_time = 0.0  # seconds muxed so far, from -progress
+        self._duration: float | None = None
+        self._failure = "FFmpeg could not process this stream"
+        options = job.options or {}
+        self._input_url = str(options.get("variant_url") or job.url)
+        audio = options.get("audio_url")
+        self._audio_url = str(audio) if audio else None
 
     def pause(self) -> None:
         self._stop_event.set()
@@ -61,36 +81,68 @@ class HlsDownload:
             return self._finish_failed(
                 "FFmpeg is required to save this stream — install it from Settings"
             )
-        live_error = self._detect_live_playlist()
+        playlist_text = self._fetch_playlist()
+        live_error = self._detect_live_playlist(playlist_text)
         if live_error:
             return self._finish_failed(live_error)
+        if playlist_text is not None:
+            self._duration = playlist_duration(playlist_text)
         part = self.job.part_path
         part.parent.mkdir(parents=True, exist_ok=True)
+        for attempt in range(1, self.max_attempts + 1):
+            status = self._attempt(part)
+            if status is not None:
+                return status
+            if attempt < self.max_attempts:
+                log.info(
+                    "hls job %s attempt %d failed (%s) — retrying",
+                    self.job.id,
+                    attempt,
+                    self._failure,
+                )
+        return self._finish_failed(self._failure)
+
+    # ------------------------------------------------------------ one attempt
+
+    def _command(self, part: Path) -> list[str]:
+        assert self.ffmpeg_path is not None
         command = [
             self.ffmpeg_path,
             "-y",
             "-nostdin",
             "-loglevel",
             "error",
+            "-nostats",
+            "-progress",
+            "pipe:1",
             "-i",
-            self.job.url,
-            "-c",
-            "copy",
-            "-f",
-            "mp4",
-            str(part),
+            self._input_url,
         ]
+        if self._audio_url:
+            command += ["-i", self._audio_url, "-map", "0", "-map", "1"]
+        command += ["-c", "copy", "-f", "mp4", str(part)]
+        return command
+
+    def _attempt(self, part: Path) -> JobStatus | None:
+        """One FFmpeg run. None means: transient failure, caller may retry."""
+        self._downloaded = 0
+        self._out_time = 0.0
         try:
             process = subprocess.Popen(  # argument list only — no shell (S1)
-                command,
-                stdout=subprocess.DEVNULL,
+                self._command(part),
+                stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
             )
         except OSError as exc:
-            return self._finish_failed(f"could not start FFmpeg: {exc}")
+            self._failure = f"could not start FFmpeg: {exc}"
+            return self._finish_failed(self._failure)
+        assert process.stdout is not None
+        reader = threading.Thread(target=self._read_progress, args=(process.stdout,), daemon=True)
+        reader.start()
 
         last_persist = 0.0
+        last_estimate = 0
         last_growth = time.monotonic()
         stalled = False
         while process.poll() is None:
@@ -106,6 +158,7 @@ class HlsDownload:
                 if now - last_persist >= self.persist_interval:
                     last_persist = now
                     self.db.update_job_downloaded(self.job.id, self._downloaded)
+                    last_estimate = self._persist_estimate(last_estimate)
             # A live or broken playlist makes FFmpeg poll forever without
             # producing data; never let a job spin indefinitely.
             if now - last_growth > self.stall_timeout:
@@ -114,6 +167,7 @@ class HlsDownload:
                 break
             time.sleep(0.2)
 
+        reader.join(timeout=5)
         stderr_tail = ""
         if process.stderr is not None:
             lines = process.stderr.read().strip().splitlines()
@@ -125,15 +179,45 @@ class HlsDownload:
             return self._settle_stopped(part)
         if stalled:
             part.unlink(missing_ok=True)
-            return self._finish_failed(
+            self._failure = (
                 f"the stream stalled (no data for {self.stall_timeout:.0f}s) — "
                 "it may be live or the server may be down"
             )
+            return None
         if process.returncode != 0:
             part.unlink(missing_ok=True)
             detail = f" ({stderr_tail})" if stderr_tail else ""
-            return self._finish_failed(f"FFmpeg could not process this stream{detail}")
+            self._failure = f"FFmpeg could not process this stream{detail}"
+            return None
         return self._finalize(part)
+
+    def _read_progress(self, stream: IO[str]) -> None:
+        # FFmpeg's out_time_ms is microseconds too (bug-compatible forever).
+        for raw in stream:
+            line = raw.strip()
+            if line.startswith(("out_time_us=", "out_time_ms=")):
+                try:
+                    value = int(line.split("=", 1)[1])
+                except ValueError:
+                    continue
+                self._out_time = max(self._out_time, value / 1_000_000)
+        stream.close()
+
+    def _persist_estimate(self, last_estimate: int) -> int:
+        """Total-size estimate: bytes so far scaled by muxed/total duration.
+
+        Self-correcting as the bitrate reveals itself; the real size replaces
+        it at finalize. Only written when it moves by more than 2%.
+        """
+        if not self._duration or self._out_time < _ESTIMATE_MIN_SECONDS:
+            return last_estimate
+        if self._out_time >= self._duration or self._downloaded <= 0:
+            return last_estimate
+        estimate = int(self._downloaded * self._duration / self._out_time)
+        if last_estimate and abs(estimate - last_estimate) < last_estimate * 0.02:
+            return last_estimate
+        self.db.update_job_total(self.job.id, estimate)
+        return estimate
 
     @staticmethod
     def _terminate(process: subprocess.Popen[str]) -> None:
@@ -144,20 +228,29 @@ class HlsDownload:
             process.kill()
             process.wait()
 
-    def _detect_live_playlist(self) -> str | None:
-        """Refuse live-in-progress HLS clearly instead of recording forever.
+    # -------------------------------------------------------------- playlist
 
-        Only a direct media playlist can be judged here; master playlists pass
-        through (the stall guard still bounds the worst case). Any fetch error
-        is ignored so FFmpeg can report the real problem.
+    def _fetch_playlist(self) -> str | None:
+        """The input manifest's text, or None when it cannot be fetched.
+
+        Any fetch error is ignored so FFmpeg can report the real problem.
         """
         try:
             with httpx.Client(follow_redirects=True, timeout=10) as client:
-                response = client.get(self.job.url)
+                response = client.get(self._input_url)
                 if response.status_code != 200:
                     return None
-                text = response.text
+                return response.text
         except httpx.HTTPError:
+            return None
+
+    def _detect_live_playlist(self, text: str | None) -> str | None:
+        """Refuse live-in-progress HLS clearly instead of recording forever.
+
+        Only a direct media playlist can be judged here; master playlists pass
+        through (the stall guard still bounds the worst case).
+        """
+        if text is None:
             return None
         if "#EXTM3U" not in text or "#EXT-X-STREAM-INF" in text:
             return None
@@ -167,6 +260,8 @@ class HlsDownload:
                 "Grabline cannot save it yet. Try again once it has ended."
             )
         return None
+
+    # ------------------------------------------------------------- outcomes
 
     def _finalize(self, part: Path) -> JobStatus:
         with open(part, "rb") as handle:

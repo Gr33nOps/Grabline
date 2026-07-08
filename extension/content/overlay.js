@@ -9,9 +9,28 @@
   const api = globalThis.browser ?? globalThis.chrome;
   const MIN_IMAGE_SIZE = 200;
   const HIDE_DELAY_MS = 350;
-  // Hosts where a site module owns thumbnails: skip plain-image overlays
-  // there so two buttons never fight over the same element.
-  const SITE_MODULE_HOSTS = /(^|\.)youtube\.com$/;
+  // Hosts where a site module (content/sites/*.js) owns the media UI. On
+  // those hosts the generic overlay stands back: browse pages run inline
+  // preview <video>s whose blob src would fall back to the *page* URL (= the
+  // feed, not the video), and site thumbnails already have their own button.
+  // videos: the generic overlay only decorates <video> on matching paths
+  // (the real player page). images: skipped entirely when true.
+  const SITE_RULES = [
+    {
+      hosts: /(^|\.)youtube\.com$/,
+      videos: /^\/(watch|shorts\/|live\/)/,
+      images: true,
+    },
+    {
+      hosts: /(^|\.)(x|twitter)\.com$/,
+      videos: /^$/, // never — the x.js module handles every tweet video
+      images: false,
+    },
+  ];
+
+  function siteRule() {
+    return SITE_RULES.find((rule) => rule.hosts.test(location.hostname)) ?? null;
+  }
 
   let enabled = true;
   let currentTarget = null;
@@ -69,9 +88,13 @@
   }
 
   function eligible(element) {
-    if (element instanceof HTMLMediaElement) return true;
+    const rule = siteRule();
+    if (element instanceof HTMLMediaElement) {
+      if (rule) return rule.videos.test(location.pathname);
+      return true;
+    }
     if (element instanceof HTMLImageElement) {
-      if (SITE_MODULE_HOSTS.test(location.hostname)) return false;
+      if (rule?.images) return false;
       return (
         element.naturalWidth >= MIN_IMAGE_SIZE && element.naturalHeight >= MIN_IMAGE_SIZE
       );
@@ -100,6 +123,46 @@
     clearTimeout(hideTimer);
     hideTimer = setTimeout(hideButton, HIDE_DELAY_MS);
   }
+
+  // ------------------------------------------------- gallery grab (F2.2)
+  // The background script asks for every big-enough image on the page; a
+  // wrapping <a> that links straight to an image wins over the (often
+  // thumbnail-sized) <img> src.
+
+  const IMAGE_HREF = /\.(jpe?g|png|gif|webp|avif|bmp)(\?|$)/i;
+  const MAX_GALLERY_ITEMS = 200;
+
+  function collectImages() {
+    const urls = [];
+    const seen = new Set();
+    for (const img of document.images) {
+      if (urls.length >= MAX_GALLERY_ITEMS) break;
+      const src = img.currentSrc || img.src;
+      if (!src || !/^https?:/.test(src)) continue;
+      if (img.naturalWidth < MIN_IMAGE_SIZE && img.naturalHeight < MIN_IMAGE_SIZE) continue;
+      let url = src;
+      const href = img.closest("a")?.getAttribute("href");
+      if (href) {
+        try {
+          const full = new URL(href, location.href).toString();
+          if (IMAGE_HREF.test(full)) url = full;
+        } catch {
+          /* unparsable href — keep the img src */
+        }
+      }
+      if (seen.has(url)) continue;
+      seen.add(url);
+      urls.push(url);
+    }
+    return urls;
+  }
+
+  api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.cmd === "collectImages") {
+      sendResponse({ urls: collectImages() });
+    }
+    return false;
+  });
 
   document.addEventListener(
     "mouseover",

@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS handoffs (
     page_url   TEXT,
     page_title TEXT,
     source     TEXT NOT NULL DEFAULT 'extension',
+    payload    TEXT NOT NULL DEFAULT '[]',
     claimed    INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -74,6 +75,10 @@ _JOBS_MIGRATIONS = {
     "title": "ALTER TABLE jobs ADD COLUMN title TEXT",
     "options": "ALTER TABLE jobs ADD COLUMN options TEXT NOT NULL DEFAULT '{}'",
     "downloaded": "ALTER TABLE jobs ADD COLUMN downloaded INTEGER NOT NULL DEFAULT 0",
+}
+
+_HANDOFFS_MIGRATIONS = {
+    "payload": "ALTER TABLE handoffs ADD COLUMN payload TEXT NOT NULL DEFAULT '[]'",
 }
 
 
@@ -125,11 +130,14 @@ class Database:
 
     def _migrate(self) -> None:
         """Add columns introduced after Phase 0 to databases created before them."""
-        existing = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)").fetchall()}
-        with self._conn:
-            for column, statement in _JOBS_MIGRATIONS.items():
-                if column not in existing:
-                    self._conn.execute(statement)
+        for table, migrations in (("jobs", _JOBS_MIGRATIONS), ("handoffs", _HANDOFFS_MIGRATIONS)):
+            existing = {
+                row["name"] for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            with self._conn:
+                for column, statement in migrations.items():
+                    if column not in existing:
+                        self._conn.execute(statement)
 
     def close(self) -> None:
         with self._lock:
@@ -255,11 +263,13 @@ class Database:
         page_url: str | None = None,
         page_title: str | None = None,
         source: str = "extension",
+        payload: Sequence[str] = (),
     ) -> int:
         with self._lock, self._conn:
             cur = self._conn.execute(
-                "INSERT INTO handoffs (url, page_url, page_title, source) VALUES (?, ?, ?, ?)",
-                (url, page_url, page_title, source),
+                "INSERT INTO handoffs (url, page_url, page_title, source, payload) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (url, page_url, page_title, source, json.dumps(list(payload))),
             )
         handoff_id = cur.lastrowid
         if handoff_id is None:  # pragma: no cover - sqlite always sets it
@@ -284,6 +294,7 @@ class Database:
                 page_url=row["page_url"],
                 page_title=row["page_title"],
                 source=row["source"],
+                payload=tuple(json.loads(row["payload"] or "[]")),
             )
             for row in rows
         ]

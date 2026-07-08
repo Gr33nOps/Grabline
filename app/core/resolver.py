@@ -16,6 +16,7 @@ import httpx
 from app.core.errors import DownloadError
 from app.core.models import JobKind
 from app.core.probe import ProbeResult, probe
+from app.engines.manifest import HlsVariant, parse_master_playlist
 from app.engines.smart import MediaInfo, PlaylistInfo, SmartEngine
 
 _MANIFEST_SUFFIXES = (".m3u8", ".mpd")
@@ -25,6 +26,7 @@ _MANIFEST_CONTENT_TYPES = (
     "audio/mpegurl",
     "application/dash+xml",
 )
+_HLS_CONTENT_TYPES = _MANIFEST_CONTENT_TYPES[:3]  # dash+xml goes to FFmpeg unparsed
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,20 @@ class Resolution:
     playlist: PlaylistInfo | None = None  # set for SMART playlists (F1.7)
     probe: ProbeResult | None = None  # set for DIRECT
     message: str | None = None  # set when kind is None
+    variants: tuple[HlsVariant, ...] = ()  # set for HLS master playlists (F2.1)
+
+
+def _hls_variants(url: str) -> tuple[HlsVariant, ...]:
+    """Quality choices from a master playlist; empty for media playlists
+    or when the manifest cannot be fetched (FFmpeg reports the real error)."""
+    try:
+        with httpx.Client(follow_redirects=True, timeout=10) as client:
+            response = client.get(url)
+            if response.status_code != 200:
+                return ()
+            return parse_master_playlist(response.text, str(response.url))
+    except httpx.HTTPError:
+        return ()
 
 
 class Resolver:
@@ -74,7 +90,8 @@ class Resolver:
 
         path = urlsplit(url).path.lower()
         if path.endswith(_MANIFEST_SUFFIXES):
-            return Resolution(url=url, kind=JobKind.HLS)
+            variants = _hls_variants(url) if path.endswith(".m3u8") else ()
+            return Resolution(url=url, kind=JobKind.HLS, variants=variants)
 
         try:
             with httpx.Client(
@@ -89,5 +106,6 @@ class Resolver:
             )
         content_type = (result.content_type or "").split(";")[0].strip().lower()
         if content_type in _MANIFEST_CONTENT_TYPES:
-            return Resolution(url=url, kind=JobKind.HLS, probe=result)
+            variants = _hls_variants(url) if content_type in _HLS_CONTENT_TYPES else ()
+            return Resolution(url=url, kind=JobKind.HLS, probe=result, variants=variants)
         return Resolution(url=url, kind=JobKind.DIRECT, probe=result)

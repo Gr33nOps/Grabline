@@ -58,6 +58,8 @@ class Handoff:
     page_url: str | None
     page_title: str | None
     source: str
+    #: Gallery handoffs (F2.2) carry the page's image URLs here.
+    payload: tuple[str, ...] = ()
 
 
 @dataclass

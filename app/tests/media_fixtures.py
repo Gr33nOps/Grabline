@@ -59,6 +59,56 @@ def make_hls(directory: Path, *, seconds: int = 2) -> dict[str, bytes]:
     return {item.name: item.read_bytes() for item in directory.iterdir()}
 
 
+def make_hls_audio(directory: Path, *, seconds: int = 2) -> dict[str, bytes]:
+    """A tiny audio-only HLS rendition (aac in TS), as name -> bytes."""
+    assert FFMPEG is not None
+    directory.mkdir(parents=True, exist_ok=True)
+    command = [
+        FFMPEG,
+        "-y",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        f"sine=frequency=440:duration={seconds}",
+        "-c:a",
+        "aac",
+        "-f",
+        "hls",
+        "-hls_time",
+        "1",
+        "-hls_list_size",
+        "0",
+        "-hls_segment_filename",
+        str(directory / "aud%03d.ts"),
+        str(directory / "audio.m3u8"),
+    ]
+    subprocess.run(command, check=True, capture_output=True)
+    return {item.name: item.read_bytes() for item in directory.iterdir()}
+
+
+def probe_streams(path: Path) -> list[str]:
+    """codec_type of every stream ("video", "audio"), or [] without ffprobe."""
+    if FFPROBE is None:
+        return []
+    result = subprocess.run(
+        [
+            FFPROBE,
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.split()
+
+
 def probe_duration(path: Path) -> float | None:
     if FFPROBE is None:
         return None
