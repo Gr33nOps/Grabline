@@ -128,6 +128,19 @@ def test_link_panel_selection_and_filter(db: Database):
     assert panel.list.item(0).isHidden() and not panel.list.item(2).isHidden()
 
 
+def test_main_window_has_file_menu(db: Database, tmp_path: Path):
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        titles = [action.text() for action in window.menuBar().actions()]
+        assert "&File" in titles
+    finally:
+        manager.shutdown()
+
+
 def test_theme_apply_switches_palette():
     from app.ui import theme
 

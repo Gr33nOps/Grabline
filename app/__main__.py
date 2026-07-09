@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from PySide6.QtCore import QBuffer, QIODevice
+from PySide6.QtCore import QBuffer, QIODevice, QTimer
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from app.core import instance, launcher, paths, power
@@ -123,6 +123,10 @@ def main() -> int:
 
     window.job_completed.connect(on_job_completed)
     window.queue_drained.connect(on_queue_drained)
+
+    if settings.check_updates:
+        # A few seconds after launch so it never delays the window appearing.
+        QTimer.singleShot(3000, lambda: window.check_for_updates(quiet=True))
 
     if minimized and tray is not None:
         log.info("started minimized to the tray (autostart)")

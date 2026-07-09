@@ -21,6 +21,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QInputDialog,
     QLineEdit,
     QMainWindow,
@@ -35,7 +36,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import archive, naming, verify
+from app import __version__
+from app.core import archive, crawler, listio, naming, update, verify
 from app.core.batch import expand_all, expand_pattern, extract_urls
 from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
@@ -133,6 +135,8 @@ class MainWindow(QMainWindow):
         self.resize(880, 440)
         self.setAcceptDrops(True)  # drop URLs (or text with URLs) onto the window
 
+        self._build_menu()
+
         toolbar = QToolBar("Main", self)
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
@@ -203,6 +207,39 @@ class MainWindow(QMainWindow):
         self._handoff_timer.start(1000)
         self.refresh()
 
+    def _build_menu(self) -> None:
+        bar = self.menuBar()
+        file_menu = bar.addMenu("&File")
+        for label, handler in (
+            ("Add URL…", self._add_url),
+            ("Import Links…", self._import_links),
+            ("Grab Site…", self._grab_site),
+        ):
+            action = QAction(label, self)
+            action.triggered.connect(handler)
+            file_menu.addAction(action)
+        file_menu.addSeparator()
+        for label, handler in (
+            ("Import List…", self._import_list),
+            ("Export List…", self._export_list),
+        ):
+            action = QAction(label, self)
+            action.triggered.connect(handler)
+            file_menu.addAction(action)
+        file_menu.addSeparator()
+        updates = QAction("Check for Updates…", self)
+        updates.triggered.connect(lambda: self.check_for_updates(quiet=False))
+        file_menu.addAction(updates)
+        file_menu.addSeparator()
+        quit_action = QAction("Quit", self)
+        quit_action.triggered.connect(self._quit)
+        file_menu.addAction(quit_action)
+
+    def _quit(self) -> None:
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.quit()
+
     def _poll_handoffs(self) -> None:
         for handoff in self.manager.db.claim_handoffs():
             if handoff.source == "gallery" and handoff.payload:
@@ -254,6 +291,86 @@ class MainWindow(QMainWindow):
         if dialog.exec() != BatchImportDialog.DialogCode.Accepted:
             return
         self._run_batch(dialog.urls())
+
+    def _grab_site(self) -> None:
+        """Crawl a page (optionally deeper) and pick from the files it finds."""
+        url, accepted = QInputDialog.getText(self, "Grab site", "Page URL:")
+        url = url.strip()
+        if not (accepted and url):
+            return
+        depth, accepted = QInputDialog.getInt(
+            self,
+            "Grab site",
+            "How many levels deep to follow links?",
+            value=0,
+            minValue=0,
+            maxValue=3,
+        )
+        if not accepted:
+            return
+        self.statusBar().showMessage(f"Scanning {url} …")
+        proxy = self.settings.proxy
+
+        def done(result: object) -> None:
+            found = cast(list[str], result)
+            self.statusBar().showMessage(f"Found {len(found)} file link(s)", 6000)
+            if found:
+                self._open_links(found, url)
+            else:
+                QMessageBox.information(
+                    self, "Grabline", "No downloadable files found on that page."
+                )
+
+        self._run_file_op(partial(crawler.crawl, url, depth=depth, proxy=proxy), done)
+
+    def _export_list(self) -> None:
+        path, _f = QFileDialog.getSaveFileName(
+            self, "Export download list", "grabline-downloads.json", "JSON (*.json)"
+        )
+        if not path:
+            return
+        try:
+            count = listio.write_file(self.manager.db, Path(path))
+        except OSError as exc:
+            QMessageBox.warning(self, "Grabline", f"Could not export: {exc}")
+            return
+        self.statusBar().showMessage(f"Exported {count} download(s)", 6000)
+
+    def _import_list(self) -> None:
+        path, _f = QFileDialog.getOpenFileName(
+            self, "Import download list", "", "JSON (*.json);;All files (*)"
+        )
+        if not path:
+            return
+        try:
+            count = listio.read_file(self.manager.db, Path(path))
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Grabline", f"Could not import: {exc}")
+            return
+        self.statusBar().showMessage(f"Imported {count} download(s)", 6000)
+        self.refresh()
+
+    def check_for_updates(self, *, quiet: bool) -> None:
+        """Look for a newer release; ``quiet`` skips the 'up to date' notice."""
+        if not quiet:
+            self.statusBar().showMessage("Checking for updates…")
+        proxy = self.settings.proxy
+
+        def done(result: object) -> None:
+            if result is not None:
+                tag, url = cast("tuple[str, str]", result)
+                answer = QMessageBox.question(
+                    self,
+                    "Grabline",
+                    f"Grabline {tag} is available (you have {__version__}).\n"
+                    "Open the download page?",
+                )
+                if answer == QMessageBox.StandardButton.Yes:
+                    QDesktopServices.openUrl(QUrl(url))
+            elif not quiet:
+                QMessageBox.information(self, "Grabline", "You have the latest version.")
+
+        self._run_file_op(partial(update.check_for_update, proxy), done)
 
     def _run_batch(self, urls: list[str]) -> None:
         """Queue many URLs through the resolver at sensible defaults."""

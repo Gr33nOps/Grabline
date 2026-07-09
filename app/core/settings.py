@@ -140,6 +140,44 @@ class Settings:
     def speed_full_to(self, value: str) -> None:
         self._db.set_setting("speed_full_to", value)
 
+    # --- timed download window: only run downloads between two times ---
+
+    @property
+    def download_schedule_enabled(self) -> bool:
+        """When on, downloads only start (and keep running) inside the window."""
+        return self._get_bool("download_schedule_enabled", False)
+
+    @download_schedule_enabled.setter
+    def download_schedule_enabled(self, value: bool) -> None:
+        self._set_bool("download_schedule_enabled", value)
+
+    @property
+    def download_start(self) -> str:
+        return self._get_time("download_start", "02:00")
+
+    @download_start.setter
+    def download_start(self, value: str) -> None:
+        self._db.set_setting("download_start", value)
+
+    @property
+    def download_stop(self) -> str:
+        return self._get_time("download_stop", "08:00")
+
+    @download_stop.setter
+    def download_stop(self, value: str) -> None:
+        self._db.set_setting("download_stop", value)
+
+    # --- updates ---
+
+    @property
+    def check_updates(self) -> bool:
+        """Look for a newer Grabline release on startup (best effort)."""
+        return self._get_bool("check_updates", True)
+
+    @check_updates.setter
+    def check_updates(self, value: bool) -> None:
+        self._set_bool("check_updates", value)
+
     # --- automatic retry of failed downloads ---
 
     @property

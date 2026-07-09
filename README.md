@@ -1,41 +1,59 @@
 # Grabline
 
-**The open-source download manager: a ⬇ button on any media, anywhere -
-with a real quality picker where one exists, and IDM-grade segmented
-downloading everywhere else.**
+**A fast, free, open-source download manager - the modern, cross-platform
+answer to IDM. Accelerated multi-connection downloads, a real browser button,
+and a proper quality picker for video and audio, all in one app.**
 
-Paste a link or click the button in your browser - a YouTube video, a
-SoundCloud track, a streaming lecture, a plain file - and Grabline downloads
-it fast: a quality panel (4K → 144p, MP3/M4A with tags and cover art) on the
-1000+ sites its Smart Engine knows, multi-connection resumable downloading
-for everything else, and FFmpeg stream reassembly in between. Free, no ads,
-no telemetry, AGPL-3.0.
+Grabline downloads everything: a plain file, a 4K video, a whole folder of
+links, a streaming lecture. Point it at a URL - paste it, drop it on the
+window, or click the ⬇ button in your browser - and it downloads fast with up
+to 16 accelerated connections, crash-proof resume, and a queue you actually
+control. On the 1000+ sites it knows (YouTube, SoundCloud and friends) you
+also get a quality panel: 4K → 144p, MP3/M4A with tags and cover art,
+subtitles, and clip trimming. Windows, macOS, and Linux. No ads, no
+telemetry, no paid tier. AGPL-3.0.
 
-## Highlights
+## Why Grabline
 
-- **One button in the browser** - hover ⬇ on videos and thumbnails (YouTube,
-  YouTube Music, SoundCloud, Vimeo, X), pick the quality right on the page,
-  watch a live progress pill in the corner. Right-click → *Download with
-  Grabline* works on anything, everywhere.
-- **Serious downloading** - up to 16 parallel connections per file with
-  dynamic segmentation (free connections steal work from the slowest one),
-  crash-proof checkpointed resume (survives kill -9 and power loss), a queue
-  you can reorder and prioritize, pause/resume, per-download and global speed
-  limits with a nightly "full speed" schedule, automatic reconnect with
-  backoff, an optional proxy, and auto-sorting into
-  Video/Music/Images/Documents/Archives.
-- **The whole yt-dlp toolbox, no terminal** - curated quality list with size
-  estimates, MP3/M4A extraction with tags and cover art, subtitles (manual or
-  auto, .srt or embedded), clip trimming, playlists with checkbox selection.
-- **Streams** - HLS/DASH manifests are reassembled into clean .mp4 by FFmpeg,
-  with master-playlist quality picking and automatic retry. The per-tab
-  sniffer in the extension catches streams the page loads.
-- **Extras** - download every image or every link on a page (thumbnail grid
-  and a filterable link picker), URL patterns like `file[1-100].jpg`,
-  drag-and-drop URLs onto the window, checksum verification, auto-extract
-  archives, convert any downloaded video to a GIF, a "when the queue
-  finishes: notify / quit / sleep / shut down" action, a dark/light theme,
-  a live speed graph, dashboard tabs, and start minimized in the tray on login.
+A real download-accelerator core, a browser button that just works, and the
+video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
+
+**Accelerated engine**
+- Up to 16 parallel connections per file, with **dynamic segmentation** -
+  free connections steal work from the slowest one so no thread sits idle.
+- **Crash-proof resume**: checkpointed to survive kill -9 and power loss.
+- Global **and** per-download speed limits, plus a nightly "full speed" window.
+- Automatic reconnect with exponential backoff; optional HTTP/SOCKS **proxy**.
+
+**A queue you control**
+- Reorder and prioritize, pause/resume/cancel, dashboard tabs
+  (Active / Completed / Failed), search, a live speed graph.
+- **Timed schedule**: only download between the hours you choose (run it
+  overnight), and *notify / quit / sleep / shut down* when the queue finishes.
+- Auto-sort into Video / Music / Images / Documents / Archives.
+- Import/export your download list; back it up or move it to another machine.
+
+**One button in the browser** (Chrome / Edge / Brave / Firefox)
+- Hover ⬇ on videos and thumbnails (YouTube, YouTube Music, SoundCloud,
+  Vimeo, X), pick the quality right on the page, watch a live progress pill.
+- Right-click → *Download with Grabline* on anything. **Grab all links** or
+  **all images** on a page, or crawl a whole site a few levels deep.
+- A per-tab sniffer catches the streams a page loads. Native Messaging only -
+  no open ports, no localhost server.
+
+**Video & audio done right** (1000+ sites, powered by yt-dlp, no terminal)
+- Quality picker 4K → 144p with size estimates, **MP3/M4A** with tags and
+  cover art, subtitles (manual or auto, .srt or embedded), clip trimming,
+  and playlists with checkbox selection.
+- HLS/DASH streams reassembled into a clean .mp4 by FFmpeg, with quality
+  picking and automatic retry.
+
+**Nice touches**
+- URL patterns like `file[1-100].jpg`, drag-and-drop URLs, checksum
+  verification, auto-extract archives, video → GIF, a dark/light theme,
+  start-minimized-in-the-tray on login, and an update check.
+
+**Honest by design**: no DRM circumvention, no login bypass, no telemetry.
 
 ---
 
@@ -130,11 +148,14 @@ the tray menu.
 |---|---|
 | Hover a video or thumbnail → click **⬇** | In-page panel: Best / 1080p / 720p / 480p / MP3 / M4A - downloading starts immediately, a progress pill tracks it in the corner |
 | Right-click anything → *Download with Grabline* | Link, image, video, audio, or the page itself - routed to the best engine |
-| Right-click a page → *Download all images* | Every big-enough image in a checkable thumbnail grid |
+| Right-click a page → *Download all images / all links* | Every image or file link on the page, in a checkable, filterable picker |
 | Click the toolbar icon | Everything the page's network traffic loaded - streams (.m3u8/.mpd) and media files, one click each |
 | Paste a playlist URL | Fast listing → checkboxes → one quality for the batch |
-| **Import Links** in the app | Paste anything with URLs in it (or load a .txt) - all of it queues at sensible defaults |
-| Right-click a finished video row | Open it, open its folder, re-download - or **Convert to GIF…** with clip range, fps, and width |
+| **File → Grab Site…** | Crawl a page a few levels deep and pick from every file it finds |
+| **File → Import / Export List** | Save your whole queue to a file, or restore it on another machine |
+| **Import Links** in the app | Paste anything with URLs (or `file[1-100].jpg` patterns) - all of it queues |
+| Drag a URL onto the window | Queued instantly |
+| Right-click a finished row | Open it, open its folder, re-download, **verify checksum**, **extract**, or **Convert to GIF…** |
 | Copy a URL anywhere | An unobtrusive "Download with Grabline?" offer (can be turned off) |
 
 Popup toggles: hover button on/off per site, hover button on images (off by

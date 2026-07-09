@@ -68,6 +68,20 @@ def _is_transient_error(error: str | None) -> bool:
     return not any(marker in lowered for marker in _PERMANENT_ERROR_MARKERS)
 
 
+def _in_window(now: datetime, from_str: str, to_str: str) -> bool:
+    """Is ``now`` inside the daily [from, to) window? Handles a window that
+    wraps past midnight (e.g. 23:00 to 07:00). An empty window is never in."""
+    try:
+        fh, fm = (int(p) for p in from_str.split(":"))
+        th, tm = (int(p) for p in to_str.split(":"))
+    except ValueError:
+        return False
+    start, end, cur = fh * 60 + fm, th * 60 + tm, now.hour * 60 + now.minute
+    if start == end:
+        return False
+    return start <= cur < end if start < end else (cur >= start or cur < end)
+
+
 @dataclass(frozen=True)
 class JobView:
     """A read-only snapshot of one job for the UI."""
@@ -112,6 +126,8 @@ class DownloadManager:
         self._job_limiters: dict[int, RateLimiter] = {}
         # job id -> monotonic deadline at which an auto-retry becomes due.
         self._retry_at: dict[int, float] = {}
+        # Jobs paused because the download window closed; resumed when it opens.
+        self._paused_by_schedule: set[int] = set()
         self._cond = threading.Condition()
         self._active: dict[int, DownloadTask] = {}
         self._threads: dict[int, threading.Thread] = {}
@@ -139,17 +155,7 @@ class DownloadManager:
     # -------------------------------------------------- speed limit + schedule
 
     def _in_full_speed_window(self, now: datetime) -> bool:
-        """Is the clock inside the nightly full-speed window? Handles a window
-        that wraps past midnight (e.g. 23:00 to 07:00)."""
-        try:
-            fh, fm = (int(p) for p in self.settings.speed_full_from.split(":"))
-            th, tm = (int(p) for p in self.settings.speed_full_to.split(":"))
-        except ValueError:
-            return False
-        start, end, cur = fh * 60 + fm, th * 60 + tm, now.hour * 60 + now.minute
-        if start == end:
-            return False
-        return start <= cur < end if start < end else (cur >= start or cur < end)
+        return _in_window(now, self.settings.speed_full_from, self.settings.speed_full_to)
 
     def _effective_global_rate(self) -> int:
         base = self.settings.speed_limit_kbps * 1024
@@ -166,6 +172,30 @@ class DownloadManager:
         if rate != self._applied_rate:
             self.limiter.set_rate(rate)
             self._applied_rate = rate
+
+    # -------------------------------------------------- timed download window
+
+    def downloads_allowed_now(self) -> bool:
+        """False while a scheduled download window is closed."""
+        if not self.settings.download_schedule_enabled:
+            return True
+        return _in_window(datetime.now(), self.settings.download_start, self.settings.download_stop)
+
+    def _apply_download_schedule(self) -> None:
+        """Pause active downloads when the window closes; resume them (and let
+        queued ones start) when it opens."""
+        if self.downloads_allowed_now():
+            if self._paused_by_schedule:
+                for job_id in list(self._paused_by_schedule):
+                    job = self.db.get_job(job_id)
+                    if job is not None and job.status is JobStatus.PAUSED:
+                        self.db.set_job_status(job_id, JobStatus.QUEUED)
+                self._paused_by_schedule.clear()
+            return
+        # Window closed: pause anything running and remember it.
+        for job_id, task in list(self._active.items()):
+            task.pause()
+            self._paused_by_schedule.add(job_id)
 
     # -------------------------------------------------- per-download speed cap
 
@@ -493,8 +523,9 @@ class DownloadManager:
                 if not self._running:
                     return
                 self._apply_global_rate()  # honor the nightly full-speed window
+                self._apply_download_schedule()  # start/stop within the timed window
                 self._promote_due_retries()  # re-queue failed jobs whose backoff elapsed
-                if len(self._active) < self.max_concurrent:
+                if self.downloads_allowed_now() and len(self._active) < self.max_concurrent:
                     job = self._next_queued()
                     if job is not None:
                         task = self._create_task(job)
