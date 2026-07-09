@@ -50,7 +50,11 @@ def test_downloads_allowed_respects_schedule(manager: DownloadManager):
 def test_export_then_import_roundtrip(db: Database, tmp_path: Path):
     db.create_job("https://x.test/a.zip", "/tmp", "a.zip")
     db.create_job(
-        "https://x.test/v", "/tmp", "v.mp4", kind=JobKind.SMART, title="Clip",
+        "https://x.test/v",
+        "/tmp",
+        "v.mp4",
+        kind=JobKind.SMART,
+        title="Clip",
         options={"quality_label": "1080p"},
     )
     out = tmp_path / "list.json"
