@@ -55,6 +55,22 @@ def test_is_probable_url():
     assert not is_probable_url("ftp://example.com/f")
 
 
+def test_clipboard_off_by_default_and_suppress(db: Database):
+    from app.ui.clipboard import ClipboardWatcher
+
+    app = _qapp()
+    settings = Settings(db)
+    assert settings.clipboard_watcher is False  # no auto-offer on copy
+    watcher = ClipboardWatcher(app, settings)
+    fired: list[str] = []
+    watcher.url_copied.connect(fired.append)
+    # Even enabled, a suppressed URL (our own Copy URL) must not bounce back.
+    settings.clipboard_watcher = True
+    watcher.suppress("https://example.com/mine.zip")
+    app.clipboard().setText("https://example.com/mine.zip")
+    assert fired == []
+
+
 def test_main_window_lists_jobs(db: Database, tmp_path: Path):
     _qapp()
     settings = Settings(db)

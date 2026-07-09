@@ -13,7 +13,7 @@ def test_defaults(db: Database):
     settings = Settings(db)
     assert settings.download_dir == default_download_dir()
     assert settings.categories_enabled is True
-    assert settings.clipboard_watcher is True
+    assert settings.clipboard_watcher is False  # opt-in: no offer on every copy
     assert settings.use_browser_session is False
     assert settings.session_browser == "chrome"
     assert settings.max_concurrent == 3

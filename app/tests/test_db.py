@@ -66,6 +66,19 @@ def test_segments_roundtrip_and_progress(db: Database):
     assert not reloaded[2].is_complete  # unknown end is never complete
 
 
+def test_all_segment_progress_is_one_query(db: Database):
+    a = db.create_job("http://x.test/a.bin", "/tmp/dl", "a.bin")
+    b = db.create_job("http://x.test/b.bin", "/tmp/dl", "b.bin")
+    db.create_job("http://x.test/c.bin", "/tmp/dl", "c.bin")  # no segments yet
+    sa = db.replace_segments(a.id, [(0, 99), (100, 199)])
+    sb = db.replace_segments(b.id, [(0, 99)])
+    db.update_segment_progress({sa[0].id: 100, sa[1].id: 30, sb[0].id: 50})
+    progress = db.all_segment_progress()
+    assert progress[a.id] == 130
+    assert progress[b.id] == 50
+    assert progress.get(a.id) == db.job_downloaded(a.id)  # matches the per-job query
+
+
 def test_mark_interrupted_flips_downloading_to_paused(db: Database):
     job = db.create_job("http://x.test/a.bin", "/tmp/dl", "a.bin")
     db.set_job_status(job.id, JobStatus.DOWNLOADING)

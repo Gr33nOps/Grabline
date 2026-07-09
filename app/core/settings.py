@@ -53,8 +53,10 @@ class Settings:
 
     @property
     def clipboard_watcher(self) -> bool:
-        """F0.5: offer to download URLs copied to the clipboard."""
-        return self._get_bool("clipboard_watcher", True)
+        """F0.5: offer to download URLs copied to the clipboard. Off by
+        default - an offer on every copied link is intrusive, and the browser
+        button covers the common case."""
+        return self._get_bool("clipboard_watcher", False)
 
     @clipboard_watcher.setter
     def clipboard_watcher(self, value: bool) -> None:

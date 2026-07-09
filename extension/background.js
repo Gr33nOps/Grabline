@@ -281,17 +281,25 @@ api.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 // --------------------------------------------------- interception (F1.5)
 // Off by default; toggle lives in the popup. chrome.downloads based - the
-// download is cancelled after it starts and the app re-requests it.
+// download is cancelled the moment it starts and the app re-requests it.
 
 const INTERCEPT_EXTENSIONS =
-  /\.(mp4|mkv|webm|mov|avi|mp3|m4a|flac|wav|zip|rar|7z|iso|tar|gz|xz|pdf|exe|dmg|appimage)(\?|$)/i;
+  /\.(mp4|mkv|webm|mov|avi|m4v|mp3|m4a|flac|wav|ogg|opus|aac|zip|rar|7z|tar|gz|xz|bz2|iso|img|pdf|docx?|xlsx?|pptx?|epub|exe|msi|dmg|pkg|appimage|deb|rpm|apk|bin)(\?|$)/i;
+// The download's MIME type is usually known before its filename is, so this
+// is what actually catches installers/archives/docs that have no extension in
+// their URL.
+const INTERCEPT_MIME =
+  /^(video\/|audio\/|application\/(zip|x-rar|x-7z|x-tar|gzip|x-xz|x-bzip2|x-iso9660-image|pdf|x-msdownload|x-msi|vnd\.microsoft\.portable-executable|x-apple-diskimage|vnd\.android\.package-archive|octet-stream|epub|vnd\.debian|x-redhat|msword|vnd\.openxmlformats))/i;
+
+function shouldIntercept(item) {
+  if (!/^https?:/.test(item.url)) return false;
+  if (item.mime && INTERCEPT_MIME.test(item.mime)) return true;
+  return INTERCEPT_EXTENSIONS.test(item.filename || item.url);
+}
 
 api.downloads.onCreated.addListener(async (item) => {
   const { intercept = false } = await api.storage.local.get("intercept");
-  if (!intercept) return;
-  if (!/^https?:/.test(item.url)) return;
-  const name = item.filename || item.url;
-  if (!INTERCEPT_EXTENSIONS.test(name)) return;
+  if (!intercept || !shouldIntercept(item)) return;
   try {
     await api.downloads.cancel(item.id);
     await api.downloads.erase({ id: item.id });

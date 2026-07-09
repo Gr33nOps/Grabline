@@ -173,6 +173,7 @@ class MainWindow(QMainWindow):
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_row_menu)
+        self.table.itemSelectionChanged.connect(self._on_selection_changed)
         self.table.verticalHeader().setVisible(False)
         self.table.setColumnWidth(0, 320)
         self.table.setColumnWidth(1, 100)
@@ -192,9 +193,13 @@ class MainWindow(QMainWindow):
         self._row_job_ids: list[int] = []
         self._last_views: dict[int, JobView] = {}
         self._rates: dict[int, tuple[float, int]] = {}
+        self._speed_ema: dict[int, float] = {}
+        self._selected_id: int | None = None
+        self.clipboard_suppressor: Callable[[str], None] | None = None
         self._prev_status: dict[int, JobStatus] = {}
         self._was_active = False
         self._agg: tuple[float, int] | None = None  # (monotonic time, total bytes)
+        self._agg_ema: float | None = None
         self._resolve_threads: list[_ResolveThread] = []
         self._file_ops: set[_FileOpThread] = set()
         self._auto_extracted: set[int] = set()
@@ -525,7 +530,16 @@ class MainWindow(QMainWindow):
         row = self.table.currentRow()
         if 0 <= row < len(self._row_job_ids):
             return self._row_job_ids[row]
+        # Selection can be lost when the table rebuilds mid-download; fall back
+        # to the id we remembered so the toolbar buttons keep working.
+        if self._selected_id in self._row_job_ids:
+            return self._selected_id
         return None
+
+    def _on_selection_changed(self) -> None:
+        row = self.table.currentRow()
+        if 0 <= row < len(self._row_job_ids):
+            self._selected_id = self._row_job_ids[row]
 
     def _pause_selected(self) -> None:
         job_id = self._selected_job_id()
@@ -608,6 +622,8 @@ class MainWindow(QMainWindow):
         elif chosen is open_folder:
             QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
         elif chosen is copy_url:
+            if self.clipboard_suppressor is not None:
+                self.clipboard_suppressor(view.url)  # don't offer our own copy back
             QGuiApplication.clipboard().setText(view.url)
         elif chosen is redownload:
             self.begin_add_url(view.url)
@@ -703,9 +719,16 @@ class MainWindow(QMainWindow):
         ids = [view.id for view in views]
         if ids != self._row_job_ids:
             self._rebuild_rows(views)
+            self._restore_selection()
         for row, view in enumerate(views):
             self._update_row(row, view)
         self._apply_filter()
+
+    def _restore_selection(self) -> None:
+        """Re-select the remembered job after a rebuild so the toolbar keeps
+        acting on what the user picked."""
+        if self._selected_id in self._row_job_ids:
+            self.table.selectRow(self._row_job_ids.index(self._selected_id))
 
     def _update_speed_line(self, views: list[JobView]) -> None:
         total = sum(v.downloaded for v in views if v.status is JobStatus.DOWNLOADING)
@@ -714,7 +737,11 @@ class MainWindow(QMainWindow):
             elapsed = now - self._agg[0]
             if elapsed > 0:
                 # Clamp: a finishing job leaves the sum and would read negative.
-                self.speed_line.push(max(0, total - self._agg[1]) / elapsed)
+                instant = max(0, total - self._agg[1]) / elapsed
+                self._agg_ema = (
+                    instant if self._agg_ema is None else self._agg_ema * 0.6 + instant * 0.4
+                )
+                self.speed_line.push(self._agg_ema)
         self._agg = (now, total)
 
     def _detect_transitions(self, views: list[JobView]) -> None:
@@ -810,17 +837,23 @@ class MainWindow(QMainWindow):
     def _speed_text(self, view: JobView) -> str:
         if view.status is not JobStatus.DOWNLOADING:
             self._rates.pop(view.id, None)
+            self._speed_ema.pop(view.id, None)
             return ""
         now = time.monotonic()
         previous = self._rates.get(view.id)
         self._rates[view.id] = (now, view.downloaded)
         if previous is None:
-            return ""
+            return "…"
         elapsed = now - previous[0]
         if elapsed <= 0:
-            return ""
-        speed = max(0, view.downloaded - previous[1]) / elapsed
-        return f"{human_bytes(speed)}/s"
+            return f"{human_bytes(self._speed_ema.get(view.id, 0.0))}/s"
+        instant = max(0, view.downloaded - previous[1]) / elapsed
+        # Exponential moving average: progress is checkpointed in bursts, so a
+        # single zero-delta sample must not drop the display to 0 B/s.
+        ema = self._speed_ema.get(view.id)
+        smoothed = instant if ema is None else ema * 0.6 + instant * 0.4
+        self._speed_ema[view.id] = smoothed
+        return f"{human_bytes(smoothed)}/s"
 
     # ---------------------------------------------------------- drag & drop
 

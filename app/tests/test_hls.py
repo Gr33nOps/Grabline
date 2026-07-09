@@ -129,6 +129,34 @@ def test_transient_failure_is_retried_once(server: MediaServer, db: Database, de
     assert not (dest / "lecture.mp4.gl-part").exists()
 
 
+def test_looks_complete_accepts_full_stream(db: Database, dest: Path):
+    """A stream FFmpeg muxed to ~its full duration is kept even on a nonzero
+    exit (a trailing segment 404 must not throw away a finished file)."""
+    job = _hls_job(db, "http://x/live.m3u8", dest)
+    task = HlsDownload(db, job, ffmpeg_path="ffmpeg")
+    part = job.part_path
+    part.write_bytes(b"x" * 1024)
+    task._duration = 100.0
+
+    task._out_time = 99.5  # 99.5% muxed -> complete
+    assert task._looks_complete(part) is True
+    task._out_time = 40.0  # less than 98% -> not complete
+    assert task._looks_complete(part) is False
+    task._out_time = 99.5
+    task._duration = None  # unknown duration -> cannot claim complete
+    assert task._looks_complete(part) is False
+
+
+def test_discard_removes_leftover_part(db: Database, dest: Path, tmp_path: Path):
+    from app.engines.hls import _discard
+
+    leftover = tmp_path / "x.mp4.gl-part"
+    leftover.write_bytes(b"junk")
+    _discard(leftover)
+    assert not leftover.exists()
+    _discard(leftover)  # already gone: no error
+
+
 def test_live_playlist_is_refused_clearly(server: MediaServer, db: Database, dest: Path):
     # A media playlist without #EXT-X-ENDLIST is a live stream in progress.
     # FFmpeg would happily poll it forever; Grabline must refuse up front.

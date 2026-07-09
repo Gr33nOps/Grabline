@@ -412,3 +412,12 @@ class Database:
                 (job_id,),
             ).fetchone()
         return int(row["total"])
+
+    def all_segment_progress(self) -> dict[int, int]:
+        """Summed downloaded bytes per job, in one query - the UI snapshot
+        polls this every refresh, so it must not be N separate SUM queries."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT job_id, COALESCE(SUM(downloaded), 0) AS total FROM segments GROUP BY job_id"
+            ).fetchall()
+        return {int(row["job_id"]): int(row["total"]) for row in rows}

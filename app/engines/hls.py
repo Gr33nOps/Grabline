@@ -190,18 +190,32 @@ class HlsDownload:
         if self._stop_event.is_set():
             return self._settle_stopped(part)
         if stalled:
-            part.unlink(missing_ok=True)
+            _discard(part)
             self._failure = (
                 f"the stream stalled (no data for {self.stall_timeout:.0f}s) - "
                 "it may be live or the server may be down"
             )
             return None
         if process.returncode != 0:
-            part.unlink(missing_ok=True)
+            # FFmpeg often exits nonzero on a fully downloaded stream because a
+            # trailing segment 404s or the connection drops after the last byte.
+            # If we actually muxed the whole thing, keep it instead of failing.
+            if self._looks_complete(part):
+                log.info("hls job %s: nonzero exit but stream is complete, keeping", self.job.id)
+                return self._finalize(part)
+            _discard(part)
             detail = f" ({stderr_tail})" if stderr_tail else ""
             self._failure = f"FFmpeg could not process this stream{detail}"
             return None
         return self._finalize(part)
+
+    def _looks_complete(self, part: Path) -> bool:
+        """A stream is 'done' when we muxed ~all of the playlist's duration."""
+        if not part.exists() or part.stat().st_size <= 0:
+            return False
+        if not self._duration:
+            return False
+        return self._out_time >= self._duration * 0.98
 
     def _read_progress(self, stream: IO[str]) -> None:
         # FFmpeg's out_time_ms is microseconds too (bug-compatible forever).
@@ -280,7 +294,7 @@ class HlsDownload:
             os.fsync(handle.fileno())
         size = part.stat().st_size
         if size == 0:
-            part.unlink(missing_ok=True)
+            _discard(part)
             return self._finish_failed("the stream produced an empty file")
         dest = naming.unique_path(self.job.dest_path)
         os.replace(part, dest)
@@ -296,7 +310,7 @@ class HlsDownload:
     def _settle_stopped(self, part: Path) -> JobStatus:
         # MP4 muxing cannot resume: a paused reassembly restarts from scratch,
         # so the partial output is useless either way.
-        part.unlink(missing_ok=True)
+        _discard(part)
         self.db.update_job_downloaded(self.job.id, 0)
         if self._cancelled:
             self.db.set_job_status(self.job.id, JobStatus.CANCELLED)
@@ -308,3 +322,15 @@ class HlsDownload:
         log.warning("hls job %s failed: %s", self.job.id, message)
         self.db.set_job_status(self.job.id, JobStatus.FAILED, error=message)
         return JobStatus.FAILED
+
+
+def _discard(part: Path) -> None:
+    """Delete a leftover .gl-part, retrying briefly: on Windows FFmpeg may
+    still hold the handle for a moment after it exits (WinError 32)."""
+    for attempt in range(5):
+        try:
+            part.unlink(missing_ok=True)
+            return
+        except OSError:
+            time.sleep(0.2 * (attempt + 1))
+    log.warning("could not remove leftover part file: %s", part)

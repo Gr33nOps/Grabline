@@ -450,10 +450,18 @@ class DownloadManager:
     def snapshot(self) -> list[JobView]:
         with self._cond:
             active = dict(self._active)
+        # One query for all segment progress instead of one per direct job:
+        # the UI polls snapshot() every 500ms, so this is a real hot path.
+        segment_progress = self.db.all_segment_progress()
         views: list[JobView] = []
         for job in self.db.list_jobs():
             task = active.get(job.id)
-            downloaded = task.bytes_downloaded if task is not None else self.db.stored_progress(job)
+            if task is not None:
+                downloaded = task.bytes_downloaded
+            elif job.kind is JobKind.DIRECT:
+                downloaded = segment_progress.get(job.id, 0)
+            else:
+                downloaded = job.downloaded
             views.append(
                 JobView(
                     id=job.id,

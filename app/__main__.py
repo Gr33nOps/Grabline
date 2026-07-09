@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 
 from PySide6.QtCore import QBuffer, QIODevice, QTimer
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
@@ -62,6 +63,17 @@ def main() -> int:
 
     window = MainWindow(manager, settings)
     window.setWindowIcon(make_app_icon())
+
+    # Warm yt-dlp's extractor list off the UI thread so the first paste/grab
+    # doesn't stall for a second while 1000+ extractors are enumerated.
+    def _warm_extractors() -> None:
+        try:
+            window.resolver.smart.matches("https://www.youtube.com/watch?v=warmup")
+        except Exception:  # pragma: no cover - warmup is best effort
+            log.debug("extractor warmup failed", exc_info=True)
+
+    threading.Thread(target=_warm_extractors, name="gl-warmup", daemon=True).start()
+
     if find_ffmpeg(settings) is None:
         window.statusBar().showMessage(
             "FFmpeg not found - install it in Settings to enable MP3, merging, and streams"
@@ -75,6 +87,7 @@ def main() -> int:
         window.close_to_tray = True
 
     watcher = ClipboardWatcher(app, settings)
+    window.clipboard_suppressor = watcher.suppress
     pending_clipboard_url: list[str] = []
 
     def on_url_copied(url: str) -> None:

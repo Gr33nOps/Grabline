@@ -11,12 +11,16 @@
 // case the thumbnail button pauses while right-click and paste still work.
 
 (() => {
-  // Anchors that wrap a video thumbnail, oldest → newest YouTube layouts.
+  // Anchors that wrap a video thumbnail. The specific classes come first for
+  // precision, then a generic href match so a class rename on YouTube's side
+  // can't hide the button entirely (any link to a video still works).
   const THUMBNAIL_ANCHORS = [
     "a#thumbnail[href*='/watch']",
     "a.yt-lockup-view-model-wiz__content-image[href*='/watch']",
     "a.yt-simple-endpoint[href^='/shorts/']",
     "a.reel-item-endpoint[href^='/shorts/']",
+    "a[href*='/watch?v=']",
+    "a[href^='/shorts/']",
   ].join(", ");
   // The player on a watch/Shorts page gets the same button - the page URL is
   // the video URL there, and the quality panel beats a blind instant grab.
