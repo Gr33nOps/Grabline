@@ -46,6 +46,7 @@ class HlsDownload:
         persist_interval: float = 0.5,
         stall_timeout: float = 90.0,
         max_attempts: int = 2,
+        proxy: str | None = None,
     ) -> None:
         self.db = db
         self.job = job
@@ -53,6 +54,7 @@ class HlsDownload:
         self.persist_interval = persist_interval
         self.stall_timeout = stall_timeout
         self.max_attempts = max_attempts
+        self.proxy = proxy
         self._stop_event = threading.Event()
         self._cancelled = False
         self._downloaded = 0
@@ -132,12 +134,17 @@ class HlsDownload:
         """One FFmpeg run. None means: transient failure, caller may retry."""
         self._downloaded = 0
         self._out_time = 0.0
+        env = None
+        if self.proxy:
+            # FFmpeg reads http(s)_proxy from the environment for http inputs.
+            env = {**os.environ, "http_proxy": self.proxy, "https_proxy": self.proxy}
         try:
             process = subprocess.Popen(  # argument list only - no shell (S1)
                 self._command(part),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                env=env,
             )
         except OSError as exc:
             self._failure = f"could not start FFmpeg: {exc}"

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import naming
-from app.core.batch import extract_urls
+from app.core.batch import expand_all, extract_urls
 from app.core.manager import DownloadManager
 from app.core.models import JobKind
 from app.core.resolver import Resolver
@@ -67,6 +67,7 @@ class BatchImportThread(QThread):
             url,
             use_session=self._settings.use_browser_session,
             session_browser=self._settings.session_browser,
+            proxy=self._settings.proxy,
         )
         if resolution.kind is None:
             return resolution.message or "nothing downloadable"
@@ -142,7 +143,8 @@ class BatchImportDialog(QDialog):
         self._update_count()
 
     def urls(self) -> list[str]:
-        return extract_urls(self.text_edit.toPlainText())
+        # Expand range patterns (file[1-20].jpg) after pulling URLs out.
+        return expand_all(extract_urls(self.text_edit.toPlainText()))
 
     def _load_file(self) -> None:
         path, _filter = QFileDialog.getOpenFileName(

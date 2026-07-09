@@ -84,11 +84,11 @@ class Resolution:
     variants: tuple[HlsVariant, ...] = ()  # set for HLS master playlists (F2.1)
 
 
-def _hls_variants(url: str) -> tuple[HlsVariant, ...]:
+def _hls_variants(url: str, proxy: str | None = None) -> tuple[HlsVariant, ...]:
     """Quality choices from a master playlist; empty for media playlists
     or when the manifest cannot be fetched (FFmpeg reports the real error)."""
     try:
-        with httpx.Client(follow_redirects=True, timeout=10) as client:
+        with httpx.Client(follow_redirects=True, timeout=10, proxy=proxy or None) as client:
             response = client.get(url)
             if response.status_code != 200:
                 return ()
@@ -107,6 +107,7 @@ class Resolver:
         *,
         use_session: bool = False,
         session_browser: str = "chrome",
+        proxy: str | None = None,
     ) -> Resolution:
         url = url.strip()
         scheme = urlsplit(url).scheme.lower()
@@ -124,7 +125,10 @@ class Resolver:
         if self.smart.matches(url):
             try:
                 inspected = self.smart.inspect(
-                    url, use_session=use_session, session_browser=session_browser
+                    url,
+                    use_session=use_session,
+                    session_browser=session_browser,
+                    proxy=proxy,
                 )
             except DownloadError as exc:
                 # A site extractor claimed the URL; its verdict is final -
@@ -136,12 +140,14 @@ class Resolver:
 
         path = urlsplit(url).path.lower()
         if path.endswith(_MANIFEST_SUFFIXES):
-            variants = _hls_variants(url) if path.endswith(".m3u8") else ()
+            variants = _hls_variants(url, proxy) if path.endswith(".m3u8") else ()
             return Resolution(url=url, kind=JobKind.HLS, variants=variants)
 
         try:
             with httpx.Client(
-                follow_redirects=True, timeout=httpx.Timeout(20.0, connect=10.0)
+                follow_redirects=True,
+                timeout=httpx.Timeout(20.0, connect=10.0),
+                proxy=proxy or None,
             ) as client:
                 result = probe(client, url)
         except DownloadError as exc:
@@ -152,7 +158,7 @@ class Resolver:
             )
         content_type = (result.content_type or "").split(";")[0].strip().lower()
         if content_type in _MANIFEST_CONTENT_TYPES:
-            variants = _hls_variants(url) if content_type in _HLS_CONTENT_TYPES else ()
+            variants = _hls_variants(url, proxy) if content_type in _HLS_CONTENT_TYPES else ()
             return Resolution(url=url, kind=JobKind.HLS, probe=result, variants=variants)
         if content_type in _HTML_CONTENT_TYPES:
             # Saving a streaming site's page as lecture.html helps nobody.

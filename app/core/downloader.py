@@ -116,6 +116,7 @@ class SegmentedDownload:
         checkpoint_interval: float = 0.3,
         limiter: RateLimiter | None = None,
         job_limiter: RateLimiter | None = None,
+        proxy: str | None = None,
     ) -> None:
         self.db = db
         self.job = job
@@ -131,12 +132,14 @@ class SegmentedDownload:
             follow_redirects=True,
             timeout=httpx.Timeout(30.0, connect=15.0),
             limits=httpx.Limits(max_connections=connections + 2),
+            proxy=proxy or None,
         )
         self._checkpointer = _Checkpointer(db, checkpoint_interval)
         self._segments: list[Segment] = []
         self._stop_event = threading.Event()
         self._reason = StopReason.NONE
         self._reason_lock = threading.Lock()
+        self._steal_lock = threading.Lock()
         self._error: str | None = None
 
     # ------------------------------------------------------------ control
@@ -261,46 +264,79 @@ class SegmentedDownload:
 
     # ------------------------------------------------------------ workers
 
-    def _worker(self, segment: Segment) -> None:
+    def _worker(self, segment: Segment | None) -> None:
         try:
             with open(self.job.part_path, "r+b", buffering=0) as handle:
-                attempts = 0
-                while not self._stop_event.is_set():
-                    downloaded_before = segment.downloaded
-                    try:
-                        if self.job.resumable:
-                            self._stream_range(handle, segment)
-                        else:
-                            self._stream_full(handle, segment)
-                        return
-                    except (httpx.TransportError, _Retry) as exc:
-                        if segment.downloaded > downloaded_before:
-                            attempts = 0  # forward progress earns fresh retries
-                        attempts += 1
-                        if attempts > self.max_retries:
-                            raise DownloadError(
-                                f"segment {segment.index}: giving up after "
-                                f"{self.max_retries} retries ({exc})"
-                            ) from exc
-                        # Exponential backoff with jitter: spreads out retries
-                        # so many segments failing at once don't hammer in sync.
-                        capped = min(self.retry_backoff * 2 ** (attempts - 1), 5.0)
-                        delay = capped * (0.5 + random.random() * 0.5)
-                        log.debug(
-                            "job %s segment %s: retry %s/%s in %.2fs (%s)",
-                            self.job.id,
-                            segment.index,
-                            attempts,
-                            self.max_retries,
-                            delay,
-                            exc,
-                        )
-                        self._stop_event.wait(delay)
+                while segment is not None and not self._stop_event.is_set():
+                    self._download_segment(handle, segment)
+                    if self._stop_event.is_set():
+                        break
+                    # Finished early? Help the slowest segment instead of idling
+                    # (dynamic segmentation: reallocate work to free connections).
+                    segment = self._steal_segment()
         except DownloadError as exc:
             self._record_error(str(exc))
         except Exception as exc:
-            log.exception("job %s segment %s crashed", self.job.id, segment.index)
-            self._record_error(f"segment {segment.index}: {exc}")
+            index = segment.index if segment is not None else -1
+            log.exception("job %s segment %s crashed", self.job.id, index)
+            self._record_error(f"segment {index}: {exc}")
+
+    def _download_segment(self, handle: IO[bytes], segment: Segment) -> None:
+        attempts = 0
+        while not self._stop_event.is_set():
+            downloaded_before = segment.downloaded
+            try:
+                if self.job.resumable:
+                    self._stream_range(handle, segment)
+                else:
+                    self._stream_full(handle, segment)
+                return
+            except (httpx.TransportError, _Retry) as exc:
+                if segment.downloaded > downloaded_before:
+                    attempts = 0  # forward progress earns fresh retries
+                attempts += 1
+                if attempts > self.max_retries:
+                    raise DownloadError(
+                        f"segment {segment.index}: giving up after "
+                        f"{self.max_retries} retries ({exc})"
+                    ) from exc
+                # Exponential backoff with jitter: spreads out retries
+                # so many segments failing at once don't hammer in sync.
+                capped = min(self.retry_backoff * 2 ** (attempts - 1), 5.0)
+                delay = capped * (0.5 + random.random() * 0.5)
+                self._stop_event.wait(delay)
+
+    #: A segment must have at least this much left to be worth splitting; each
+    #: half then stays above MIN_SEGMENT_SIZE.
+    STEAL_THRESHOLD = 2 * MIN_SEGMENT_SIZE
+
+    def _steal_segment(self) -> Segment | None:
+        """Split the tail off the segment with the most bytes remaining and
+        return it as fresh work, so a finished connection keeps pulling."""
+        if not self.job.resumable:
+            return None  # a single non-range stream cannot be split
+        with self._steal_lock:
+            victim: Segment | None = None
+            best = 0
+            for seg in self._segments:
+                if seg.end is None:
+                    continue
+                remaining = seg.end - (seg.start + seg.downloaded) + 1
+                if remaining > best:
+                    best, victim = remaining, seg
+            if victim is None or victim.end is None or best < self.STEAL_THRESHOLD:
+                return None
+            old_end = victim.end
+            mid = victim.start + victim.downloaded + best // 2
+            # Shrink the busy segment (it re-reads .end each chunk and stops);
+            # the tail becomes a new segment this connection takes over.
+            victim.end = mid - 1
+            self.db.set_segment_end(victim.id, mid - 1)
+            new_index = max(seg.index for seg in self._segments) + 1
+            new_segment = self.db.add_segment(self.job.id, new_index, mid, old_end)
+            self._segments.append(new_segment)
+            log.debug("job %s: split segment %s at %s", self.job.id, victim.index, mid)
+            return new_segment
 
     def _stream_range(self, handle: IO[bytes], segment: Segment) -> None:
         end = segment.end
@@ -321,7 +357,10 @@ class SegmentedDownload:
                     return
                 if not chunk:
                     continue
-                remaining = end - (segment.start + segment.downloaded) + 1
+                # Re-read .end each chunk: a steal may have shrunk this segment,
+                # in which case we stop at the new boundary.
+                cap = segment.end if segment.end is not None else end
+                remaining = cap - (segment.start + segment.downloaded) + 1
                 if remaining <= 0:
                     return
                 data = chunk[:remaining]
@@ -329,7 +368,8 @@ class SegmentedDownload:
                 segment.downloaded += len(data)
                 self._checkpointer.report(segment.id, segment.downloaded)
                 self._throttle(len(data))
-        if segment.start + segment.downloaded <= end:
+        final_end = segment.end if segment.end is not None else end
+        if segment.start + segment.downloaded <= final_end:
             raise _Retry("server closed the connection early")
 
     def _throttle(self, amount: int) -> None:

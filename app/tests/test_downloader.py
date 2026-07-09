@@ -41,9 +41,10 @@ def test_segmented_download_completes_with_checksum(server: MediaServer, db: Dat
     assert sha256_file(dest / "big.bin") == sha256(data)
     assert not (dest / "big.bin.gl-part").exists()
     segments = db.segments_for(job.id)
-    assert len(segments) == 8
+    # >= 8: dynamic segmentation may split segments as fast workers steal work.
+    assert len(segments) >= 8
     assert all(segment.is_complete for segment in segments)
-    assert server.request_count("/big.bin") >= 9  # probe + 8 range requests
+    assert server.request_count("/big.bin") >= 9  # probe + 8+ range requests
 
 
 def test_single_connection_fallback_when_no_ranges(server: MediaServer, db: Database, dest: Path):
@@ -196,6 +197,38 @@ def test_speed_limiter_caps_throughput(server: MediaServer, db: Database, dest: 
     assert status is JobStatus.COMPLETED
     assert sha256_file(dest / "capped.bin") == sha256(data)
     assert elapsed >= 0.8
+
+
+def test_steal_segment_splits_the_biggest_remainder(db: Database, dest: Path):
+    """Dynamic segmentation: an idle worker steals the tail of the segment
+    with the most bytes left, and both halves stay well-formed."""
+    job = db.create_job("http://x.test/f.bin", str(dest), "f.bin")
+    job.resumable = True
+    task = SegmentedDownload(db, job, connections=4)
+    # One big segment [0, 3_999_999], nothing downloaded yet.
+    task._segments = db.replace_segments(job.id, [(0, 3_999_999)])
+    victim = task._segments[0]
+
+    stolen = task._steal_segment()
+    assert stolen is not None
+    # The victim shrank; the stolen tail continues exactly where it ends.
+    assert victim.end == stolen.start - 1
+    assert stolen.end == 3_999_999
+    assert stolen.downloaded == 0
+    # Together they still cover the whole range with no gap or overlap.
+    assert victim.start == 0 and stolen.end == 3_999_999
+    # Persisted so a crash mid-way can resume the new layout.
+    persisted = {(s.start, s.end) for s in db.segments_for(job.id)}
+    assert (victim.start, victim.end) in persisted
+    assert (stolen.start, stolen.end) in persisted
+
+
+def test_steal_declines_when_remainder_too_small(db: Database, dest: Path):
+    job = db.create_job("http://x.test/f.bin", str(dest), "f.bin")
+    job.resumable = True
+    task = SegmentedDownload(db, job, connections=4)
+    task._segments = db.replace_segments(job.id, [(0, 100_000)])  # below STEAL_THRESHOLD
+    assert task._steal_segment() is None
 
 
 def test_per_download_limiter_caps_throughput(server: MediaServer, db: Database, dest: Path):

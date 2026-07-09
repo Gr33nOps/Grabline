@@ -318,6 +318,7 @@ class SmartEngine:
         *,
         use_session: bool = False,
         session_browser: str = "chrome",
+        proxy: str | None = None,
     ) -> MediaInfo | PlaylistInfo:
         """Metadata for a single video, or a fast flat listing for a playlist.
 
@@ -336,6 +337,8 @@ class SmartEngine:
         }
         if use_session:
             opts["cookiesfrombrowser"] = (session_browser,)
+        if proxy:
+            opts["proxy"] = proxy
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -353,6 +356,7 @@ class SmartEngine:
                     playlist.entries[0].url,
                     use_session=use_session,
                     session_browser=session_browser,
+                    proxy=proxy,
                 )
             return playlist
         return MediaInfo(
@@ -397,12 +401,14 @@ class SmartDownload:
         ffmpeg_path: str | None = None,
         persist_interval: float = 0.3,
         ratelimit: int | None = None,
+        proxy: str | None = None,
     ) -> None:
         self.db = db
         self.job = job
         self.ffmpeg_path = ffmpeg_path
         self.persist_interval = persist_interval
         self.ratelimit = ratelimit
+        self.proxy = proxy
         self._stop_event = threading.Event()
         self._cancelled = False
         self._live = _LiveProgress()
@@ -508,6 +514,8 @@ class SmartDownload:
             ydl_opts["force_keyframes_at_cuts"] = True
         if options.get("use_session"):
             ydl_opts["cookiesfrombrowser"] = (options.get("session_browser") or "chrome",)
+        if self.proxy:
+            ydl_opts["proxy"] = self.proxy
         ydl_opts["postprocessors"] = postprocessors
         return ydl_opts
 

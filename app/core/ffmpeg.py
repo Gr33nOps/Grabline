@@ -80,6 +80,7 @@ def ensure_ffmpeg(
     pins: dict[str, tuple[PinnedArchive, ...]] | None = None,
     progress: Callable[[int, int | None], None] | None = None,
     verify_run: bool = True,
+    proxy: str | None = None,
 ) -> Path:
     """Download, verify, and install FFmpeg for this platform. Returns the
     ffmpeg binary path. Raises DownloadError with a user-facing message on
@@ -97,7 +98,11 @@ def ensure_ffmpeg(
         )
     target_dir.mkdir(parents=True, exist_ok=True)
     extracted: list[Path] = []
-    with httpx.Client(follow_redirects=True, timeout=httpx.Timeout(60.0, connect=15.0)) as client:
+    with httpx.Client(
+        follow_redirects=True,
+        timeout=httpx.Timeout(60.0, connect=15.0),
+        proxy=proxy or None,
+    ) as client:
         for archive in archives:
             extracted += _install_archive(client, archive, target_dir, progress)
     ffmpeg_path = managed_binary("ffmpeg", target_dir)

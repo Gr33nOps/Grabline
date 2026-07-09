@@ -366,6 +366,21 @@ class Database:
             )
         return self.segments_for(job_id)
 
+    def add_segment(self, job_id: int, seg_index: int, start: int, end: int | None) -> Segment:
+        """Insert one segment (used when a worker steals work at runtime)."""
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO segments (job_id, seg_index, start_byte, end_byte) "
+                "VALUES (?, ?, ?, ?)",
+                (job_id, seg_index, start, end),
+            )
+            seg_id = cur.lastrowid
+        if seg_id is None:  # pragma: no cover - sqlite always sets it
+            raise RuntimeError("INSERT did not produce a row id")
+        return Segment(
+            id=seg_id, job_id=job_id, index=seg_index, start=start, end=end, downloaded=0
+        )
+
     def segments_for(self, job_id: int) -> list[Segment]:
         with self._lock:
             rows = self._conn.execute(

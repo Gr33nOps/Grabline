@@ -173,6 +173,59 @@ class Settings:
             raise ValueError(f"unknown theme: {value}")
         self._db.set_setting("theme", value)
 
+    # --- networking ---
+
+    @property
+    def proxy(self) -> str | None:
+        """A proxy URL (http://, https://, socks5://…) applied to all
+        downloading, or None to go direct."""
+        return self._db.get_setting("proxy") or None
+
+    @proxy.setter
+    def proxy(self, value: str | None) -> None:
+        self._db.set_setting("proxy", (value or "").strip())
+
+    # --- finishing touches ---
+
+    @property
+    def notify_on_complete(self) -> bool:
+        return self._get_bool("notify_on_complete", True)
+
+    @notify_on_complete.setter
+    def notify_on_complete(self, value: bool) -> None:
+        self._set_bool("notify_on_complete", value)
+
+    @property
+    def auto_open_folder(self) -> bool:
+        """Open the containing folder when a download finishes."""
+        return self._get_bool("auto_open_folder", False)
+
+    @auto_open_folder.setter
+    def auto_open_folder(self, value: bool) -> None:
+        self._set_bool("auto_open_folder", value)
+
+    @property
+    def auto_extract(self) -> bool:
+        """Unpack .zip/.tar archives automatically once they finish."""
+        return self._get_bool("auto_extract", False)
+
+    @auto_extract.setter
+    def auto_extract(self, value: bool) -> None:
+        self._set_bool("auto_extract", value)
+
+    @property
+    def after_queue_action(self) -> str:
+        """What to do once every download finishes: nothing / quit / sleep /
+        shutdown."""
+        raw = self._db.get_setting("after_queue_action")
+        return raw if raw in ("nothing", "quit", "sleep", "shutdown") else "nothing"
+
+    @after_queue_action.setter
+    def after_queue_action(self, value: str) -> None:
+        if value not in ("nothing", "quit", "sleep", "shutdown"):
+            raise ValueError(f"unknown after-queue action: {value}")
+        self._db.set_setting("after_queue_action", value)
+
     @property
     def playlist_batch_cap(self) -> int:
         """How many playlist entries get preselected (F1.7)."""

@@ -154,11 +154,12 @@ def _create_job(
 
 def _create_task(db: Database, job: Job, args: argparse.Namespace) -> DownloadTask:
     settings = Settings(db)
+    proxy = settings.proxy
     if job.kind is JobKind.SMART:
-        return SmartDownload(db, job, ffmpeg_path=find_ffmpeg(settings))
+        return SmartDownload(db, job, ffmpeg_path=find_ffmpeg(settings), proxy=proxy)
     if job.kind is JobKind.HLS:
-        return HlsDownload(db, job, ffmpeg_path=find_ffmpeg(settings))
-    return SegmentedDownload(db, job, connections=args.connections)
+        return HlsDownload(db, job, ffmpeg_path=find_ffmpeg(settings), proxy=proxy)
+    return SegmentedDownload(db, job, connections=args.connections, proxy=proxy)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -203,6 +204,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.url,
                 use_session=bool(args.session),
                 session_browser=args.session or "chrome",
+                proxy=Settings(db).proxy,
             )
             if resolution.kind is None:
                 print(f"ERROR {resolution.message}", flush=True)

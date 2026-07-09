@@ -38,9 +38,16 @@ class _FfmpegInstaller(QThread):
     succeeded = Signal(str)
     failed = Signal(str)
 
+    def __init__(self, proxy: str | None = None) -> None:
+        super().__init__()
+        self._proxy = proxy
+
     def run(self) -> None:
         try:
-            path = ensure_ffmpeg(progress=lambda got, total: self.progressed.emit(got, total))
+            path = ensure_ffmpeg(
+                progress=lambda got, total: self.progressed.emit(got, total),
+                proxy=self._proxy,
+            )
             self.succeeded.emit(str(path))
         except DownloadError as exc:
             self.failed.emit(str(exc))
@@ -118,7 +125,37 @@ class SettingsDialog(QDialog):
             self.theme_combo.addItem(label, value)
         self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(settings.theme)))
         form.addRow("Theme:", self.theme_combo)
+        self.proxy_edit = QLineEdit(settings.proxy or "")
+        self.proxy_edit.setPlaceholderText(
+            "http://host:port or socks5://host:port (blank = direct)"
+        )
+        form.addRow("Proxy:", self.proxy_edit)
         layout.addWidget(general)
+
+        finishing = QGroupBox("When downloads finish")
+        finishing_form = QFormLayout(finishing)
+        self.notify_check = QCheckBox("Show a notification when a download completes")
+        self.notify_check.setChecked(settings.notify_on_complete)
+        finishing_form.addRow("", self.notify_check)
+        self.open_folder_check = QCheckBox("Open the folder when a download completes")
+        self.open_folder_check.setChecked(settings.auto_open_folder)
+        finishing_form.addRow("", self.open_folder_check)
+        self.extract_check = QCheckBox("Extract .zip/.tar archives automatically")
+        self.extract_check.setChecked(settings.auto_extract)
+        finishing_form.addRow("", self.extract_check)
+        self.after_combo = QComboBox()
+        for label, value in (
+            ("Do nothing", "nothing"),
+            ("Quit Grabline", "quit"),
+            ("Sleep the computer", "sleep"),
+            ("Shut down the computer", "shutdown"),
+        ):
+            self.after_combo.addItem(label, value)
+        self.after_combo.setCurrentIndex(
+            max(0, self.after_combo.findData(settings.after_queue_action))
+        )
+        finishing_form.addRow("When the queue empties:", self.after_combo)
+        layout.addWidget(finishing)
 
         session = QGroupBox("Browser session (advanced)")
         session_layout = QVBoxLayout(session)
@@ -211,7 +248,7 @@ class SettingsDialog(QDialog):
         progress = QProgressDialog("Downloading FFmpeg…", "Hide", 0, 0, self)
         progress.setWindowTitle("Grabline")
         progress.setMinimumDuration(0)
-        installer = _FfmpegInstaller()
+        installer = _FfmpegInstaller(self.settings.proxy)
         self._installer = installer
 
         def on_progress(received: int, total: object) -> None:
@@ -252,6 +289,11 @@ class SettingsDialog(QDialog):
         self.settings.auto_retry = self.retry_check.isChecked()
         self.settings.auto_retry_max = self.retry_spin.value()
         self.settings.theme = self.theme_combo.currentData()
+        self.settings.proxy = self.proxy_edit.text().strip() or None
+        self.settings.notify_on_complete = self.notify_check.isChecked()
+        self.settings.auto_open_folder = self.open_folder_check.isChecked()
+        self.settings.auto_extract = self.extract_check.isChecked()
+        self.settings.after_queue_action = self.after_combo.currentData()
         try:
             # The autostart file/registry entry IS the setting - no DB copy
             # that could drift from what the OS will actually do at login.

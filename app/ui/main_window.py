@@ -5,11 +5,20 @@ routes it in a background thread, and Smart Engine hits get the quality panel.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import cast
 
 from PySide6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, Signal
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QGuiApplication
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDesktopServices,
+    QDragEnterEvent,
+    QDropEvent,
+    QGuiApplication,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QInputDialog,
@@ -26,7 +35,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import naming
+from app.core import archive, naming, verify
+from app.core.batch import expand_all, expand_pattern, extract_urls
+from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
 from app.core.manager import DownloadManager, JobView
 from app.core.models import JobKind, JobStatus
@@ -42,6 +53,7 @@ from app.ui.link_panel import LinkPanel
 from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
 from app.ui.settings_dialog import SettingsDialog
+from app.ui.sparkline import Sparkline
 
 _COLUMNS = ("Name", "Size", "Progress", "Speed", "Status")
 _VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
@@ -77,15 +89,40 @@ class _ResolveThread(QThread):
         self._fallbacks = fallbacks
         self._use_session = settings.use_browser_session
         self._browser = settings.session_browser
+        self._proxy = settings.proxy
 
     def run(self) -> None:
         resolution = self._resolver.resolve(
-            self._url, use_session=self._use_session, session_browser=self._browser
+            self._url,
+            use_session=self._use_session,
+            session_browser=self._browser,
+            proxy=self._proxy,
         )
         self.resolved.emit(resolution, self._page_title, self._quality, self._fallbacks)
 
 
+class _FileOpThread(QThread):
+    """Runs a slow file operation (hashing, extraction) off the UI thread."""
+
+    done = Signal(object, object)  # result, error str | None
+
+    def __init__(self, work: Callable[[], object]) -> None:
+        super().__init__()
+        self._work = work
+
+    def run(self) -> None:
+        try:
+            self.done.emit(self._work(), None)
+        except (OSError, DownloadError, ValueError) as exc:
+            self.done.emit(None, str(exc))
+
+
 class MainWindow(QMainWindow):
+    #: Emitted when a download finishes (display name) and when the last
+    #: active/queued download drains, so __main__ can toast and act.
+    job_completed = Signal(str)
+    queue_drained = Signal()
+
     def __init__(self, manager: DownloadManager, settings: Settings) -> None:
         super().__init__()
         self.manager = manager
@@ -94,6 +131,7 @@ class MainWindow(QMainWindow):
         self.close_to_tray = False
         self.setWindowTitle("Grabline")
         self.resize(880, 440)
+        self.setAcceptDrops(True)  # drop URLs (or text with URLs) onto the window
 
         toolbar = QToolBar("Main", self)
         toolbar.setMovable(False)
@@ -116,6 +154,8 @@ class MainWindow(QMainWindow):
         self.search_box.setMaximumWidth(220)
         self.search_box.textChanged.connect(lambda _text: self._apply_filter())
         toolbar.addWidget(self.search_box)
+        self.speed_line = Sparkline()
+        toolbar.addWidget(self.speed_line)
 
         self.tabs = QTabBar()
         for label, _statuses in _TABS:
@@ -148,7 +188,12 @@ class MainWindow(QMainWindow):
         self._row_job_ids: list[int] = []
         self._last_views: dict[int, JobView] = {}
         self._rates: dict[int, tuple[float, int]] = {}
+        self._prev_status: dict[int, JobStatus] = {}
+        self._was_active = False
+        self._agg: tuple[float, int] | None = None  # (monotonic time, total bytes)
         self._resolve_threads: list[_ResolveThread] = []
+        self._file_ops: set[_FileOpThread] = set()
+        self._auto_extracted: set[int] = set()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(500)
@@ -192,9 +237,16 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------- actions
 
     def _add_url(self) -> None:
-        url, accepted = QInputDialog.getText(self, "Add download", "URL:")
-        if accepted and url.strip():
-            self.begin_add_url(url.strip())
+        url, accepted = QInputDialog.getText(
+            self, "Add download", "URL (ranges like file[1-20].jpg expand):"
+        )
+        if not (accepted and url.strip()):
+            return
+        expanded = expand_pattern(url.strip())
+        if len(expanded) > 1:
+            self._run_batch(expanded)  # a pattern: queue them all at defaults
+        else:
+            self.begin_add_url(expanded[0])
 
     def _import_links(self) -> None:
         """F2.4: paste/load many URLs; they queue at defaults, no panels."""
@@ -414,6 +466,14 @@ class MainWindow(QMainWindow):
         limit_speed = menu.addAction("Limit speed…")
         limit_speed.setEnabled(view.status is not JobStatus.COMPLETED)
 
+        done = view.status is JobStatus.COMPLETED and file_path.exists()
+        copy_hash = menu.addAction("Copy SHA-256")
+        copy_hash.setEnabled(done)
+        verify_hash = menu.addAction("Verify checksum…")
+        verify_hash.setEnabled(done)
+        extract_here = menu.addAction("Extract here")
+        extract_here.setEnabled(done and archive.is_archive(file_path))
+
         pending = view.status in (JobStatus.QUEUED, JobStatus.PAUSED)
         queue_menu = menu.addMenu("Move in queue")
         queue_menu.setEnabled(pending)
@@ -438,6 +498,12 @@ class MainWindow(QMainWindow):
             GifDialog(ffmpeg_path, file_path, self).exec()
         elif chosen is limit_speed:
             self._limit_speed(view)
+        elif chosen is copy_hash:
+            self._copy_hash(file_path)
+        elif chosen is verify_hash:
+            self._verify_hash(file_path)
+        elif chosen is extract_here:
+            self._extract(file_path)
         elif chosen is move_top:
             self.manager.move_to_top(view.id)
         elif chosen is move_up:
@@ -449,6 +515,53 @@ class MainWindow(QMainWindow):
         elif chosen is remove:
             self.manager.remove(view.id)
             self.refresh()
+
+    def _run_file_op(self, work: Callable[[], object], on_done: Callable[[object], None]) -> None:
+        thread = _FileOpThread(work)
+        self._file_ops.add(thread)
+
+        def finished(result: object, error: object) -> None:
+            self._file_ops.discard(thread)
+            if error is not None:
+                QMessageBox.warning(self, "Grabline", str(error))
+            else:
+                on_done(result)
+
+        thread.done.connect(finished)
+        thread.start()
+
+    def _copy_hash(self, path: Path) -> None:
+        self.statusBar().showMessage(f"Hashing {path.name} …")
+
+        def done(result: object) -> None:
+            QGuiApplication.clipboard().setText(str(result))
+            self.statusBar().showMessage(f"SHA-256 copied for {path.name}", 6000)
+
+        self._run_file_op(lambda: verify.hash_file(path), done)
+
+    def _verify_hash(self, path: Path) -> None:
+        expected, accepted = QInputDialog.getText(
+            self, "Verify checksum", f"Paste the expected MD5/SHA-1/SHA-256 for {path.name}:"
+        )
+        if not (accepted and expected.strip()):
+            return
+        self.statusBar().showMessage(f"Verifying {path.name} …")
+
+        def done(result: object) -> None:
+            if result:
+                QMessageBox.information(self, "Grabline", f"{path.name} matches the checksum.")
+            else:
+                QMessageBox.warning(self, "Grabline", f"{path.name} does NOT match the checksum.")
+
+        self._run_file_op(lambda: verify.verify_file(path, expected.strip()), done)
+
+    def _extract(self, path: Path) -> None:
+        self.statusBar().showMessage(f"Extracting {path.name} …")
+
+        def done(result: object) -> None:
+            self.statusBar().showMessage(f"Extracted to {Path(str(result)).name}", 6000)
+
+        self._run_file_op(lambda: archive.extract(path), done)
 
     def _limit_speed(self, view: JobView) -> None:
         kbps, accepted = QInputDialog.getInt(
@@ -467,6 +580,8 @@ class MainWindow(QMainWindow):
 
     def refresh(self) -> None:
         views = self.manager.snapshot()
+        self._detect_transitions(views)
+        self._update_speed_line(views)
         self._last_views = {view.id: view for view in views}
         ids = [view.id for view in views]
         if ids != self._row_job_ids:
@@ -474,6 +589,52 @@ class MainWindow(QMainWindow):
         for row, view in enumerate(views):
             self._update_row(row, view)
         self._apply_filter()
+
+    def _update_speed_line(self, views: list[JobView]) -> None:
+        total = sum(v.downloaded for v in views if v.status is JobStatus.DOWNLOADING)
+        now = time.monotonic()
+        if self._agg is not None:
+            elapsed = now - self._agg[0]
+            if elapsed > 0:
+                # Clamp: a finishing job leaves the sum and would read negative.
+                self.speed_line.push(max(0, total - self._agg[1]) / elapsed)
+        self._agg = (now, total)
+
+    def _detect_transitions(self, views: list[JobView]) -> None:
+        """Notify on newly finished downloads and when the queue drains."""
+        active_now = False
+        for view in views:
+            previous = self._prev_status.get(view.id)
+            if view.status in (JobStatus.DOWNLOADING, JobStatus.QUEUED):
+                active_now = True
+            just_completed = (
+                previous is not None
+                and previous is not JobStatus.COMPLETED
+                and view.status is JobStatus.COMPLETED
+            )
+            if just_completed:
+                self.job_completed.emit(view.display_name)
+                if self.settings.auto_open_folder:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
+                file_path = Path(view.dest_dir) / view.filename
+                if (
+                    self.settings.auto_extract
+                    and view.id not in self._auto_extracted
+                    and archive.is_archive(file_path)
+                    and file_path.exists()
+                ):
+                    self._auto_extracted.add(view.id)
+                    self.statusBar().showMessage(f"Extracting {file_path.name} …")
+                    self._run_file_op(
+                        partial(archive.extract, file_path),
+                        lambda r: self.statusBar().showMessage(
+                            f"Extracted {Path(str(r)).name}", 6000
+                        ),
+                    )
+        if self._was_active and not active_now:
+            self.queue_drained.emit()
+        self._was_active = active_now
+        self._prev_status = {view.id: view.status for view in views}
 
     def _apply_filter(self) -> None:
         needle = self.search_box.text().strip().lower()
@@ -543,6 +704,27 @@ class MainWindow(QMainWindow):
             return ""
         speed = max(0, view.downloaded - previous[1]) / elapsed
         return f"{human_bytes(speed)}/s"
+
+    # ---------------------------------------------------------- drag & drop
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        data = event.mimeData()
+        if data.hasUrls() or data.hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        data = event.mimeData()
+        text_parts = [url.toString() for url in data.urls()]
+        if data.hasText():
+            text_parts.append(data.text())
+        urls = expand_all(extract_urls("\n".join(text_parts)))
+        if not urls:
+            return
+        event.acceptProposedAction()
+        if len(urls) > 1:
+            self._run_batch(urls)
+        else:
+            self.begin_add_url(urls[0])
 
     # --------------------------------------------------------------- close
 

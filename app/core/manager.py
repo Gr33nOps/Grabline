@@ -460,6 +460,7 @@ class DownloadManager:
 
     def _create_task(self, job: Job) -> DownloadTask:
         job_kbps = int(job.options.get("speed_limit_kbps") or 0)
+        proxy = self.settings.proxy
         if job.kind is JobKind.SMART:
             # yt-dlp takes one number: the tighter of the global and per-job cap.
             rates = [r for r in (self.limiter.rate, job_kbps * 1024) if r]
@@ -468,16 +469,18 @@ class DownloadManager:
                 job,
                 ffmpeg_path=find_ffmpeg(self.settings),
                 ratelimit=min(rates) if rates else None,
+                proxy=proxy,
             )
         if job.kind is JobKind.HLS:
             # FFmpeg-driven jobs are not rate-limited (Phase 3 polish).
-            return HlsDownload(self.db, job, ffmpeg_path=find_ffmpeg(self.settings))
+            return HlsDownload(self.db, job, ffmpeg_path=find_ffmpeg(self.settings), proxy=proxy)
         return SegmentedDownload(
             self.db,
             job,
             connections=self.connections,
             limiter=self.limiter,
             job_limiter=self._job_limiter_for(job),
+            proxy=proxy,
         )
 
     def _kick(self) -> None:

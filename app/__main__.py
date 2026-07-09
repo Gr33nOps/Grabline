@@ -8,7 +8,7 @@ import sys
 from PySide6.QtCore import QBuffer, QIODevice
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from app.core import instance, launcher, paths
+from app.core import instance, launcher, paths, power
 from app.core.ffmpeg import find_ffmpeg
 from app.core.manager import DownloadManager
 from app.core.settings import Settings
@@ -99,6 +99,30 @@ def main() -> int:
     watcher.url_copied.connect(on_url_copied)
     if tray is not None:
         tray.messageClicked.connect(on_message_clicked)
+
+    def on_job_completed(name: str) -> None:
+        if tray is not None and settings.notify_on_complete:
+            tray.showMessage(
+                "Download complete",
+                name,
+                QSystemTrayIcon.MessageIcon.Information,
+                4000,
+            )
+
+    def on_queue_drained() -> None:
+        action = settings.after_queue_action
+        if action == "nothing":
+            return
+        log.info("all downloads finished; after-queue action: %s", action)
+        if action == "quit":
+            app.quit()
+        elif action == "sleep":
+            power.sleep()
+        elif action == "shutdown":
+            power.shutdown()
+
+    window.job_completed.connect(on_job_completed)
+    window.queue_drained.connect(on_queue_drained)
 
     if minimized and tray is not None:
         log.info("started minimized to the tray (autostart)")
