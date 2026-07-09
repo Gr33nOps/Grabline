@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from app.native_host import CHROME_EXTENSION_IDS, FIREFOX_EXTENSION_IDS, HOST_NAME
-from app.native_host.install import browser_targets, install, write_launcher
+from app.native_host.install import browser_targets, check, install, write_launcher
 
 
 def test_linux_targets_cover_the_major_browsers(tmp_path: Path):
@@ -86,6 +86,24 @@ def test_frozen_launcher_reruns_the_binary(tmp_path: Path, monkeypatch: pytest.M
     content = launcher.read_text()
     assert "--native-host" in content
     assert "PYTHONPATH" not in content  # a frozen binary needs no import path
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="posix launcher script")
+def test_check_reports_healthy_after_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The --check doctor: full pairing = OK lines and a live pong."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    install(platform="linux", home=tmp_path)
+    healthy, lines = check(platform="linux", home=tmp_path)
+    assert healthy, "\n".join(lines)
+    assert any("pong" in line for line in lines)
+
+
+def test_check_flags_missing_pairing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    healthy, lines = check(platform="linux", home=tmp_path)
+    assert not healthy
+    assert any(line.startswith("FAIL") for line in lines)
 
 
 def test_dry_run_writes_nothing(tmp_path: Path, capsys):

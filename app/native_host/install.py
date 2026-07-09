@@ -13,12 +13,23 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import struct
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from app.core import paths
 from app.native_host import CHROME_EXTENSION_IDS, FIREFOX_EXTENSION_IDS, HOST_NAME
+
+#: Windows registry roots browsers search for host manifests (HKCU).
+_WINDOWS_REGISTRY_ROOTS: tuple[tuple[str, str, str], ...] = (
+    ("Chrome", "chromium", r"Software\Google\Chrome\NativeMessagingHosts"),
+    ("Chromium", "chromium", r"Software\Chromium\NativeMessagingHosts"),
+    ("Edge", "chromium", r"Software\Microsoft\Edge\NativeMessagingHosts"),
+    ("Brave", "chromium", r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts"),
+    ("Firefox", "firefox", r"Software\Mozilla\NativeMessagingHosts"),
+)
 
 
 @dataclass(frozen=True)
@@ -157,7 +168,7 @@ def install(
             print(f"would write {manifest_path}")
             continue
         target.manifest_dir.mkdir(parents=True, exist_ok=True)
-        manifest_path.write_text(payload)
+        manifest_path.write_text(payload, encoding="utf-8")
         written.append(manifest_path)
     return written
 
@@ -171,18 +182,14 @@ def _install_windows_registry(
         manifest_dir = paths.data_dir() / "native_host"
         manifest_dir.mkdir(parents=True, exist_ok=True)
         written: list[Path] = []
-        for kind, registry_root in (
-            ("chromium", r"Software\Google\Chrome\NativeMessagingHosts"),
-            ("chromium", r"Software\Chromium\NativeMessagingHosts"),
-            ("chromium", r"Software\Microsoft\Edge\NativeMessagingHosts"),
-            ("chromium", r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts"),
-            ("firefox", r"Software\Mozilla\NativeMessagingHosts"),
-        ):
+        for _browser, kind, registry_root in _WINDOWS_REGISTRY_ROOTS:
             manifest_path = manifest_dir / f"{HOST_NAME}.{kind}.json"
             if dry_run:
                 print(f"would write {manifest_path} and HKCU\\{registry_root}\\{HOST_NAME}")
                 continue
-            manifest_path.write_text(json.dumps(host_manifest(kind, launcher), indent=2) + "\n")
+            manifest_path.write_text(
+                json.dumps(host_manifest(kind, launcher), indent=2) + "\n", encoding="utf-8"
+            )
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"{registry_root}\{HOST_NAME}") as key:
                 winreg.SetValueEx(key, "", 0, winreg.REG_SZ, str(manifest_path))
             written.append(manifest_path)
@@ -190,10 +197,112 @@ def _install_windows_registry(
     raise RuntimeError("registry registration is Windows-only")
 
 
+# ------------------------------------------------------------- the doctor
+
+
+def _launcher_path() -> Path:
+    name = "grabline-host.bat" if sys.platform == "win32" else "grabline-host"
+    return paths.bin_dir() / name
+
+
+def _check_manifest(browser: str, manifest_path: Path, lines: list[str]) -> bool:
+    if not manifest_path.exists():
+        lines.append(f"FAIL {browser}: manifest missing at {manifest_path}")
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        lines.append(f"FAIL {browser}: manifest unreadable ({exc})")
+        return False
+    host_path = Path(str(manifest.get("path", "")))
+    if not host_path.exists():
+        lines.append(f"FAIL {browser}: manifest points at a missing launcher: {host_path}")
+        return False
+    lines.append(f"OK   {browser}: manifest -> {host_path}")
+    return True
+
+
+def _check_ping(launcher: Path, lines: list[str]) -> bool:
+    """Spawn the real launcher exactly like a browser would and expect a pong."""
+    payload = json.dumps({"type": "ping"}).encode()
+    try:
+        result = subprocess.run(  # argument list only — no shell (S1)
+            [str(launcher)],
+            input=struct.pack("<I", len(payload)) + payload,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        lines.append(f"FAIL live test: could not run the launcher ({exc})")
+        return False
+    if len(result.stdout) >= 4:
+        (length,) = struct.unpack("<I", result.stdout[:4])
+        try:
+            reply = json.loads(result.stdout[4 : 4 + length])
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            reply = None
+        if isinstance(reply, dict) and reply.get("type") == "pong":
+            lines.append(
+                f"OK   live test: host replied pong (appRunning={reply.get('appRunning')})"
+            )
+            return True
+    stderr_tail = result.stderr.decode(errors="replace").strip().splitlines()[-3:]
+    detail = " | ".join(stderr_tail) if stderr_tail else f"exit code {result.returncode}"
+    lines.append(f"FAIL live test: no pong from the host — {detail}")
+    return False
+
+
+def check(platform: str | None = None, home: Path | None = None) -> tuple[bool, list[str]]:
+    """Verify the whole pairing chain; returns (healthy, report lines)."""
+    platform = platform or sys.platform
+    lines: list[str] = []
+    healthy = True
+
+    launcher = _launcher_path()
+    if launcher.exists():
+        lines.append(f"OK   launcher exists: {launcher}")
+    else:
+        lines.append(f"FAIL launcher missing: {launcher} — run pairing (Settings -> Pair browsers)")
+        healthy = False
+
+    if platform == "win32" and sys.platform == "win32":  # pragma: no cover - windows-only
+        import winreg
+
+        for browser, _kind, registry_root in _WINDOWS_REGISTRY_ROOTS:
+            try:
+                with winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER, rf"{registry_root}\{HOST_NAME}"
+                ) as key:
+                    value, _type = winreg.QueryValueEx(key, "")
+            except OSError:
+                lines.append(f"--   {browser}: not registered (fine if not installed)")
+                continue
+            healthy &= _check_manifest(browser, Path(str(value)), lines)
+    else:
+        for target in browser_targets(platform, home):
+            manifest_path = target.manifest_dir / f"{HOST_NAME}.json"
+            if not manifest_path.exists():
+                lines.append(f"--   {target.browser}: not registered (fine if not installed)")
+                continue
+            healthy &= _check_manifest(target.browser, manifest_path, lines)
+
+    if launcher.exists():
+        healthy &= _check_ping(launcher, lines)
+    return healthy, lines
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="print targets, write nothing")
+    parser.add_argument(
+        "--check", action="store_true", help="diagnose an existing pairing, write nothing"
+    )
     args = parser.parse_args(argv)
+    if args.check:
+        healthy, lines = check()
+        print("\n".join(lines))
+        print("pairing looks healthy" if healthy else "pairing is broken — see FAIL lines above")
+        return 0 if healthy else 1
     written = install(dry_run=args.dry_run)
     for path in written:
         print(f"registered {path}")
