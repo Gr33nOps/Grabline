@@ -57,21 +57,34 @@ no telemetry, AGPL-3.0.
 2. The first run adds Grabline to your application menu — launch it from
    there (or pin it to the dock) from then on.
 
-### From source (any platform)
+### From source — Linux / macOS
 
-Needs Python 3.12+ and git.
-
-> **Windows:** install Python from [python.org](https://www.python.org/downloads/),
-> **not** the Microsoft Store — the Store build is sandboxed and hides the
-> browser-pairing files from your browsers (the pairing tools will refuse to
-> run under it and tell you the same).
+Needs Python 3.12+ and git:
 
 ```bash
 git clone https://github.com/Gr33nOps/Grabline.git && cd Grabline
-python3 -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 python -m app
 ```
+
+### From source — Windows
+
+Install Python from [python.org](https://www.python.org/downloads/) —
+**not** the Microsoft Store (the Store build is sandboxed and hides the
+browser-pairing files from your browsers; Grabline detects this and refuses).
+Then, in PowerShell:
+
+```powershell
+git clone https://github.com/Gr33nOps/Grabline.git; cd Grabline
+py -m venv .venv
+.venv\Scripts\python -m pip install -e .
+.venv\Scripts\python -m app
+```
+
+The `.venv\Scripts\python -m …` style needs no activation and is immune to
+other Pythons on your PATH (MSYS2, Store aliases, and friends). If you have
+several Pythons, pick one explicitly: `py -3.12 -m venv .venv`.
 
 Debian/Ubuntu only: if the window doesn't appear
 (*"Could not load the Qt platform plugin xcb"*), install Qt's system

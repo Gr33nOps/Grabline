@@ -124,9 +124,13 @@ def _install_archive(
 ) -> list[Path]:
     digest = hashlib.sha256()
     received = 0
-    with tempfile.NamedTemporaryFile(suffix=f".{archive.format}", delete=False) as spool:
-        spool_path = Path(spool.name)
-        try:
+    # The spool handle must be CLOSED before the archive is reopened for
+    # extraction and before the unlink: Windows refuses both while another
+    # handle is open (WinError 32), even our own.
+    spool_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=f".{archive.format}", delete=False) as spool:
+            spool_path = Path(spool.name)
             with client.stream("GET", archive.url) as response:
                 if response.status_code != 200:
                     raise DownloadError(f"FFmpeg download failed (HTTP {response.status_code})")
@@ -138,17 +142,17 @@ def _install_archive(
                     received += len(chunk)
                     if progress is not None:
                         progress(received, total)
-            spool.flush()
-            if digest.hexdigest() != archive.sha256:
-                raise DownloadError(
-                    "FFmpeg download failed its integrity check (SHA-256 mismatch) — "
-                    "refusing to install. Try again later; if this persists the pins "
-                    "may need updating."
-                )
-            return _extract_binaries(spool_path, archive.format, target_dir)
-        except httpx.HTTPError as exc:
-            raise DownloadError(f"could not download FFmpeg: {exc}") from exc
-        finally:
+        if digest.hexdigest() != archive.sha256:
+            raise DownloadError(
+                "FFmpeg download failed its integrity check (SHA-256 mismatch) — "
+                "refusing to install. Try again later; if this persists the pins "
+                "may need updating."
+            )
+        return _extract_binaries(spool_path, archive.format, target_dir)
+    except httpx.HTTPError as exc:
+        raise DownloadError(f"could not download FFmpeg: {exc}") from exc
+    finally:
+        if spool_path is not None:
             spool_path.unlink(missing_ok=True)
 
 
