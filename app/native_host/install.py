@@ -39,8 +39,14 @@ class BrowserTarget:
     kind: str  # "chromium" | "firefox"
 
 
-def _linux_targets(home: Path) -> list[BrowserTarget]:
-    config = Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config")))
+def _linux_targets(home: Path, *, use_env: bool) -> list[BrowserTarget]:
+    # XDG_CONFIG_HOME only applies to the real home: an explicitly passed
+    # ``home`` must fully determine the result (callers isolating a fake
+    # home would otherwise leak into the real one).
+    if use_env:
+        config = Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config")))
+    else:
+        config = home / ".config"
     return [
         BrowserTarget("Chrome", config / "google-chrome" / "NativeMessagingHosts", "chromium"),
         BrowserTarget("Chromium", config / "chromium" / "NativeMessagingHosts", "chromium"),
@@ -71,13 +77,14 @@ def _darwin_targets(home: Path) -> list[BrowserTarget]:
 
 def browser_targets(platform: str | None = None, home: Path | None = None) -> list[BrowserTarget]:
     platform = platform or sys.platform
+    use_env = home is None
     home = home or Path.home()
     if platform == "darwin":
         return _darwin_targets(home)
     if platform == "win32":
         # Windows resolves manifests via registry keys; handled in install().
         return []
-    return _linux_targets(home)
+    return _linux_targets(home, use_env=use_env)
 
 
 def host_manifest(kind: str, launcher: Path) -> dict[str, object]:
