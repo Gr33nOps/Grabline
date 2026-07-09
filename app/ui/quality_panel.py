@@ -62,7 +62,7 @@ class QualityPanel(QDialog):
     def __init__(self, media: MediaInfo, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.media = media
-        self.setWindowTitle("Grabline — choose quality")
+        self.setWindowTitle("Grabline - choose quality")
         self.setMinimumWidth(460)
 
         layout = QVBoxLayout(self)
@@ -92,7 +92,7 @@ class QualityPanel(QDialog):
             if option.kind == "audio":
                 label += "  (audio only)"
             if option.estimated_size:
-                label += f"  —  ~{human_bytes(option.estimated_size)}"
+                label += f"   ~{human_bytes(option.estimated_size)}"
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, index)
             self.options_list.addItem(item)

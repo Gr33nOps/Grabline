@@ -61,7 +61,7 @@ def main() -> int:
     window.setWindowIcon(make_app_icon())
     if find_ffmpeg(settings) is None:
         window.statusBar().showMessage(
-            "FFmpeg not found — install it in Settings to enable MP3, merging, and streams"
+            "FFmpeg not found - install it in Settings to enable MP3, merging, and streams"
         )
 
     tray: GrablineTray | None = None

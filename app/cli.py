@@ -67,7 +67,7 @@ def _run_playlist(
         (o for o in generic_quality_options() if o.label.lower() == args.quality.lower()),
         generic_quality_options()[0],
     )
-    print(f"PLAYLIST {playlist.title} — downloading {len(entries)} item(s)", flush=True)
+    print(f"PLAYLIST {playlist.title} - downloading {len(entries)} item(s)", flush=True)
     failures = 0
     for entry in entries:
         extension = option.audio_format if option.kind == "audio" else "mp4"
@@ -103,7 +103,7 @@ def _create_job(
             return None
         option = _pick_option(resolution.media, args.quality)
         if option is None:
-            print(f"ERROR unknown quality '{args.quality}' — try --list-formats", flush=True)
+            print(f"ERROR unknown quality '{args.quality}' - try --list-formats", flush=True)
             raise SystemExit(2)
         extension = option.audio_format if option.kind == "audio" else "mp4"
         filename = f"{naming.sanitize_filename(resolution.media.title)}.{extension}"
@@ -216,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
                 if not args.playlist:
                     count = len(resolution.playlist.entries)
                     print(
-                        f"PLAYLIST detected ({count} items) — rerun with --playlist "
+                        f"PLAYLIST detected ({count} items) - rerun with --playlist "
                         "to download them",
                         flush=True,
                     )

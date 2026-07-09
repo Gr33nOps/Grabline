@@ -1,5 +1,5 @@
 """SmartDownload exercised end-to-end through yt-dlp's generic extractor
-against the local media server — the full engine pipeline without YouTube.
+against the local media server - the full engine pipeline without YouTube.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def test_smart_download_direct_file(server: MediaServer, db: Database, dest: Pat
     url = server.add("/video.mp4", data, content_type="video/mp4")
     job = _smart_job(db, url, dest, "clip.mp4")
 
-    # ffmpeg_path=None: no postprocessing — bytes must come through untouched.
+    # ffmpeg_path=None: no postprocessing - bytes must come through untouched.
     status = SmartDownload(db, job, ffmpeg_path=None).run()
 
     assert status is JobStatus.COMPLETED

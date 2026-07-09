@@ -33,8 +33,8 @@ QUALITY_TIERS = (2160, 1440, 1080, 720, 480, 360)
 
 #: Substring -> user-facing message for the yt-dlp error zoo (F1.8 groundwork).
 _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
-    ("This video is private", "This video is private — its owner restricted access."),
-    ("Private video", "This video is private — its owner restricted access."),
+    ("This video is private", "This video is private - its owner restricted access."),
+    ("Private video", "This video is private - its owner restricted access."),
     (
         "Sign in to confirm your age",
         "This video is age-restricted. Grabline does not bypass age or login walls; "
@@ -48,12 +48,12 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
     ("geo restricted", "This video is region-blocked and not available from your location."),
     (
         "This live event will begin",
-        "This is a live stream that has not started yet — try again once it is over.",
+        "This is a live stream that has not started yet - try again once it is over.",
     ),
     ("is not a valid URL", "That does not look like a valid address."),
     (
         "Unable to download JSON metadata: HTTP Error 404",
-        "This does not look like a track or video page — it may be a browse "
+        "This does not look like a track or video page - it may be a browse "
         "page, or the item was removed. Open the track/video itself and grab "
         "it there, or right-click its title link.",
     ),
@@ -67,12 +67,12 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
     ),
     (
         "cookie database",
-        "Could not read the browser's cookie store — close the browser completely "
+        "Could not read the browser's cookie store - close the browser completely "
         "and try again (Chromium locks its cookie database while running).",
     ),
     (
         "could not find",  # e.g. "could not find chrome cookies database"
-        "Could not find that browser's cookie store — pick the browser you are "
+        "Could not find that browser's cookie store - pick the browser you are "
         "actually signed in with under Settings.",
     ),
 )
@@ -476,7 +476,7 @@ class SmartDownload:
         if audio_format:
             if not has_ffmpeg:
                 raise DownloadError(
-                    "FFmpeg is required for audio extraction — install it from Settings"
+                    "FFmpeg is required for audio extraction - install it from Settings"
                 )
             postprocessors.append(
                 {

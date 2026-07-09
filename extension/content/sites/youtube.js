@@ -1,4 +1,4 @@
-// Grabline Connect — YouTube site module (F1.3, first slice).
+// Grabline Connect - YouTube site module (F1.3, first slice).
 //
 // A hover ⬇ on video thumbnails (home, search, channels, sidebar, playlists,
 // Shorts shelf) so a video can be grabbed without opening it. Clicking hands
@@ -7,7 +7,7 @@
 // inline hover-preview player covers the thumbnail.
 //
 // DELIBERATELY ISOLATED: every selector lives in THUMBNAIL_ANCHORS below.
-// When YouTube's DOM churns, this file is the whole blast radius — worst
+// When YouTube's DOM churns, this file is the whole blast radius - worst
 // case the thumbnail button pauses while right-click and paste still work.
 
 (() => {
@@ -18,7 +18,7 @@
     "a.yt-simple-endpoint[href^='/shorts/']",
     "a.reel-item-endpoint[href^='/shorts/']",
   ].join(", ");
-  // The player on a watch/Shorts page gets the same button — the page URL is
+  // The player on a watch/Shorts page gets the same button - the page URL is
   // the video URL there, and the quality panel beats a blind instant grab.
   const PLAYERS = "#movie_player, .html5-video-player";
   const MEDIA_PAGES = /^\/(watch|shorts\/|live\/)/;

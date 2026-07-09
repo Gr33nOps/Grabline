@@ -1,4 +1,4 @@
-# Privacy Policy — Grabline & Grabline Connect
+# Privacy Policy - Grabline & Grabline Connect
 
 *Last updated: 2026-07-08*
 
@@ -7,7 +7,7 @@ open-source software published under AGPL-3.0. Their privacy model is simple:
 
 **Nothing you do is collected, stored remotely, or transmitted to us or to
 any third party. There is no telemetry, no analytics, no accounts, and no
-advertising — in any part of the project, ever.**
+advertising - in any part of the project, ever.**
 
 ## What stays on your device
 
@@ -17,7 +17,7 @@ advertising — in any part of the project, ever.**
   stdio pipe between your browser and the app) into that same local database.
   No network service, port, or server is involved.
 
-## What touches the network — only at your request
+## What touches the network - only at your request
 
 - Downloading a URL contacts that URL's server (and, for Smart Engine sites,
   the pages yt-dlp needs to resolve it). This happens only when you start a

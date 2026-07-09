@@ -4,7 +4,7 @@ crash-safe resume (F0.1, F0.2).
 Crash-safety model
 ------------------
 Workers write with unbuffered file handles (``buffering=0``), so every byte a
-worker counts as downloaded has already been handed to the OS page cache —
+worker counts as downloaded has already been handed to the OS page cache -
 which survives a kill -9 of this process. Segment progress is checkpointed to
 SQLite (WAL) shortly *after* the bytes are written, never before, so a recorded
 offset can only ever lag the file, and resuming from it merely rewrites a few

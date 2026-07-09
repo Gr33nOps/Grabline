@@ -51,7 +51,7 @@ class SettingsDialog(QDialog):
     def __init__(self, settings: Settings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.settings = settings
-        self.setWindowTitle("Grabline — Settings")
+        self.setWindowTitle("Grabline - Settings")
         self.setMinimumWidth(480)
         layout = QVBoxLayout(self)
 
@@ -104,7 +104,7 @@ class SettingsDialog(QDialog):
         browser_row.addWidget(self.browser_combo, 1)
         session_layout.addLayout(browser_row)
         consent = QLabel(
-            "Uses your real login — only for your own content. Heavy automated "
+            "Uses your real login - only for your own content. Heavy automated "
             "downloading can get accounts flagged. Cookies are read per download, "
             "kept in memory only, and never stored or sent anywhere else."
         )
@@ -165,7 +165,7 @@ class SettingsDialog(QDialog):
             "Grabline",
             f"Registered with {len(written)} browser location(s).\n\n"
             "Now install (or reload) the Grabline Connect extension in your "
-            "browser — its toolbar popup should say “connected”.",
+            "browser - its toolbar popup should say “connected”.",
         )
 
     def _refresh_ffmpeg_status(self) -> None:
@@ -217,7 +217,7 @@ class SettingsDialog(QDialog):
         self.settings.connections = self.connections_spin.value()
         self.settings.speed_limit_kbps = self.speed_spin.value()
         try:
-            # The autostart file/registry entry IS the setting — no DB copy
+            # The autostart file/registry entry IS the setting - no DB copy
             # that could drift from what the OS will actually do at login.
             launcher.set_autostart(self.autostart_check.isChecked())
         except OSError as exc:

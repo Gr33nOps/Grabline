@@ -1,8 +1,8 @@
-// Grabline Connect — shared site-module hover button.
+// Grabline Connect - shared site-module hover button.
 //
 // Every site module is just a matcher: given a hovered element, return the
 // element to anchor the ⬇ button to and the URL to grab, or null. This file
-// owns the rest — the shadow-root button, the show dwell (no flicker while
+// owns the rest - the shadow-root button, the show dwell (no flicker while
 // scanning a grid), the rect keep-alive (players that spawn *over* the
 // anchor steal the hover; as long as the pointer stays inside the anchor's
 // box the button survives), and the per-site off switch.
@@ -15,10 +15,10 @@
   const RECT_MARGIN = 8;
   const BUTTON_SIZE = 30;
   // The in-page quality panel (F1.3). Labels the app resolves at download
-  // time (same trick as playlist batches) — instant, no metadata fetch.
+  // time (same trick as playlist batches) - instant, no metadata fetch.
   const QUALITY_LABELS = ["Best", "1080p", "720p", "480p", "MP3", "M4A"];
 
-  // Which corner of the hovered element the ⬇ sits in — user-settable in
+  // Which corner of the hovered element the ⬇ sits in - user-settable in
   // the popup (some sites put their own controls exactly where we default).
   let corner = "top-right";
   api.storage.local.get("buttonCorner").then(({ buttonCorner = "top-right" }) => {
@@ -219,7 +219,7 @@
         }
         if (!hit) {
           // Pointer still inside the shown or pending target's box: the
-          // "miss" is just an overlay/preview stealing the hover — hold on.
+          // "miss" is just an overlay/preview stealing the hover - hold on.
           if (insideRect(event, currentRect) || insideRect(event, pendingRect)) return;
           clearPending();
           if (currentUrl) scheduleHide();
@@ -227,7 +227,7 @@
         }
         clearTimeout(hideTimer);
         if (hit.url === currentUrl) return; // already shown for this target
-        if (hit.url === pendingUrl) return; // dwell in progress — let it fire
+        if (hit.url === pendingUrl) return; // dwell in progress - let it fire
         clearPending();
         pendingUrl = hit.url;
         pendingRect = hit.anchor.getBoundingClientRect();

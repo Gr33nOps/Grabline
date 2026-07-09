@@ -182,7 +182,7 @@ class Database:
         return [_job_from_row(row) for row in rows]
 
     def latest_job_for_url(self, url: str) -> Job | None:
-        """The most recent job for a URL — how the extension's progress pill
+        """The most recent job for a URL - how the extension's progress pill
         (F1.3) finds "its" download without any job-id round trip."""
         with self._lock:
             row = self._conn.execute(

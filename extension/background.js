@@ -1,9 +1,9 @@
-// Grabline Connect — background (MV3 service worker / Firefox event page).
+// Grabline Connect - background (MV3 service worker / Firefox event page).
 //
 // Deliberately thin and stateless: detect, decorate, deliver. Every download
 // happens in the desktop app; this file only relays URLs over Native
 // Messaging and keeps a small per-tab list of sniffed media in session
-// storage (the service worker can die at any time — nothing lives here).
+// storage (the service worker can die at any time - nothing lives here).
 
 const api = globalThis.browser ?? globalThis.chrome;
 const HOST_NAME = "dev.grabline.host";
@@ -270,7 +270,7 @@ api.tabs.onUpdated.addListener((tabId, changeInfo) => {
 });
 
 // --------------------------------------------------- interception (F1.5)
-// Off by default; toggle lives in the popup. chrome.downloads based — the
+// Off by default; toggle lives in the popup. chrome.downloads based - the
 // download is cancelled after it starts and the app re-requests it.
 
 const INTERCEPT_EXTENSIONS =
@@ -303,7 +303,7 @@ async function tabForMessage(sender, message) {
   }
 }
 
-// The streams/media the sniffer saw in a tab, best candidates first —
+// The streams/media the sniffer saw in a tab, best candidates first -
 // attached as fallbacks when a blob-backed player forced a page-URL grab.
 async function sniffedUrlsFor(tabId) {
   if (tabId == null) return [];

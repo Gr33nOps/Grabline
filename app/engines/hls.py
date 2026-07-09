@@ -79,7 +79,7 @@ class HlsDownload:
         self.db.set_job_status(self.job.id, JobStatus.DOWNLOADING)
         if not self.ffmpeg_path:
             return self._finish_failed(
-                "FFmpeg is required to save this stream — install it from Settings"
+                "FFmpeg is required to save this stream - install it from Settings"
             )
         playlist_text = self._fetch_playlist()
         live_error = self._detect_live_playlist(playlist_text)
@@ -95,7 +95,7 @@ class HlsDownload:
                 return status
             if attempt < self.max_attempts:
                 log.info(
-                    "hls job %s attempt %d failed (%s) — retrying",
+                    "hls job %s attempt %d failed (%s) - retrying",
                     self.job.id,
                     attempt,
                     self._failure,
@@ -128,7 +128,7 @@ class HlsDownload:
         self._downloaded = 0
         self._out_time = 0.0
         try:
-            process = subprocess.Popen(  # argument list only — no shell (S1)
+            process = subprocess.Popen(  # argument list only - no shell (S1)
                 self._command(part),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -180,7 +180,7 @@ class HlsDownload:
         if stalled:
             part.unlink(missing_ok=True)
             self._failure = (
-                f"the stream stalled (no data for {self.stall_timeout:.0f}s) — "
+                f"the stream stalled (no data for {self.stall_timeout:.0f}s) - "
                 "it may be live or the server may be down"
             )
             return None
@@ -256,7 +256,7 @@ class HlsDownload:
             return None
         if "#EXTINF" in text and "#EXT-X-ENDLIST" not in text:
             return (
-                "This looks like a live stream that is still in progress — "
+                "This looks like a live stream that is still in progress - "
                 "Grabline cannot save it yet. Try again once it has ended."
             )
         return None

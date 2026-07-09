@@ -52,9 +52,9 @@ def test_is_ugly_name():
 
 def test_improved_filename_rescues_ugly_names():
     fixed = improved_filename(
-        "https://cdn.example/videoplayback.mp4", "Amazing Talk — Conference 2026"
+        "https://cdn.example/videoplayback.mp4", "Amazing Talk - Conference 2026"
     )
-    assert fixed == "Amazing Talk — Conference 2026.mp4"
+    assert fixed == "Amazing Talk - Conference 2026.mp4"
 
 
 def test_improved_filename_keeps_good_names():

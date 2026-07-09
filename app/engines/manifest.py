@@ -4,7 +4,7 @@ FFmpeg can eat a master playlist whole, but then *it* picks the variant and
 the user gets no say. Parsing the master ourselves gives the quality picker
 for raw streams, catches variants whose audio lives in a separate rendition
 (``#EXT-X-MEDIA:TYPE=AUDIO``), and lets us sum ``#EXTINF`` durations for
-honest progress. Only HLS is parsed here — DASH manifests go straight to
+honest progress. Only HLS is parsed here - DASH manifests go straight to
 FFmpeg untouched.
 """
 
@@ -42,7 +42,7 @@ class HlsVariant:
         parts = [self.label]
         if self.height and self.bandwidth:
             parts.append(f"{self.bandwidth / 1_000_000:.1f} Mbps")
-        return " — ".join(parts)
+        return " - ".join(parts)
 
 
 def parse_attributes(line: str) -> dict[str, str]:

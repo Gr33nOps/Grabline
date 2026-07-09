@@ -162,7 +162,7 @@ def test_download_stores_sniffed_fallbacks(db: Database):
             "fallbackUrls": [
                 "https://cdn.example/movie/master.m3u8",
                 "javascript:alert(1)",  # dropped
-                "https://movies.example/watch/123",  # same as url — dropped
+                "https://movies.example/watch/123",  # same as url - dropped
                 "https://cdn.example/movie/720.mp4",
             ],
         },

@@ -1,4 +1,4 @@
-# Grabline Connect — store listing kit (F2.5)
+# Grabline Connect - store listing kit (F2.5)
 
 Everything needed to submit the extension to the Chrome Web Store and
 addons.mozilla.org. Build the upload zips first:
@@ -26,14 +26,14 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 ## Summary (short description)
 
 > The connector for the Grabline download manager: right-click download,
-> hover ⬇ buttons on media, quality picking for 1000+ sites — every download
+> hover ⬇ buttons on media, quality picking for 1000+ sites - every download
 > runs in the open-source desktop app, not the browser.
 
 ## Description (long)
 
 > Grabline Connect pairs your browser with **Grabline**, the free and
 > open-source download manager (AGPL-3.0). The extension is deliberately
-> thin — it detects and delivers, the desktop app downloads:
+> thin - it detects and delivers, the desktop app downloads:
 >
 > - **Right-click → "Download with Grabline"** on any link, image, video, or page
 > - **Hover ⬇ button** on videos, audio, and large images
@@ -46,7 +46,7 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 > Everywhere else you get segmented, resumable multi-connection downloading.
 >
 > **Requires the free Grabline desktop app** (Windows/macOS/Linux):
-> https://github.com/Gr33nOps/Grabline — the extension talks to it over
+> https://github.com/Gr33nOps/Grabline - the extension talks to it over
 > Native Messaging only. No account, no cloud, no telemetry, no ads.
 >
 > Grabline does not bypass DRM or logins.
@@ -82,6 +82,6 @@ host. See PRIVACY.md.
 
 ## Assets still needed before submission
 
-- [ ] 1–5 screenshots, 1280×800 (queue window + quality panel + popup)
+- [ ] 1-5 screenshots, 1280×800 (queue window + quality panel + popup)
 - [ ] CWS promo tile 440×280 (optional but recommended)
 - [ ] Developer accounts: CWS one-time $5, AMO free

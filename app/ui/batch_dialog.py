@@ -1,5 +1,5 @@
 """Batch import (F2.4): paste links or load a .txt, everything queues at
-sensible defaults — Smart URLs at Best quality, no per-URL panels.
+sensible defaults - Smart URLs at Best quality, no per-URL panels.
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ class BatchImportThread(QThread):
             return resolution.message or "nothing downloadable"
         if resolution.kind is JobKind.SMART:
             if resolution.playlist is not None:
-                return "playlist — add it on its own to pick entries"
+                return "playlist - add it on its own to pick entries"
             assert resolution.media is not None
             if not resolution.media.options:
                 return "no downloadable formats"
@@ -105,12 +105,12 @@ class BatchImportDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Grabline — import links")
+        self.setWindowTitle("Grabline - import links")
         self.setMinimumSize(520, 380)
 
         layout = QVBoxLayout(self)
         intro = QLabel(
-            "Paste anything with links in it — one per line, a page's\n"
+            "Paste anything with links in it - one per line, a page's\n"
             "text, an export file. Grabline picks out the URLs."
         )
         layout.addWidget(intro)

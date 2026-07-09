@@ -113,7 +113,7 @@ def is_store_python(executable: str | None = None) -> bool:
 
 
 _STORE_PYTHON_MESSAGE = (
-    "this is the Microsoft Store build of Python — its sandbox hides every "
+    "this is the Microsoft Store build of Python - its sandbox hides every "
     "file it writes from your browsers, so pairing cannot work. Install "
     "Python from python.org, disable the Store aliases (Settings > Apps > "
     "Advanced app settings > App execution aliases > turn off python.exe), "
@@ -126,7 +126,7 @@ def _host_command() -> tuple[str, str]:
 
     Frozen (packaged) builds re-run the app binary with ``--native-host``;
     source installs run ``python -m app.native_host`` with PYTHONPATH pinned
-    to wherever the ``app`` package lives — browsers launch the host from
+    to wherever the ``app`` package lives - browsers launch the host from
     their *own* working directory, so nothing may depend on the cwd.
     """
     if getattr(sys, "frozen", False):
@@ -147,7 +147,7 @@ def write_launcher(bin_dir: Path | None = None) -> Path:
     frozen = getattr(sys, "frozen", False)
     if sys.platform == "win32":  # pragma: no cover - windows-only branch
         # pythonw.exe avoids a console window flashing up when the browser
-        # spawns the host. newline="" — text mode would turn our \r\n into
+        # spawns the host. newline="" - text mode would turn our \r\n into
         # \r\r\n, and the stray \r corrupts the command line (the bug that
         # broke Windows pairing entirely).
         if not frozen:
@@ -251,7 +251,7 @@ def _check_ping(launcher: Path, lines: list[str]) -> bool:
     """Spawn the real launcher exactly like a browser would and expect a pong."""
     payload = json.dumps({"type": "ping"}).encode()
     try:
-        result = subprocess.run(  # argument list only — no shell (S1)
+        result = subprocess.run(  # argument list only - no shell (S1)
             [str(launcher)],
             input=struct.pack("<I", len(payload)) + payload,
             capture_output=True,
@@ -273,7 +273,7 @@ def _check_ping(launcher: Path, lines: list[str]) -> bool:
             return True
     stderr_tail = result.stderr.decode(errors="replace").strip().splitlines()[-3:]
     detail = " | ".join(stderr_tail) if stderr_tail else f"exit code {result.returncode}"
-    lines.append(f"FAIL live test: no pong from the host — {detail}")
+    lines.append(f"FAIL live test: no pong from the host - {detail}")
     return False
 
 
@@ -291,7 +291,7 @@ def check(platform: str | None = None, home: Path | None = None) -> tuple[bool, 
     if launcher.exists():
         lines.append(f"OK   launcher exists: {launcher}")
     else:
-        lines.append(f"FAIL launcher missing: {launcher} — run pairing (Settings -> Pair browsers)")
+        lines.append(f"FAIL launcher missing: {launcher} - run pairing (Settings -> Pair browsers)")
         healthy = False
 
     if platform == "win32" and sys.platform == "win32":  # pragma: no cover - windows-only
@@ -330,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         healthy, lines = check()
         print("\n".join(lines))
-        print("pairing looks healthy" if healthy else "pairing is broken — see FAIL lines above")
+        print("pairing looks healthy" if healthy else "pairing is broken - see FAIL lines above")
         return 0 if healthy else 1
     if sys.platform == "win32" and not getattr(sys, "frozen", False) and is_store_python():
         print(f"ERROR: {_STORE_PYTHON_MESSAGE}")

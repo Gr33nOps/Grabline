@@ -56,7 +56,7 @@ class GifDialog(QDialog):
         super().__init__(parent)
         self._ffmpeg_path = ffmpeg_path
         self._source = source
-        self.setWindowTitle("Grabline — convert to GIF")
+        self.setWindowTitle("Grabline - convert to GIF")
         self.setMinimumWidth(360)
 
         form = QFormLayout(self)
@@ -79,7 +79,7 @@ class GifDialog(QDialog):
         self.width_spin.setValue(gif.DEFAULT_WIDTH)
         self.width_spin.setSuffix(" px wide")
         form.addRow("Size:", self.width_spin)
-        hint = QLabel("Tip: GIFs get huge fast — keep clips short.")
+        hint = QLabel("Tip: GIFs get huge fast - keep clips short.")
         hint.setStyleSheet("color: gray; font-size: 11px;")
         form.addRow(hint)
 

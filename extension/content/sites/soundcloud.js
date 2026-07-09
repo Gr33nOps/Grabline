@@ -1,7 +1,7 @@
-// Grabline Connect — SoundCloud site module (F2.6).
+// Grabline Connect - SoundCloud site module (F2.6).
 //
 // SoundCloud plays through a hidden MSE audio element, so the generic
-// overlay has nothing to hover — and the page URL is wrong the moment you
+// overlay has nothing to hover - and the page URL is wrong the moment you
 // play from Discover or the feed (that's how "soundcloud:user discover
 // 404" happens). This module puts the ⬇ on actual track links instead:
 // the bottom play bar (whatever is playing right now) and track titles in

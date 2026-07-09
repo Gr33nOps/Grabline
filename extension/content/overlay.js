@@ -1,4 +1,4 @@
-// Grabline Connect — element sniffer + hover ⬇ button (F1.2).
+// Grabline Connect - element sniffer + hover ⬇ button (F1.2).
 //
 // One floating button, hosted in a closed shadow root so page CSS can't touch
 // it. Shown when the pointer rests on a <video>, <audio>, or big-enough
@@ -18,12 +18,12 @@
   const SITE_RULES = [
     {
       hosts: /(^|\.)youtube\.com$/,
-      videos: /^$/, // never — youtube.js owns thumbnails AND the player button
+      videos: /^$/, // never - youtube.js owns thumbnails AND the player button
       images: true,
     },
     {
       hosts: /(^|\.)(x|twitter)\.com$/,
-      videos: /^$/, // never — the x.js module handles every tweet video
+      videos: /^$/, // never - the x.js module handles every tweet video
       images: false,
     },
   ];
@@ -101,7 +101,7 @@
     }
     // blob:/data: sources can't be fetched outside the page. Send the page
     // URL (the Smart Engine may know the site) and flag it so the background
-    // attaches the streams the sniffer saw in this tab as fallbacks — on
+    // attaches the streams the sniffer saw in this tab as fallbacks - on
     // no-name streaming sites the sniffed .m3u8 IS the movie.
     if (!src || !/^https?:/.test(src)) return { url: location.href, fromPage: true };
     return { url: src, fromPage: false };
@@ -170,7 +170,7 @@
           const full = new URL(href, location.href).toString();
           if (IMAGE_HREF.test(full)) url = full;
         } catch {
-          /* unparsable href — keep the img src */
+          /* unparsable href - keep the img src */
         }
       }
       if (seen.has(url)) continue;
@@ -249,7 +249,7 @@
   function pillText(job) {
     const name = job.name ?? "download";
     if (job.status === "completed") return `✓ ${name}`;
-    if (job.status === "failed") return `✗ failed — ${name}`;
+    if (job.status === "failed") return `✗ failed - ${name}`;
     if (job.total && job.downloaded != null) {
       return `⬇ ${Math.min(100, Math.round((job.downloaded / job.total) * 100))}% · ${name}`;
     }

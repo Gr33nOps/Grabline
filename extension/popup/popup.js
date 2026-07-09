@@ -1,4 +1,4 @@
-// Grabline Connect — toolbar popup (F1.4): pairing status, per-tab sniffed
+// Grabline Connect - toolbar popup (F1.4): pairing status, per-tab sniffed
 // media list, interception and per-site overlay toggles.
 
 const api = globalThis.browser ?? globalThis.chrome;

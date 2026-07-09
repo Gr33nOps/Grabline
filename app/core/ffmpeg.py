@@ -3,7 +3,7 @@
 The app never bundles FFmpeg. When it's needed and not present, the pinned
 archive for this platform is downloaded over HTTPS, hashed while streaming,
 rejected outright on any mismatch, and only then are the ffmpeg/ffprobe
-binaries extracted (by explicit member name — never a blanket archive extract).
+binaries extracted (by explicit member name - never a blanket archive extract).
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ def ensure_ffmpeg(
 ) -> Path:
     """Download, verify, and install FFmpeg for this platform. Returns the
     ffmpeg binary path. Raises DownloadError with a user-facing message on
-    any failure — most importantly on a checksum mismatch.
+    any failure - most importantly on a checksum mismatch.
     """
     target_dir = bin_dir or paths.bin_dir()
     key = platform_key()
@@ -104,7 +104,7 @@ def ensure_ffmpeg(
     if not ffmpeg_path.is_file():
         raise DownloadError("the verified FFmpeg archive did not contain an ffmpeg binary")
     if verify_run:
-        result = subprocess.run(  # argument list only — no shell, ever (S1)
+        result = subprocess.run(  # argument list only - no shell, ever (S1)
             [str(ffmpeg_path), "-version"],
             capture_output=True,
             text=True,
@@ -144,7 +144,7 @@ def _install_archive(
                         progress(received, total)
         if digest.hexdigest() != archive.sha256:
             raise DownloadError(
-                "FFmpeg download failed its integrity check (SHA-256 mismatch) — "
+                "FFmpeg download failed its integrity check (SHA-256 mismatch) - "
                 "refusing to install. Try again later; if this persists the pins "
                 "may need updating."
             )

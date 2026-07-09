@@ -1,9 +1,9 @@
 """The resolver: every URL, one route (proposal §5).
 
-1. Smart Engine — does a yt-dlp site extractor recognize it? Full experience.
-2. HLS/DASH manifest — FFmpeg reassembly.
-3. Direct file — the segmented downloader.
-4. Nothing — a friendly message, never a traceback.
+1. Smart Engine - does a yt-dlp site extractor recognize it? Full experience.
+2. HLS/DASH manifest - FFmpeg reassembly.
+3. Direct file - the segmented downloader.
+4. Nothing - a friendly message, never a traceback.
 """
 
 from __future__ import annotations
@@ -32,11 +32,11 @@ _HTML_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
 _HTML_MESSAGE = (
     "This address is a web page, not a downloadable file. If a video plays "
     "on it, let it play for a moment, then use the Grabline button on the "
-    "player or the toolbar popup — Grabline grabs the stream the page loads."
+    "player or the toolbar popup - Grabline grabs the stream the page loads."
 )
 
 #: Services whose media is DRM-protected end to end. Refused up front with an
-#: honest, named message (proposal: no DRM circumvention, clear refusal) —
+#: honest, named message (proposal: no DRM circumvention, clear refusal) -
 #: better than the confusing failure yt-dlp or the probe would produce.
 _DRM_SERVICES: tuple[tuple[str, str], ...] = (
     (r"(^|\.)netflix\.com$", "Netflix"),
@@ -127,7 +127,7 @@ class Resolver:
                     url, use_session=use_session, session_browser=session_browser
                 )
             except DownloadError as exc:
-                # A site extractor claimed the URL; its verdict is final —
+                # A site extractor claimed the URL; its verdict is final -
                 # falling through to sniffing would just fail less clearly.
                 return Resolution(url=url, kind=None, message=str(exc))
             if isinstance(inspected, PlaylistInfo):

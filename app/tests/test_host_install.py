@@ -113,7 +113,7 @@ def test_check_flags_missing_pairing(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_store_python_is_recognized():
-    """The Microsoft Store Python sandboxes file writes — pairing made with
+    """The Microsoft Store Python sandboxes file writes - pairing made with
     it is invisible to browsers, so it must be detected and named."""
     assert is_store_python(r"C:\Users\GREEN\AppData\Local\Microsoft\WindowsApps\python.exe")
     assert is_store_python(

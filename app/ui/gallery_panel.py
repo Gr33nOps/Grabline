@@ -1,5 +1,5 @@
 """Gallery grid (F2.2): the image URLs Grabline Connect collected on a page,
-shown as a checkable thumbnail grid — pick, then batch-download.
+shown as a checkable thumbnail grid - pick, then batch-download.
 
 Thumbnails load lazily in one background thread; the grid is usable (and the
 download can start) before any of them arrive.
@@ -71,11 +71,11 @@ class GalleryPanel(QDialog):
     ) -> None:
         super().__init__(parent)
         self.urls = urls
-        self.setWindowTitle("Grabline — images on this page")
+        self.setWindowTitle("Grabline - images on this page")
         self.setMinimumSize(640, 480)
 
         layout = QVBoxLayout(self)
-        title = QLabel(f"{page_title or 'This page'} — {len(urls)} images")
+        title = QLabel(f"{page_title or 'This page'} - {len(urls)} images")
         title.setWordWrap(True)
         title.setStyleSheet("font-weight: 600; font-size: 14px;")
         layout.addWidget(title)

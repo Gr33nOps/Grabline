@@ -59,7 +59,7 @@ def make_gif(
         "gif",
         str(target),
     ]
-    result = subprocess.run(  # argument list only — no shell (S1)
+    result = subprocess.run(  # argument list only - no shell (S1)
         command, capture_output=True, text=True
     )
     if result.returncode != 0 or not target.exists() or target.stat().st_size == 0:

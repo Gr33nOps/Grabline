@@ -156,7 +156,7 @@ class DownloadManager:
         use_session: bool = False,
         session_browser: str = "chrome",
     ) -> Job:
-        """Queue one Smart Engine job from just a URL and title — the playlist
+        """Queue one Smart Engine job from just a URL and title - the playlist
         path (F1.7), where entries were listed flat and formats resolve at
         download time."""
         extension = option.audio_format if option.kind == "audio" else "mp4"

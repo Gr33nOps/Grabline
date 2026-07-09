@@ -43,7 +43,7 @@ _VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
 
 class _ResolveThread(QThread):
     # Resolution, page_title (str | None), quality label (str | None, F1.3),
-    # fallback URLs (tuple[str, ...] — sniffed streams to try if this one dies)
+    # fallback URLs (tuple[str, ...] - sniffed streams to try if this one dies)
     resolved = Signal(object, object, object, object)
 
     def __init__(
@@ -145,7 +145,7 @@ class MainWindow(QMainWindow):
                 )
 
     def _open_gallery(self, urls: list[str], page_title: str | None) -> None:
-        """F2.2: the extension collected a page's images — pick and batch."""
+        """F2.2: the extension collected a page's images - pick and batch."""
         panel = GalleryPanel(urls, page_title=page_title, parent=self)
         if panel.exec() != GalleryPanel.DialogCode.Accepted:
             return
@@ -182,10 +182,10 @@ class MainWindow(QMainWindow):
             message += f", skipped {len(items)}"
         self.statusBar().showMessage(message, 10000)
         if items:
-            detail = "\n".join(f"• {url} — {reason}" for url, reason in items[:10])
+            detail = "\n".join(f"• {url} - {reason}" for url, reason in items[:10])
             if len(items) > 10:
                 detail += f"\n… and {len(items) - 10} more"
-            QMessageBox.information(self, "Grabline — import finished", f"{message}.\n\n{detail}")
+            QMessageBox.information(self, "Grabline - import finished", f"{message}.\n\n{detail}")
         self.refresh()
 
     def begin_add_url(
@@ -216,8 +216,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready")
         if resolution.kind is None:
             if fallbacks:
-                # The page itself had nothing — try the stream it played.
-                self.statusBar().showMessage("Page had no direct media — trying its stream …")
+                # The page itself had nothing - try the stream it played.
+                self.statusBar().showMessage("Page had no direct media - trying its stream …")
                 self.begin_add_url(
                     fallbacks[0],
                     page_title=page_title,
@@ -233,7 +233,7 @@ class MainWindow(QMainWindow):
             and resolution.media is not None
             and (option := option_for_label(quality, resolution.media.options)) is not None
         ):
-            # F1.3: the quality was already chosen in the page — no dialog.
+            # F1.3: the quality was already chosen in the page - no dialog.
             self.manager.add_smart(
                 resolution.url,
                 resolution.media,

@@ -51,7 +51,7 @@ def app_is_running(path: Path | None = None) -> bool:
 
 def _pid_running_windows(pid: int) -> bool:  # pragma: no cover - windows-only
     """Existence check WITHOUT os.kill: on Windows, os.kill(pid, 0) is not a
-    probe — it TerminateProcess()es the target. The native host used to
+    probe - it TerminateProcess()es the target. The native host used to
     murder the running app every time the extension asked 'is it running?'."""
     import ctypes
 

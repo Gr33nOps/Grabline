@@ -1,7 +1,7 @@
 """Desktop integration, IDM-style: an application-menu entry and start-on-login.
 
 Everything here is per-user (no root) and idempotent. Linux gets the full
-treatment — an XDG desktop entry written on first run so Grabline shows up in
+treatment - an XDG desktop entry written on first run so Grabline shows up in
 the app grid/dock, and an autostart entry behind the Settings toggle. Windows
 autostart uses the HKCU Run key; macOS a LaunchAgent plist. Both the dev venv
 and the frozen (PyInstaller) binary work: entries launch whatever is running
@@ -89,7 +89,7 @@ def _write_if_changed(path: Path, content: str) -> None:
 
 def install_menu_entry(icon_png: bytes | None = None) -> Path | None:
     """Put Grabline in the application menu (Linux; silently a no-op
-    elsewhere — the Windows installer and macOS app bundle own that job).
+    elsewhere - the Windows installer and macOS app bundle own that job).
     Safe to call on every startup: rewrites only when something changed,
     so a moved venv heals itself."""
     if sys.platform != "linux":
@@ -122,7 +122,7 @@ def autostart_enabled() -> bool:
 
 
 def set_autostart(enabled: bool) -> None:
-    """Start Grabline (minimized to the tray) on login — or stop doing so."""
+    """Start Grabline (minimized to the tray) on login - or stop doing so."""
     command = launch_command(minimized=True)
     if sys.platform == "win32":
         import winreg

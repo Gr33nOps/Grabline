@@ -1,7 +1,7 @@
-// Grabline Connect — X/Twitter site module (F2.6).
+// Grabline Connect - X/Twitter site module (F2.6).
 //
 // Timeline videos play from blob: URLs, so the generic overlay could only
-// offer the *timeline* URL — useless. This module shows the ⬇ when the
+// offer the *timeline* URL - useless. This module shows the ⬇ when the
 // pointer is over a video inside a tweet and hands the tweet's permalink
 // (/user/status/<id>) to the app; yt-dlp resolves the actual media.
 // Fail-silent by design; right-click on the tweet's timestamp link and
