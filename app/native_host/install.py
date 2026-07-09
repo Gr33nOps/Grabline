@@ -47,7 +47,13 @@ def _darwin_targets(home: Path) -> list[BrowserTarget]:
     support = home / "Library" / "Application Support"
     return [
         BrowserTarget("Chrome", support / "Google" / "Chrome" / "NativeMessagingHosts", "chromium"),
+        BrowserTarget("Chromium", support / "Chromium" / "NativeMessagingHosts", "chromium"),
         BrowserTarget("Edge", support / "Microsoft Edge" / "NativeMessagingHosts", "chromium"),
+        BrowserTarget(
+            "Brave",
+            support / "BraveSoftware" / "Brave-Browser" / "NativeMessagingHosts",
+            "chromium",
+        ),
         BrowserTarget("Firefox", support / "Mozilla" / "NativeMessagingHosts", "firefox"),
     ]
 
@@ -79,20 +85,54 @@ def host_manifest(kind: str, launcher: Path) -> dict[str, object]:
     return manifest
 
 
-def write_launcher(bin_dir: Path | None = None) -> Path:
-    """A tiny script that runs the host with the current interpreter.
+def _host_command() -> tuple[str, str]:
+    """(executable, arguments) that run the host from this installation.
 
-    Packaged builds will point manifests at the app binary with a
-    ``--native-host`` flag instead; this covers the from-source install.
+    Frozen (packaged) builds re-run the app binary with ``--native-host``;
+    source installs run ``python -m app.native_host`` with PYTHONPATH pinned
+    to wherever the ``app`` package lives — browsers launch the host from
+    their *own* working directory, so nothing may depend on the cwd.
     """
+    if getattr(sys, "frozen", False):
+        return sys.executable, "--native-host"
+    return sys.executable, "-m app.native_host"
+
+
+def _package_root() -> Path:
+    """The directory containing the ``app`` package."""
+    return Path(paths.__file__).resolve().parents[2]
+
+
+def write_launcher(bin_dir: Path | None = None) -> Path:
+    """A tiny script that runs the host; the manifests point at it."""
     target_dir = bin_dir or paths.bin_dir()
     target_dir.mkdir(parents=True, exist_ok=True)
+    executable, arguments = _host_command()
+    frozen = getattr(sys, "frozen", False)
     if sys.platform == "win32":  # pragma: no cover - windows-only branch
+        # pythonw.exe avoids a console window flashing up when the browser
+        # spawns the host. newline="" — text mode would turn our \r\n into
+        # \r\r\n, and the stray \r corrupts the command line (the bug that
+        # broke Windows pairing entirely).
+        if not frozen:
+            windowless = Path(sys.executable).with_name("pythonw.exe")
+            if windowless.exists():
+                executable = str(windowless)
         launcher = target_dir / "grabline-host.bat"
-        launcher.write_text(f'@echo off\r\n"{sys.executable}" -m app.native_host %*\r\n')
+        lines = ["@echo off"]
+        if not frozen:
+            lines.append(f'set "PYTHONPATH={_package_root()};%PYTHONPATH%"')
+        lines.append(f'"{executable}" {arguments} %*')
+        with open(launcher, "w", newline="\r\n") as handle:
+            handle.write("\n".join(lines) + "\n")
     else:
         launcher = target_dir / "grabline-host"
-        launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" -m app.native_host "$@"\n')
+        lines = ["#!/bin/sh"]
+        if not frozen:
+            lines.append(f'PYTHONPATH="{_package_root()}${{PYTHONPATH:+:$PYTHONPATH}}"')
+            lines.append("export PYTHONPATH")
+        lines.append(f'exec "{executable}" {arguments} "$@"')
+        launcher.write_text("\n".join(lines) + "\n")
         launcher.chmod(0o755)
     return launcher
 
@@ -133,7 +173,9 @@ def _install_windows_registry(
         written: list[Path] = []
         for kind, registry_root in (
             ("chromium", r"Software\Google\Chrome\NativeMessagingHosts"),
+            ("chromium", r"Software\Chromium\NativeMessagingHosts"),
             ("chromium", r"Software\Microsoft\Edge\NativeMessagingHosts"),
+            ("chromium", r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts"),
             ("firefox", r"Software\Mozilla\NativeMessagingHosts"),
         ):
             manifest_path = manifest_dir / f"{HOST_NAME}.{kind}.json"

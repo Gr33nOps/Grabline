@@ -1,154 +1,179 @@
 # Grabline
 
-**The open-source IDM: a ⬇ button on any media, anywhere — with full quality
-options where they exist, and universal sniffing everywhere else.**
+**The open-source download manager: a ⬇ button on any media, anywhere —
+with a real quality picker where one exists, and IDM-grade segmented
+downloading everywhere else.**
 
-Grabline is a free, open-source download manager. Paste (or soon: click) any
-link — a YouTube video, a streaming lecture, a plain file — and it downloads
-fast, with a quality picker (4K → 144p, MP3/M4A) on the 1000+ sites the Smart
-Engine knows, and IDM-grade segmented downloading everywhere else. No paid
-tier, no ads, no telemetry.
+Paste a link or click the button in your browser — a YouTube video, a
+SoundCloud track, a streaming lecture, a plain file — and Grabline downloads
+it fast: a quality panel (4K → 144p, MP3/M4A with tags and cover art) on the
+1000+ sites its Smart Engine knows, multi-connection resumable downloading
+for everything else, and FFmpeg stream reassembly in between. Free, no ads,
+no telemetry, AGPL-3.0.
 
-> **Status: feature-complete through Phase 3, heading to v1.0.** The desktop
-> app is a complete download manager + yt-dlp GUI, and the browser extension
-> ("Grabline Connect") does right-click download, hover ⬇ buttons with an
-> in-page quality panel, a live progress pill, per-tab stream sniffing,
-> gallery grabbing, and Native Messaging pairing.
+## Highlights
 
-## What works today
+- **One button in the browser** — hover ⬇ on videos and thumbnails (YouTube,
+  YouTube Music, SoundCloud, Vimeo, X), pick the quality right on the page,
+  watch a live progress pill in the corner. Right-click → *Download with
+  Grabline* works on anything, everywhere.
+- **Serious downloading** — up to 16 parallel connections per file,
+  crash-proof checkpointed resume (survives kill −9 and power loss), queue
+  with pause/resume, global speed limit, auto-sorting into
+  Video/Music/Images/Documents/Archives.
+- **The whole yt-dlp toolbox, no terminal** — curated quality list with size
+  estimates, MP3/M4A extraction with tags and cover art, subtitles (manual or
+  auto, .srt or embedded), clip trimming, playlists with checkbox selection.
+- **Streams** — HLS/DASH manifests are reassembled into clean .mp4 by FFmpeg,
+  with master-playlist quality picking and automatic retry. The per-tab
+  sniffer in the extension catches streams the page loads.
+- **Extras** — download every image on a page into a thumbnail grid, convert
+  any downloaded video to a GIF, import a whole list of links at once, grab
+  URLs from the clipboard, start minimized in the tray on login.
 
-**The resolver — every URL, one route:**
-1. **Smart Engine (yt-dlp, in-process):** 1000+ sites get a metadata card and
-   a curated quality list — Best / 2160p / … / 360p with estimated sizes, plus
-   **MP3/M4A audio extraction** with tags and cover art, subtitle download
-   (manual or auto, as .srt or embedded), and **clip trimming** (start/end
-   timestamps).
-2. **HLS/DASH manifests:** reassembled into a clean .mp4 by FFmpeg — with a
-   **quality picker for master playlists** (separate audio renditions get
-   muxed in), duration-based progress, and an automatic retry on transient
-   failures (F2.1).
-3. **Direct files:** the Phase 0 segmented downloader — up to 8 parallel
-   range connections, crash-proof checkpointed resume (kill -9 tested),
-   automatic single-connection fallback.
-4. **Nothing downloadable?** A friendly message. Never a traceback.
+---
 
-**Around the engine:**
-- **Queue** with concurrency limit, pause/resume/cancel/retry, live speed,
-  search, per-row actions (open file/folder, copy URL, re-download, remove),
-  a global speed limiter, system tray, close-to-tray.
-- **Playlists** (F1.7): paste a playlist URL → fast flat listing → checkbox
-  selection with a batch quality choice (`--playlist` in the CLI).
-- **Gallery grid** (F2.2): right-click → "Download all images" in the
-  browser → a checkable thumbnail grid in the app → batch download.
-- **GIF tools** (F2.3): any downloaded video → right-click → "Convert to
-  GIF…" with clip range, fps, and width (FFmpeg two-pass palette).
-- **Batch import** (F2.4): paste anything with links in it (or load a .txt)
-  — every URL queues at sensible defaults, no per-URL dialogs.
-- **Clipboard watcher** (F0.5): copy a URL anywhere → an unobtrusive
-  "Download with Grabline?" offer. Snooze/disable built in.
-- **Categories** (F0.6): downloads auto-sort into Video / Music / Images /
-  Documents / Archives (configurable).
-- **"Use my browser session"** (F0.8): an off-by-default toggle that lets
-  yt-dlp read your own browser's cookies so you can download your *own*
-  login-gated content. Cookies are read per download, kept in memory only,
-  never stored or transmitted. No DRM circumvention, no account bypass.
-- **FFmpeg fetch-on-first-run** (S5): never bundled — downloaded from official
-  builds over HTTPS and verified against pinned SHA-256 checksums
-  ([app/core/ffmpeg_pins.py](app/core/ffmpeg_pins.py), regenerated by
-  [scripts/update_ffmpeg_pins.py](scripts/update_ffmpeg_pins.py)). A mismatch
-  refuses to install, full stop.
-- **Headless CLI**: `python -m app.cli <url> <dest>` with `--list-formats`,
-  `--quality 1080p`, `--quality mp3` — same engines, same database.
-- **Grabline Connect** (first slice): right-click "Download with Grabline",
-  hover ⬇ buttons on page media, a per-tab list of sniffed streams, and
-  optional download takeover — all over Native Messaging with pinned
-  extension IDs; no ports, no localhost server. Pairing guide:
-  [extension/README.md](extension/README.md).
+## Install
 
-## Install & run (development)
+### Windows
+
+1. Download the latest `Grabline-windows.zip` from the
+   [Releases page](https://github.com/Gr33nOps/Grabline/releases) and unzip.
+2. Run `Grabline.exe`. If SmartScreen objects (the build is not code-signed),
+   click *More info → Run anyway*.
+
+### macOS
+
+1. Download `Grabline-macos.zip` from the
+   [Releases page](https://github.com/Gr33nOps/Grabline/releases) and unzip.
+2. Move `Grabline.app` to Applications. First launch: **right-click → Open**
+   (the build is not notarized), then confirm.
+
+### Linux
+
+1. Download `Grabline-linux.tar.gz` from the
+   [Releases page](https://github.com/Gr33nOps/Grabline/releases), extract,
+   and run `./Grabline`.
+2. The first run adds Grabline to your application menu — launch it from
+   there (or pin it to the dock) from then on.
+
+### From source (any platform)
+
+Needs Python 3.12+ and git:
 
 ```bash
 git clone https://github.com/Gr33nOps/Grabline.git && cd Grabline
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-python -m app          # the desktop app
+python3 -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
+pip install -e .
+python -m app
 ```
 
-On Linux, Qt 6.5+ needs a few system X11 libraries that aren't always
-preinstalled — if the app aborts with *"Could not load the Qt platform plugin
-xcb"*, install them:
+Debian/Ubuntu only: if the window doesn't appear
+(*"Could not load the Qt platform plugin xcb"*), install Qt's system
+libraries first: `sudo apt install libxcb-cursor0 libegl1 libxkbcommon0`.
+
+---
+
+## First-time setup (two minutes)
+
+1. **FFmpeg** — open **Settings**. If FFmpeg shows *Not found*, click
+   **Install FFmpeg**: Grabline downloads an official build over HTTPS and
+   verifies it against pinned SHA-256 checksums before installing. (Needed
+   for MP3 extraction, stream saving, and merging high qualities.)
+2. **Pair your browsers** — in **Settings**, click **Pair browsers**. This
+   registers Grabline with Chrome, Chromium, Edge, Brave, and Firefox in one
+   click (per-user, no admin rights).
+3. **Install the extension (Grabline Connect):**
+   - **Chrome / Edge / Brave:** open `chrome://extensions`, enable
+     *Developer mode*, click *Load unpacked*, and select the `extension/`
+     folder. This install is permanent.
+   - **Firefox:** see [extension/README.md](extension/README.md) — the
+     short version: get the zip signed for free on addons.mozilla.org
+     (unlisted) and install the resulting `.xpi` permanently, or use
+     `about:debugging` → *Load Temporary Add-on* for a quick session-only try.
+4. Click the Grabline toolbar icon — the popup should say **connected**.
+
+Optional but recommended: in **Settings**, tick **"Start Grabline when I log
+in"** — it will sit minimized in the tray, always ready for the browser,
+exactly like IDM. Closing the window keeps it in the tray; *Quit* lives in
+the tray menu.
+
+---
+
+## Everyday use
+
+| You do | Grabline does |
+|---|---|
+| Hover a video or thumbnail → click **⬇** | In-page panel: Best / 1080p / 720p / 480p / MP3 / M4A — downloading starts immediately, a progress pill tracks it in the corner |
+| Right-click anything → *Download with Grabline* | Link, image, video, audio, or the page itself — routed to the best engine |
+| Right-click a page → *Download all images* | Every big-enough image in a checkable thumbnail grid |
+| Click the toolbar icon | Everything the page's network traffic loaded — streams (.m3u8/.mpd) and media files, one click each |
+| Paste a playlist URL | Fast listing → checkboxes → one quality for the batch |
+| **Import Links** in the app | Paste anything with URLs in it (or load a .txt) — all of it queues at sensible defaults |
+| Right-click a finished video row | Open it, open its folder, re-download — or **Convert to GIF…** with clip range, fps, and width |
+| Copy a URL anywhere | An unobtrusive "Download with Grabline?" offer (can be turned off) |
+
+Popup toggles: hover button on/off per site, hover button on images (off by
+default), button position (any corner), download takeover (off by default).
+
+## Music
+
+SoundCloud, Bandcamp, YouTube Music, Mixcloud, and every other non-DRM
+music site yt-dlp knows: hover ⬇ → MP3, tagged with cover art. Spotify
+tracks, Apple Music, TIDAL, Deezer, and Amazon Music are **DRM-protected
+and are refused with a clear message** — Grabline does not and will not
+bypass DRM. (Spotify *podcasts* are not DRM-protected and download fine.)
+
+## The CLI
+
+The same engines, headless:
 
 ```bash
-sudo apt install libxcb-cursor0 libegl1 libxkbcommon0   # Debian/Ubuntu
+python -m app.cli "https://…" ~/Downloads --list-formats
+python -m app.cli "https://…" ~/Downloads --quality 1080p
+python -m app.cli "https://…" ~/Downloads --quality mp3
+python -m app.cli "https://…/playlist" ~/Downloads --playlist --limit 10
 ```
-
-**Run it like an app, not a command.** The first `python -m app` run adds
-Grabline to your application menu (Linux) — from then on launch it from the
-app grid/dock like anything else, no terminal needed. In **Settings**, tick
-*"Start Grabline when I log in"* and it starts minimized to the tray on
-every boot, IDM-style: always there, catching right-clicks and clipboard
-URLs. Closing the window keeps it in the tray; Quit lives in the tray menu.
-
-Try the CLI:
-
-```bash
-python -m app.cli "https://www.youtube.com/watch?v=..." ~/Downloads --list-formats
-python -m app.cli "https://www.youtube.com/watch?v=..." ~/Downloads --quality 1080p
-python -m app.cli "https://www.youtube.com/watch?v=..." ~/Downloads --quality mp3
-```
-
-Run the checks CI runs:
-
-```bash
-ruff check . && ruff format --check . && mypy app && pytest
-```
-
-The test suite runs against a local HTTP server simulating every failure mode
-(no ranges, redirects, connection drops, unknown length, throttling), drives
-yt-dlp end-to-end through its generic extractor, reassembles a real HLS stream
-with FFmpeg, and includes the Phase 0 milestone: an 8-connection download
-killed with SIGKILL, relaunched, resumed, and checksum-verified.
-
-## Architecture
-
-```
-app/
-├── core/       resolver, segmented downloader, probe, queue manager,
-│               settings, categories, FFmpeg manager (pinned fetch)
-├── engines/    smart.py (yt-dlp in-process) · hls.py (FFmpeg reassembly)
-├── db/         SQLite: jobs, segment checkpoints, settings (WAL, crash-safe)
-├── ui/         PySide6: queue window, quality panel, settings, tray,
-│               clipboard watcher
-└── tests/      failure-simulating server, engine tests, kill -9 milestone
-extension/      (Phase 2: Grabline Connect, MV3)
-packaging/      PyInstaller spec + release workflow (installers on tags)
-```
-
-## Roadmap
-
-- **Phase 0 — the engine** ✅ segmented downloader, checkpointed resume, queue UI, CI
-- **Phase 1 — MVP app** ✅ resolver + Smart Engine (quality panel, MP3,
-  subtitles, trimming), HLS reassembly, FFmpeg pinned fetch, clipboard
-  watcher, categories, browser session, installers on tag
-- **Phase 2 — v1.0** ✅ Native Messaging pairing, right-click, hover
-  overlays, per-tab sniffer list, interception, playlists, site thumbnail
-  buttons, ugly-name fixer, speed limiter, history search & row actions,
-  and the in-page quality panel + live progress pill (F1.3)
-- **Phase 3 — v2.0** (in progress): HLS/DASH robustness ✅ (variant picker,
-  separate audio renditions, duration progress, auto-retry), gallery grid ✅,
-  GIF tools ✅, batch import ✅, Vimeo + X site modules ✅, store publication
-  kit ✅ (`scripts/package_extension.py` + [docs/store-listing.md](docs/store-listing.md))
-  — actual store submission needs human-owned developer accounts
 
 ## Honest limits
 
-Grabline does not and will not bypass DRM (Netflix/Prime/etc. are refused with
-a clear message) and does not bypass logins — the session feature uses *your*
-login for *your* content. You are responsible for the terms of service of the
-sites you use and for your local law.
+- **No DRM circumvention** — Netflix, Prime Video, Disney+, Spotify tracks
+  and friends are refused with a clear message, not a workaround.
+- **No login bypass** — the optional *"Use my browser session"* setting uses
+  *your* login for *your* content; cookies are read per download, kept in
+  memory only, never stored or transmitted.
+- You are responsible for the terms of service of the sites you use and for
+  your local law.
+
+## For developers
+
+```
+app/
+├── core/       resolver, segmented downloader, queue manager, settings,
+│               rate limiter, GIF tools, desktop integration, FFmpeg manager
+├── engines/    smart.py (yt-dlp in-process) · hls.py (FFmpeg) · manifest.py
+├── db/         SQLite: jobs, segment checkpoints, handoffs (WAL, crash-safe)
+├── ui/         PySide6: queue window, quality/playlist/gallery panels, tray
+├── native_host/ Native Messaging host + per-browser registration
+└── tests/      failure-simulating media server, engine tests, kill -9 milestone
+extension/      Grabline Connect (MV3, Chrome + Firefox, readable in a sitting)
+packaging/      PyInstaller spec; installers built on release tags
+scripts/        FFmpeg pin updater, extension store packaging
+```
+
+Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
+(200 tests, including an 8-connection download killed with SIGKILL and
+resumed to a verified checksum). Security ground rules: no `shell=True`
+anywhere (CI-enforced), Native Messaging only — never an open port, FFmpeg
+fetched only against pinned checksums.
+
+Store packaging for the extension: `python scripts/package_extension.py`
+builds Chrome Web Store and Firefox (AMO) zips; the listing kit lives in
+[docs/store-listing.md](docs/store-listing.md).
 
 ## License
 
 [AGPL-3.0](LICENSE). yt-dlp (Unlicense) and PySide6 (LGPL) are compatible
 dependencies; FFmpeg is fetched by the user's machine on first run and never
-distributed with releases.
+distributed with releases. Privacy: [PRIVACY.md](PRIVACY.md) — nothing is
+collected, ever.

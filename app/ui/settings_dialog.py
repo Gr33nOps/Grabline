@@ -113,6 +113,19 @@ class SettingsDialog(QDialog):
         session_layout.addWidget(consent)
         layout.addWidget(session)
 
+        pairing = QGroupBox("Browser extension")
+        pairing_layout = QHBoxLayout(pairing)
+        pairing_label = QLabel(
+            "Pair Grabline with your browsers so the Grabline Connect "
+            "extension can hand downloads over."
+        )
+        pairing_label.setWordWrap(True)
+        pairing_layout.addWidget(pairing_label, 1)
+        pair_button = QPushButton("Pair browsers")
+        pair_button.clicked.connect(self._pair_browsers)
+        pairing_layout.addWidget(pair_button)
+        layout.addWidget(pairing)
+
         ffmpeg_group = QGroupBox("FFmpeg (needed for MP3, merging, and streams)")
         ffmpeg_layout = QHBoxLayout(ffmpeg_group)
         self.ffmpeg_status = QLabel()
@@ -138,6 +151,22 @@ class SettingsDialog(QDialog):
         )
         if chosen:
             self.folder_edit.setText(chosen)
+
+    def _pair_browsers(self) -> None:
+        from app.native_host.install import install as install_host
+
+        try:
+            written = install_host()
+        except OSError as exc:
+            QMessageBox.warning(self, "Grabline", f"Pairing failed: {exc}")
+            return
+        QMessageBox.information(
+            self,
+            "Grabline",
+            f"Registered with {len(written)} browser location(s).\n\n"
+            "Now install (or reload) the Grabline Connect extension in your "
+            "browser — its toolbar popup should say “connected”.",
+        )
 
     def _refresh_ffmpeg_status(self) -> None:
         path = find_ffmpeg(self.settings)

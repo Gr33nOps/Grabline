@@ -36,7 +36,9 @@ IDs allowed to connect (S3).
 
 ## Pairing (two steps)
 
-1. **Register the native host** (writes per-browser manifest files):
+1. **Register the native host** — in the Grabline app: **Settings → Pair
+   browsers** (one click, covers Chrome/Chromium/Edge/Brave/Firefox on
+   Windows, macOS, and Linux). Terminal alternative:
 
    ```bash
    python -m app.native_host.install
@@ -47,7 +49,8 @@ IDs allowed to connect (S3).
      mode* → *Load unpacked* → select this `extension/` folder. The manifest
      pins a stable ID, so pairing works no matter where the folder lives.
    - **Firefox:** `about:debugging#/runtime/this-firefox` → *Load Temporary
-     Add-on* → select `extension/manifest.json`.
+     Add-on* → select `extension/manifest.json` (session-only; see below for
+     the permanent install).
 
 Open the toolbar popup: it should say **connected**. If it says *not paired*,
 re-run step 1 and reload the extension. If it says *app not running*, that's
