@@ -5,7 +5,7 @@ and FFmpeg install/status (S5).
 
 from __future__ import annotations
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, QTime, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QSpinBox,
+    QTimeEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -82,12 +83,41 @@ class SettingsDialog(QDialog):
         self.speed_spin.setSpecialValueText("Unlimited")
         self.speed_spin.setValue(settings.speed_limit_kbps)
         form.addRow("Speed limit:", self.speed_spin)
+        schedule_row = QHBoxLayout()
+        self.schedule_check = QCheckBox("Full speed between")
+        self.schedule_check.setChecked(settings.speed_schedule_enabled)
+        self.full_from = QTimeEdit(QTime.fromString(settings.speed_full_from, "HH:mm"))
+        self.full_from.setDisplayFormat("HH:mm")
+        self.full_to = QTimeEdit(QTime.fromString(settings.speed_full_to, "HH:mm"))
+        self.full_to.setDisplayFormat("HH:mm")
+        schedule_row.addWidget(self.schedule_check)
+        schedule_row.addWidget(self.full_from)
+        schedule_row.addWidget(QLabel("and"))
+        schedule_row.addWidget(self.full_to)
+        schedule_row.addStretch(1)
+        form.addRow("Speed schedule:", schedule_row)
         self.clipboard_check = QCheckBox("Offer to download URLs copied to the clipboard")
         self.clipboard_check.setChecked(settings.clipboard_watcher)
         form.addRow("", self.clipboard_check)
         self.autostart_check = QCheckBox("Start Grabline when I log in (minimized to the tray)")
         self.autostart_check.setChecked(launcher.autostart_enabled())
         form.addRow("", self.autostart_check)
+        retry_row = QHBoxLayout()
+        self.retry_check = QCheckBox("Auto-retry failed downloads, up to")
+        self.retry_check.setChecked(settings.auto_retry)
+        self.retry_spin = QSpinBox()
+        self.retry_spin.setRange(0, 20)
+        self.retry_spin.setValue(settings.auto_retry_max)
+        self.retry_spin.setSuffix(" times")
+        retry_row.addWidget(self.retry_check)
+        retry_row.addWidget(self.retry_spin)
+        retry_row.addStretch(1)
+        form.addRow("Reconnect:", retry_row)
+        self.theme_combo = QComboBox()
+        for label, value in (("Match system", "system"), ("Light", "light"), ("Dark", "dark")):
+            self.theme_combo.addItem(label, value)
+        self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(settings.theme)))
+        form.addRow("Theme:", self.theme_combo)
         layout.addWidget(general)
 
         session = QGroupBox("Browser session (advanced)")
@@ -216,6 +246,12 @@ class SettingsDialog(QDialog):
         self.settings.max_concurrent = self.concurrent_spin.value()
         self.settings.connections = self.connections_spin.value()
         self.settings.speed_limit_kbps = self.speed_spin.value()
+        self.settings.speed_schedule_enabled = self.schedule_check.isChecked()
+        self.settings.speed_full_from = self.full_from.time().toString("HH:mm")
+        self.settings.speed_full_to = self.full_to.time().toString("HH:mm")
+        self.settings.auto_retry = self.retry_check.isChecked()
+        self.settings.auto_retry_max = self.retry_spin.value()
+        self.settings.theme = self.theme_combo.currentData()
         try:
             # The autostart file/registry entry IS the setting - no DB copy
             # that could drift from what the OS will actually do at login.

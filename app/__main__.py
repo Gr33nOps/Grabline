@@ -13,6 +13,7 @@ from app.core.ffmpeg import find_ffmpeg
 from app.core.manager import DownloadManager
 from app.core.settings import Settings
 from app.db.database import Database
+from app.ui import theme
 from app.ui.clipboard import ClipboardWatcher
 from app.ui.icon import make_app_icon
 from app.ui.main_window import MainWindow
@@ -55,6 +56,8 @@ def main() -> int:
 
     settings = Settings(db)
     settings.download_dir.mkdir(parents=True, exist_ok=True)
+    theme.remember_default(app)
+    theme.apply_theme(app, settings.theme)
     manager = DownloadManager(db, settings=settings)
 
     window = MainWindow(manager, settings)

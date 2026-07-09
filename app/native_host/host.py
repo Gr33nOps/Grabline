@@ -110,30 +110,39 @@ def handle_message(db: Database, message: dict[str, Any]) -> dict[str, Any]:
         return {"type": "status", "jobs": jobs, "appRunning": instance.app_is_running()}
     if kind == "gallery":
         # F2.2: every image URL the content script collected on one page.
-        raw = message.get("urls")
-        urls: list[str] = []
-        if isinstance(raw, list):
-            for item in raw[:_MAX_GALLERY_ITEMS]:
-                valid = _valid_url(item)
-                if valid is not None:
-                    urls.append(valid)
-        if not urls:
-            return {"type": "error", "message": "no downloadable image URLs in gallery"}
-        page_url = _valid_url(message.get("pageUrl"))
-        handoff_id = db.add_handoff(
-            page_url or urls[0],
-            page_url=page_url,
-            page_title=_clean_text(message.get("pageTitle")),
-            source="gallery",
-            payload=urls,
-        )
-        return {
-            "type": "queued",
-            "handoffId": handoff_id,
-            "count": len(urls),
-            "appRunning": instance.app_is_running(),
-        }
+        return _collection_handoff(db, message, "gallery", "no downloadable image URLs found")
+    if kind == "links":
+        # Every downloadable link the content script found on one page.
+        return _collection_handoff(db, message, "links", "no downloadable links found")
     return {"type": "error", "message": f"unknown message type: {kind!r}"}
+
+
+def _collection_handoff(
+    db: Database, message: dict[str, Any], source: str, empty_message: str
+) -> dict[str, Any]:
+    raw = message.get("urls")
+    urls: list[str] = []
+    if isinstance(raw, list):
+        for item in raw[:_MAX_GALLERY_ITEMS]:
+            valid = _valid_url(item)
+            if valid is not None and valid not in urls:
+                urls.append(valid)
+    if not urls:
+        return {"type": "error", "message": empty_message}
+    page_url = _valid_url(message.get("pageUrl"))
+    handoff_id = db.add_handoff(
+        page_url or urls[0],
+        page_url=page_url,
+        page_title=_clean_text(message.get("pageTitle")),
+        source=source,
+        payload=urls,
+    )
+    return {
+        "type": "queued",
+        "handoffId": handoff_id,
+        "count": len(urls),
+        "appRunning": instance.app_is_running(),
+    }
 
 
 def serve(stdin: BinaryIO, stdout: BinaryIO, db: Database) -> None:

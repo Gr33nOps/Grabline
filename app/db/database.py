@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     title         TEXT,
     options       TEXT NOT NULL DEFAULT '{}',
     downloaded    INTEGER NOT NULL DEFAULT 0,
+    priority      INTEGER NOT NULL DEFAULT 0,
+    retry_count   INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -76,6 +78,8 @@ _JOBS_MIGRATIONS = {
     "title": "ALTER TABLE jobs ADD COLUMN title TEXT",
     "options": "ALTER TABLE jobs ADD COLUMN options TEXT NOT NULL DEFAULT '{}'",
     "downloaded": "ALTER TABLE jobs ADD COLUMN downloaded INTEGER NOT NULL DEFAULT 0",
+    "priority": "ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
+    "retry_count": "ALTER TABLE jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
 }
 
 _HANDOFFS_MIGRATIONS = {
@@ -101,6 +105,8 @@ def _job_from_row(row: sqlite3.Row) -> Job:
         title=row["title"],
         options=json.loads(row["options"] or "{}"),
         downloaded=row["downloaded"],
+        priority=row["priority"],
+        retry_count=row["retry_count"],
     )
 
 
@@ -177,9 +183,21 @@ class Database:
         return _job_from_row(row) if row else None
 
     def list_jobs(self) -> list[Job]:
+        # Higher priority first; ties (the default 0) fall back to insertion
+        # order, so an untouched queue still runs oldest-first.
         with self._lock:
-            rows = self._conn.execute("SELECT * FROM jobs ORDER BY id").fetchall()
+            rows = self._conn.execute(
+                "SELECT * FROM jobs ORDER BY priority DESC, id ASC"
+            ).fetchall()
         return [_job_from_row(row) for row in rows]
+
+    def set_priority(self, job_id: int, priority: int) -> None:
+        with self._lock, self._conn:
+            self._conn.execute("UPDATE jobs SET priority = ? WHERE id = ?", (priority, job_id))
+
+    def set_retry_count(self, job_id: int, count: int) -> None:
+        with self._lock, self._conn:
+            self._conn.execute("UPDATE jobs SET retry_count = ? WHERE id = ?", (count, job_id))
 
     def latest_job_for_url(self, url: str) -> Job | None:
         """The most recent job for a URL - how the extension's progress pill
@@ -230,6 +248,13 @@ class Database:
             self._conn.execute(
                 "UPDATE jobs SET total_size = ?, updated_at = datetime('now') WHERE id = ?",
                 (total_size, job_id),
+            )
+
+    def update_job_options(self, job_id: int, options: Mapping[str, Any]) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE jobs SET options = ?, updated_at = datetime('now') WHERE id = ?",
+                (json.dumps(dict(options)), job_id),
             )
 
     def update_job_filename(self, job_id: int, filename: str) -> None:

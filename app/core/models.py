@@ -83,6 +83,10 @@ class Job:
     options: dict[str, Any] = field(default_factory=dict)
     #: Progress mirror for non-segmented jobs (smart/hls); direct jobs use segments.
     downloaded: int = 0
+    #: Queue priority; higher runs first, ties break by id (older first).
+    priority: int = 0
+    #: How many times auto-retry has re-queued this job after a failure.
+    retry_count: int = 0
 
     @property
     def dest_path(self) -> Path:

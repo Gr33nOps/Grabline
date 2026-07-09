@@ -109,6 +109,38 @@ def test_playlist_panel_selection(db: Database):
     assert panel.selected_option().label == "Best"
 
 
+def test_link_panel_selection_and_filter(db: Database):
+    from app.ui.link_panel import LinkPanel
+
+    _qapp()
+    urls = [
+        "https://x.test/movie.mp4",
+        "https://x.test/song.mp3",
+        "https://x.test/notes.pdf",
+        "https://x.test/page",
+    ]
+    panel = LinkPanel(urls)
+    assert panel.list.count() == 4
+    assert panel.selected_urls() == []  # nothing checked by default
+    panel._select_by_ext((".mp4", ".mp3"))
+    assert set(panel.selected_urls()) == {urls[0], urls[1]}
+    panel.filter_box.setText("notes")
+    assert panel.list.item(0).isHidden() and not panel.list.item(2).isHidden()
+
+
+def test_theme_apply_switches_palette():
+    from app.ui import theme
+
+    app = _qapp()
+    theme.remember_default(app)
+    theme.apply_theme(app, "dark")
+    dark_window = app.palette().color(app.palette().ColorRole.Window)
+    theme.apply_theme(app, "light")
+    light_window = app.palette().color(app.palette().ColorRole.Window)
+    assert dark_window != light_window
+    theme.apply_theme(app, "system")  # restores default without error
+
+
 def test_main_window_search_filter(db: Database, tmp_path: Path):
     _qapp()
     settings = Settings(db)

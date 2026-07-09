@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import shutil
 import threading
 from enum import Enum
@@ -114,6 +115,7 @@ class SegmentedDownload:
         retry_backoff: float = 0.25,
         checkpoint_interval: float = 0.3,
         limiter: RateLimiter | None = None,
+        job_limiter: RateLimiter | None = None,
     ) -> None:
         self.db = db
         self.job = job
@@ -122,6 +124,9 @@ class SegmentedDownload:
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
         self.limiter = limiter
+        # A second, per-download cap applied in series with the global one;
+        # the tighter of the two wins, which is exactly what we want.
+        self.job_limiter = job_limiter
         self._client = httpx.Client(
             follow_redirects=True,
             timeout=httpx.Timeout(30.0, connect=15.0),
@@ -277,7 +282,10 @@ class SegmentedDownload:
                                 f"segment {segment.index}: giving up after "
                                 f"{self.max_retries} retries ({exc})"
                             ) from exc
-                        delay = min(self.retry_backoff * 2 ** (attempts - 1), 3.0)
+                        # Exponential backoff with jitter: spreads out retries
+                        # so many segments failing at once don't hammer in sync.
+                        capped = min(self.retry_backoff * 2 ** (attempts - 1), 5.0)
+                        delay = capped * (0.5 + random.random() * 0.5)
                         log.debug(
                             "job %s segment %s: retry %s/%s in %.2fs (%s)",
                             self.job.id,
@@ -320,10 +328,15 @@ class SegmentedDownload:
                 self._write_at(handle, data, segment.start + segment.downloaded)
                 segment.downloaded += len(data)
                 self._checkpointer.report(segment.id, segment.downloaded)
-                if self.limiter is not None:
-                    self.limiter.throttle(len(data))
+                self._throttle(len(data))
         if segment.start + segment.downloaded <= end:
             raise _Retry("server closed the connection early")
+
+    def _throttle(self, amount: int) -> None:
+        if self.limiter is not None:
+            self.limiter.throttle(amount)
+        if self.job_limiter is not None:
+            self.job_limiter.throttle(amount)
 
     def _stream_full(self, handle: IO[bytes], segment: Segment) -> None:
         """Single-connection fallback for servers without range support.
@@ -344,8 +357,7 @@ class SegmentedDownload:
                 self._write_at(handle, chunk, segment.start + segment.downloaded)
                 segment.downloaded += len(chunk)
                 self._checkpointer.report(segment.id, segment.downloaded)
-                if self.limiter is not None:
-                    self.limiter.throttle(len(chunk))
+                self._throttle(len(chunk))
         if segment.end is None:
             # Stream ended cleanly: now we finally know the size.
             segment.end = segment.downloaded - 1

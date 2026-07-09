@@ -198,6 +198,26 @@ def test_speed_limiter_caps_throughput(server: MediaServer, db: Database, dest: 
     assert elapsed >= 0.8
 
 
+def test_per_download_limiter_caps_throughput(server: MediaServer, db: Database, dest: Path):
+    from app.core.ratelimit import RateLimiter
+
+    data = payload(2 * MB, 47)
+    url = server.add("/jobcap.bin", data)
+    job = db.create_job(url, str(dest), "jobcap.bin")
+
+    # The global limiter is unlimited; the per-download one does the capping.
+    job_limiter = RateLimiter(1 * MB)
+    started = time.monotonic()
+    status = SegmentedDownload(
+        db, job, connections=4, limiter=RateLimiter(0), job_limiter=job_limiter
+    ).run()
+    elapsed = time.monotonic() - started
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "jobcap.bin") == sha256(data)
+    assert elapsed >= 0.8
+
+
 def test_insufficient_disk_space_fails_cleanly(
     server: MediaServer, db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):

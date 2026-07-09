@@ -11,15 +11,19 @@ from typing import cast
 from PySide6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
+    QApplication,
     QInputDialog,
     QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
     QProgressBar,
+    QTabBar,
     QTableWidget,
     QTableWidgetItem,
     QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
 from app.core import naming
@@ -29,16 +33,26 @@ from app.core.models import JobKind, JobStatus
 from app.core.resolver import Resolution, Resolver
 from app.core.settings import Settings
 from app.engines.smart import option_for_label
+from app.ui import theme
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.format import human_bytes
 from app.ui.gallery_panel import GalleryPanel
 from app.ui.gif_dialog import GifDialog
+from app.ui.link_panel import LinkPanel
 from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
 from app.ui.settings_dialog import SettingsDialog
 
 _COLUMNS = ("Name", "Size", "Progress", "Speed", "Status")
 _VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
+
+#: Dashboard tabs: label -> the statuses it shows (empty tuple = everything).
+_TABS: tuple[tuple[str, tuple[JobStatus, ...]], ...] = (
+    ("All", ()),
+    ("Active", (JobStatus.DOWNLOADING, JobStatus.QUEUED, JobStatus.PAUSED)),
+    ("Completed", (JobStatus.COMPLETED,)),
+    ("Failed", (JobStatus.FAILED, JobStatus.CANCELLED)),
+)
 
 
 class _ResolveThread(QThread):
@@ -103,6 +117,11 @@ class MainWindow(QMainWindow):
         self.search_box.textChanged.connect(lambda _text: self._apply_filter())
         toolbar.addWidget(self.search_box)
 
+        self.tabs = QTabBar()
+        for label, _statuses in _TABS:
+            self.tabs.addTab(label)
+        self.tabs.currentChanged.connect(lambda _i: self._apply_filter())
+
         self.table = QTableWidget(0, len(_COLUMNS), self)
         self.table.setHorizontalHeaderLabels(_COLUMNS)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -116,7 +135,14 @@ class MainWindow(QMainWindow):
         self.table.setColumnWidth(2, 160)
         self.table.setColumnWidth(3, 110)
         self.table.setColumnWidth(4, 120)
-        self.setCentralWidget(self.table)
+
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+        container_layout.addWidget(self.tabs)
+        container_layout.addWidget(self.table)
+        self.setCentralWidget(container)
         self.statusBar().showMessage("Ready")
 
         self._row_job_ids: list[int] = []
@@ -136,6 +162,8 @@ class MainWindow(QMainWindow):
         for handoff in self.manager.db.claim_handoffs():
             if handoff.source == "gallery" and handoff.payload:
                 self._open_gallery(list(handoff.payload), handoff.page_title)
+            elif handoff.source == "links" and handoff.payload:
+                self._open_links(list(handoff.payload), handoff.page_title)
             else:
                 self.begin_add_url(
                     handoff.url,
@@ -153,6 +181,14 @@ class MainWindow(QMainWindow):
             self.manager.add_url(url)
         self.refresh()
 
+    def _open_links(self, urls: list[str], page_title: str | None) -> None:
+        """The extension collected a page's downloadable links - pick, then
+        queue them through the resolver like a batch import."""
+        panel = LinkPanel(urls, page_title=page_title, parent=self)
+        if panel.exec() != LinkPanel.DialogCode.Accepted:
+            return
+        self._run_batch(panel.selected_urls())
+
     # ------------------------------------------------------------- actions
 
     def _add_url(self) -> None:
@@ -165,7 +201,10 @@ class MainWindow(QMainWindow):
         dialog = BatchImportDialog(self)
         if dialog.exec() != BatchImportDialog.DialogCode.Accepted:
             return
-        urls = dialog.urls()
+        self._run_batch(dialog.urls())
+
+    def _run_batch(self, urls: list[str]) -> None:
+        """Queue many URLs through the resolver at sensible defaults."""
         if not urls:
             return
         thread = BatchImportThread(self.manager, self.settings, urls)
@@ -340,6 +379,9 @@ class MainWindow(QMainWindow):
     def _open_settings(self) -> None:
         if SettingsDialog(self.settings, self).exec() == SettingsDialog.DialogCode.Accepted:
             self.manager.reload_settings()
+            app = QApplication.instance()
+            if isinstance(app, QApplication):
+                theme.apply_theme(app, self.settings.theme)
 
     # -------------------------------------------------------- row actions
 
@@ -369,6 +411,17 @@ class MainWindow(QMainWindow):
             and file_path.suffix.lower() in _VIDEO_SUFFIXES
             and ffmpeg_path is not None
         )
+        limit_speed = menu.addAction("Limit speed…")
+        limit_speed.setEnabled(view.status is not JobStatus.COMPLETED)
+
+        pending = view.status in (JobStatus.QUEUED, JobStatus.PAUSED)
+        queue_menu = menu.addMenu("Move in queue")
+        queue_menu.setEnabled(pending)
+        move_top = queue_menu.addAction("To top")
+        move_up = queue_menu.addAction("Up")
+        move_down = queue_menu.addAction("Down")
+        move_bottom = queue_menu.addAction("To bottom")
+
         menu.addSeparator()
         remove = menu.addAction("Remove from list")
         remove.setEnabled(view.status is not JobStatus.DOWNLOADING)
@@ -383,9 +436,32 @@ class MainWindow(QMainWindow):
             self.begin_add_url(view.url)
         elif chosen is to_gif and ffmpeg_path is not None:
             GifDialog(ffmpeg_path, file_path, self).exec()
+        elif chosen is limit_speed:
+            self._limit_speed(view)
+        elif chosen is move_top:
+            self.manager.move_to_top(view.id)
+        elif chosen is move_up:
+            self.manager.move_up(view.id)
+        elif chosen is move_down:
+            self.manager.move_down(view.id)
+        elif chosen is move_bottom:
+            self.manager.move_to_bottom(view.id)
         elif chosen is remove:
             self.manager.remove(view.id)
             self.refresh()
+
+    def _limit_speed(self, view: JobView) -> None:
+        kbps, accepted = QInputDialog.getInt(
+            self,
+            "Limit speed",
+            f"Max speed for this download in KB/s\n(0 = no limit)  -  {view.display_name}",
+            value=view.speed_limit_kbps,
+            minValue=0,
+            maxValue=1_000_000,
+            step=256,
+        )
+        if accepted:
+            self.manager.set_job_speed(view.id, kbps)
 
     # ------------------------------------------------------------- refresh
 
@@ -401,13 +477,15 @@ class MainWindow(QMainWindow):
 
     def _apply_filter(self) -> None:
         needle = self.search_box.text().strip().lower()
+        tab_statuses = _TABS[self.tabs.currentIndex()][1] if self.tabs.currentIndex() >= 0 else ()
         for row in range(self.table.rowCount()):
             view = self._view_for_row(row)
-            visible = not needle or (
+            matches_search = not needle or (
                 view is not None
                 and (needle in view.display_name.lower() or needle in view.url.lower())
             )
-            self.table.setRowHidden(row, not visible)
+            matches_tab = not tab_statuses or (view is not None and view.status in tab_statuses)
+            self.table.setRowHidden(row, not (matches_search and matches_tab))
 
     def _rebuild_rows(self, views: list[JobView]) -> None:
         self.table.setRowCount(len(views))

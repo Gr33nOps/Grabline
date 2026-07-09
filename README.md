@@ -18,18 +18,21 @@ no telemetry, AGPL-3.0.
   watch a live progress pill in the corner. Right-click → *Download with
   Grabline* works on anything, everywhere.
 - **Serious downloading** - up to 16 parallel connections per file,
-  crash-proof checkpointed resume (survives kill -9 and power loss), queue
-  with pause/resume, global speed limit, auto-sorting into
-  Video/Music/Images/Documents/Archives.
+  crash-proof checkpointed resume (survives kill -9 and power loss), a queue
+  you can reorder and prioritize, pause/resume, per-download and global speed
+  limits with a nightly "full speed" schedule, automatic reconnect with
+  backoff, and auto-sorting into Video/Music/Images/Documents/Archives.
 - **The whole yt-dlp toolbox, no terminal** - curated quality list with size
   estimates, MP3/M4A extraction with tags and cover art, subtitles (manual or
   auto, .srt or embedded), clip trimming, playlists with checkbox selection.
 - **Streams** - HLS/DASH manifests are reassembled into clean .mp4 by FFmpeg,
   with master-playlist quality picking and automatic retry. The per-tab
   sniffer in the extension catches streams the page loads.
-- **Extras** - download every image on a page into a thumbnail grid, convert
-  any downloaded video to a GIF, import a whole list of links at once, grab
-  URLs from the clipboard, start minimized in the tray on login.
+- **Extras** - download every image or every link on a page (thumbnail grid
+  and a filterable link picker), convert any downloaded video to a GIF,
+  import a whole list of links at once, grab URLs from the clipboard, a
+  dark/light theme, dashboard tabs (Active / Completed / Failed), and start
+  minimized in the tray on login.
 
 ---
 

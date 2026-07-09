@@ -223,6 +223,34 @@ def test_gallery_is_capped(db: Database):
     assert len(db.claim_handoffs()[0].payload) == 300
 
 
+def test_links_creates_handoff_with_source_links(db: Database):
+    reply = handle_message(
+        db,
+        {
+            "type": "links",
+            "urls": [
+                "https://files.example/a.zip",
+                "not-a-url",  # dropped
+                "https://files.example/b.pdf",
+                "https://files.example/a.zip",  # duplicate dropped
+            ],
+            "pageUrl": "https://files.example/downloads",
+            "pageTitle": "Downloads",
+        },
+    )
+    assert reply["type"] == "queued"
+    assert reply["count"] == 2
+    handoff = db.claim_handoffs()[0]
+    assert handoff.source == "links"
+    assert handoff.payload == ("https://files.example/a.zip", "https://files.example/b.pdf")
+
+
+def test_links_with_nothing_downloadable_is_an_error(db: Database):
+    reply = handle_message(db, {"type": "links", "urls": ["ftp://x/y"]})
+    assert reply["type"] == "error"
+    assert db.claim_handoffs() == []
+
+
 # ---------------------------------------------------------------- serve
 
 

@@ -105,6 +105,74 @@ class Settings:
     def speed_limit_kbps(self, value: int) -> None:
         self._db.set_setting("speed_limit_kbps", str(max(0, value)))
 
+    # --- speed schedule: lift the limit during a nightly full-speed window ---
+
+    @property
+    def speed_schedule_enabled(self) -> bool:
+        """When on, the speed limit is lifted during the full-speed window."""
+        return self._get_bool("speed_schedule_enabled", False)
+
+    @speed_schedule_enabled.setter
+    def speed_schedule_enabled(self, value: bool) -> None:
+        self._set_bool("speed_schedule_enabled", value)
+
+    def _get_time(self, key: str, default: str) -> str:
+        raw = self._db.get_setting(key)
+        if raw and len(raw) == 5 and raw[2] == ":" and raw[:2].isdigit() and raw[3:].isdigit():
+            return raw
+        return default
+
+    @property
+    def speed_full_from(self) -> str:
+        """Start of the nightly full-speed window, "HH:MM"."""
+        return self._get_time("speed_full_from", "00:00")
+
+    @speed_full_from.setter
+    def speed_full_from(self, value: str) -> None:
+        self._db.set_setting("speed_full_from", value)
+
+    @property
+    def speed_full_to(self) -> str:
+        """End of the nightly full-speed window, "HH:MM"."""
+        return self._get_time("speed_full_to", "07:00")
+
+    @speed_full_to.setter
+    def speed_full_to(self, value: str) -> None:
+        self._db.set_setting("speed_full_to", value)
+
+    # --- automatic retry of failed downloads ---
+
+    @property
+    def auto_retry(self) -> bool:
+        """Retry a download that fails from a network hiccup, with backoff."""
+        return self._get_bool("auto_retry", True)
+
+    @auto_retry.setter
+    def auto_retry(self, value: bool) -> None:
+        self._set_bool("auto_retry", value)
+
+    @property
+    def auto_retry_max(self) -> int:
+        return max(0, min(20, self._get_int("auto_retry_max", 5)))
+
+    @auto_retry_max.setter
+    def auto_retry_max(self, value: int) -> None:
+        self._db.set_setting("auto_retry_max", str(max(0, value)))
+
+    # --- appearance ---
+
+    @property
+    def theme(self) -> str:
+        """UI theme: "system", "light", or "dark"."""
+        raw = self._db.get_setting("theme")
+        return raw if raw in ("system", "light", "dark") else "system"
+
+    @theme.setter
+    def theme(self, value: str) -> None:
+        if value not in ("system", "light", "dark"):
+            raise ValueError(f"unknown theme: {value}")
+        self._db.set_setting("theme", value)
+
     @property
     def playlist_batch_cap(self) -> int:
         """How many playlist entries get preselected (F1.7)."""

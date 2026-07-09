@@ -94,12 +94,17 @@ class HlsDownload:
             if status is not None:
                 return status
             if attempt < self.max_attempts:
+                delay = min(2.0 * 2 ** (attempt - 1), 15.0)
                 log.info(
-                    "hls job %s attempt %d failed (%s) - retrying",
+                    "hls job %s attempt %d failed (%s) - retrying in %.0fs",
                     self.job.id,
                     attempt,
                     self._failure,
+                    delay,
                 )
+                # Interruptible: a pause/cancel during the wait aborts the retry.
+                if self._stop_event.wait(delay):
+                    return self._settle_stopped(part)
         return self._finish_failed(self._failure)
 
     # ------------------------------------------------------------ one attempt

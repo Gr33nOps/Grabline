@@ -273,9 +273,32 @@
     if (pillRows.size) pillStack.style.display = "flex";
   }
 
+  // Every http(s) link on the page, most-downloadable first. The desktop
+  // app's picker filters and routes them; here we just gather and dedupe.
+  const MAX_LINKS = 300;
+  const FILE_LINK =
+    /\.(mp4|mkv|webm|mov|avi|m4v|mp3|m4a|flac|wav|ogg|opus|aac|zip|rar|7z|tar|gz|xz|iso|pdf|docx?|xlsx?|pptx?|epub|apk|exe|dmg|appimage|deb|rpm|jpe?g|png|gif|webp|svg)(\?|$)/i;
+
+  function collectLinks() {
+    const withExt = [];
+    const rest = [];
+    const seen = new Set();
+    for (const anchor of document.links) {
+      if (seen.size >= MAX_LINKS) break;
+      const href = anchor.href;
+      if (!href || !/^https?:/.test(href) || seen.has(href)) continue;
+      seen.add(href);
+      (FILE_LINK.test(href) ? withExt : rest).push(href);
+    }
+    // File-looking links first so the picker's default selection is useful.
+    return [...withExt, ...rest].slice(0, MAX_LINKS);
+  }
+
   api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.cmd === "collectImages") {
       sendResponse({ urls: collectImages() });
+    } else if (message?.cmd === "collectLinks") {
+      sendResponse({ urls: collectLinks() });
     } else if (message?.cmd === "progress" && Array.isArray(message.items)) {
       renderProgress(message.items);
     }

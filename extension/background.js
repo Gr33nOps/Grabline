@@ -9,6 +9,7 @@ const api = globalThis.browser ?? globalThis.chrome;
 const HOST_NAME = "dev.grabline.host";
 const MENU_ID = "grabline-download";
 const GALLERY_MENU_ID = "grabline-gallery";
+const LINKS_MENU_ID = "grabline-links";
 const MAX_ITEMS_PER_TAB = 30;
 
 // ---------------------------------------------------------------- native
@@ -156,15 +157,20 @@ api.runtime.onInstalled.addListener(() => {
     title: "Download all images with Grabline",
     contexts: ["page", "image"],
   });
+  api.contextMenus.create({
+    id: LINKS_MENU_ID,
+    title: "Download all links with Grabline",
+    contexts: ["page"],
+  });
 });
 
-// ---------------------------------------------------- gallery grab (F2.2)
+// -------------------------------------------- collect images / links grab
 
-async function sendGallery(tab) {
+async function sendCollection(tab, collectCmd, hostType) {
   if (!tab?.id) return;
   let reply = null;
   try {
-    reply = await api.tabs.sendMessage(tab.id, { cmd: "collectImages" });
+    reply = await api.tabs.sendMessage(tab.id, { cmd: collectCmd });
   } catch {
     return; // no content script on this page (browser UI, store pages …)
   }
@@ -172,7 +178,7 @@ async function sendGallery(tab) {
   if (!urls.length) return;
   try {
     await api.runtime.sendNativeMessage(HOST_NAME, {
-      type: "gallery",
+      type: hostType,
       urls,
       pageUrl: tab.url ?? null,
       pageTitle: tab.title ?? null,
@@ -185,7 +191,11 @@ async function sendGallery(tab) {
 
 api.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === GALLERY_MENU_ID) {
-    await sendGallery(tab);
+    await sendCollection(tab, "collectImages", "gallery");
+    return;
+  }
+  if (info.menuItemId === LINKS_MENU_ID) {
+    await sendCollection(tab, "collectLinks", "links");
     return;
   }
   if (info.menuItemId !== MENU_ID) return;
