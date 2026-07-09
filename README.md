@@ -59,7 +59,12 @@ no telemetry, AGPL-3.0.
 
 ### From source (any platform)
 
-Needs Python 3.12+ and git:
+Needs Python 3.12+ and git.
+
+> **Windows:** install Python from [python.org](https://www.python.org/downloads/),
+> **not** the Microsoft Store — the Store build is sandboxed and hides the
+> browser-pairing files from your browsers (the pairing tools will refuse to
+> run under it and tell you the same).
 
 ```bash
 git clone https://github.com/Gr33nOps/Grabline.git && cd Grabline

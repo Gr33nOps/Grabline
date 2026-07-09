@@ -103,6 +103,24 @@ def host_manifest(kind: str, launcher: Path) -> dict[str, object]:
     return manifest
 
 
+def is_store_python(executable: str | None = None) -> bool:
+    """The Microsoft Store build of Python runs sandboxed: its writes to
+    %LOCALAPPDATA% and HKCU are silently redirected into a private container,
+    so the manifests/launcher it 'writes' are invisible to browsers and
+    pairing can never work. Detect it and say so."""
+    exe = (executable or sys.executable).lower().replace("/", "\\")
+    return "\\windowsapps\\" in exe or "pythonsoftwarefoundation" in exe
+
+
+_STORE_PYTHON_MESSAGE = (
+    "this is the Microsoft Store build of Python — its sandbox hides every "
+    "file it writes from your browsers, so pairing cannot work. Install "
+    "Python from python.org, disable the Store aliases (Settings > Apps > "
+    "Advanced app settings > App execution aliases > turn off python.exe), "
+    "reinstall Grabline with it, and pair again."
+)
+
+
 def _host_command() -> tuple[str, str]:
     """(executable, arguments) that run the host from this installation.
 
@@ -265,6 +283,10 @@ def check(platform: str | None = None, home: Path | None = None) -> tuple[bool, 
     lines: list[str] = []
     healthy = True
 
+    if platform == "win32" and not getattr(sys, "frozen", False) and is_store_python():
+        lines.append(f"FAIL {_STORE_PYTHON_MESSAGE}")
+        healthy = False
+
     launcher = _launcher_path()
     if launcher.exists():
         lines.append(f"OK   launcher exists: {launcher}")
@@ -310,6 +332,9 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(lines))
         print("pairing looks healthy" if healthy else "pairing is broken — see FAIL lines above")
         return 0 if healthy else 1
+    if sys.platform == "win32" and not getattr(sys, "frozen", False) and is_store_python():
+        print(f"ERROR: {_STORE_PYTHON_MESSAGE}")
+        return 1
     written = install(dry_run=args.dry_run)
     for path in written:
         print(f"registered {path}")

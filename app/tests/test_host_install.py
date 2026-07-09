@@ -10,7 +10,13 @@ from pathlib import Path
 import pytest
 
 from app.native_host import CHROME_EXTENSION_IDS, FIREFOX_EXTENSION_IDS, HOST_NAME
-from app.native_host.install import browser_targets, check, install, write_launcher
+from app.native_host.install import (
+    browser_targets,
+    check,
+    install,
+    is_store_python,
+    write_launcher,
+)
 
 
 def test_linux_targets_cover_the_major_browsers(tmp_path: Path):
@@ -104,6 +110,19 @@ def test_check_flags_missing_pairing(tmp_path: Path, monkeypatch: pytest.MonkeyP
     healthy, lines = check(platform="linux", home=tmp_path)
     assert not healthy
     assert any(line.startswith("FAIL") for line in lines)
+
+
+def test_store_python_is_recognized():
+    """The Microsoft Store Python sandboxes file writes — pairing made with
+    it is invisible to browsers, so it must be detected and named."""
+    assert is_store_python(r"C:\Users\GREEN\AppData\Local\Microsoft\WindowsApps\python.exe")
+    assert is_store_python(
+        r"C:\Program Files\WindowsApps"
+        r"\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe"
+    )
+    assert not is_store_python(r"C:\Python313\python.exe")
+    assert not is_store_python(r"C:\Users\GREEN\proj\.venv\Scripts\python.exe")
+    assert not is_store_python("/usr/bin/python3")
 
 
 def test_dry_run_writes_nothing(tmp_path: Path, capsys):
