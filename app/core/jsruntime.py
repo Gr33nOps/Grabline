@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import zipfile
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
@@ -33,6 +34,11 @@ from app.core.ffmpeg import platform_key
 from app.core.ffmpeg_pins import PinnedArchive
 
 log = logging.getLogger(__name__)
+
+#: Serialize provisioning: concurrent YouTube jobs on first run must not each
+#: download Deno into the same dir (they'd corrupt each other / lock the file
+#: on Windows). The first installs; the rest wait and reuse it.
+_install_lock = threading.Lock()
 
 #: Pinned Deno release. Bump with scripts (hashes are the official per-target
 #: zip SHA-256). Deno >= 2.3.0 is what yt-dlp requires; this is well past that.
@@ -101,20 +107,25 @@ def ensure_deno(
     existing = find_deno(bin_dir)
     if existing:
         return Path(existing)
-    target_dir = bin_dir or paths.bin_dir()
-    archive = pin or deno_pin()
-    if archive is None:
-        raise DownloadError(
-            f"no pinned Deno build for this platform ({platform_key()}); install "
-            "Deno yourself and Grabline will pick it up from PATH"
-        )
-    target_dir.mkdir(parents=True, exist_ok=True)
-    with httpx.Client(
-        follow_redirects=True,
-        timeout=httpx.Timeout(60.0, connect=15.0),
-        proxy=proxy or None,
-    ) as client:
-        _install_archive(client, archive, target_dir, progress)
+    with _install_lock:
+        # Another job may have installed it while we waited for the lock.
+        existing = find_deno(bin_dir)
+        if existing:
+            return Path(existing)
+        target_dir = bin_dir or paths.bin_dir()
+        archive = pin or deno_pin()
+        if archive is None:
+            raise DownloadError(
+                f"no pinned Deno build for this platform ({platform_key()}); install "
+                "Deno yourself and Grabline will pick it up from PATH"
+            )
+        target_dir.mkdir(parents=True, exist_ok=True)
+        with httpx.Client(
+            follow_redirects=True,
+            timeout=httpx.Timeout(60.0, connect=15.0),
+            proxy=proxy or None,
+        ) as client:
+            _install_archive(client, archive, target_dir, progress)
     deno_path = managed_deno(target_dir)
     if not deno_path.is_file():
         raise DownloadError("the verified Deno archive did not contain a deno binary")

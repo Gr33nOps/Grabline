@@ -49,6 +49,30 @@ def test_ensure_deno_installs_and_verifies_hash(server: MediaServer, tmp_path: P
     assert path.is_file()
 
 
+def test_ensure_deno_installs_once_under_concurrency(server: MediaServer, tmp_path: Path):
+    # Several YouTube jobs starting together must not each download Deno into
+    # the same dir (Windows would lock the file); the lock installs it once.
+    import threading
+
+    archive = _zip({"deno": FAKE_DENO})
+    url = server.add("/deno.zip", archive)
+    pin = _pin_for(url, archive)
+    bin_dir = tmp_path / "bin"
+    results: list[Path] = []
+
+    def worker() -> None:
+        results.append(jsruntime.ensure_deno(bin_dir=bin_dir, pin=pin, verify_run=False))
+
+    threads = [threading.Thread(target=worker) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert all(r == jsruntime.managed_deno(bin_dir) for r in results)
+    assert server.request_count("/deno.zip") == 1  # downloaded exactly once
+
+
 def test_ensure_deno_rejects_a_bad_hash(server: MediaServer, tmp_path: Path):
     archive = _zip({"deno": FAKE_DENO})
     url = server.add("/deno.zip", archive)
