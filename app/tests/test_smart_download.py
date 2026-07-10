@@ -104,58 +104,86 @@ def test_smart_download_cancel_removes_partials(server: MediaServer, db: Databas
     assert leftovers == []
 
 
-def test_cookie_fallback_retries_without_cookies(
+def test_age_wall_auto_retries_with_login(
     db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    # Cookies force YouTube's JS-only web client; on a JS-less PC that yields
-    # "format not available". The engine must retry cookie-free and succeed.
+    # An age-restricted video: first cookie-free try hits the wall, so the
+    # engine must automatically retry with the browser login - no toggle.
     import yt_dlp
 
-    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=True)
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
     task = SmartDownload(db, job, ffmpeg_path=None)
     calls: list[bool] = []
 
-    def fake_download(*, drop_cookies: bool = False) -> dict[str, Any]:
-        calls.append(drop_cookies)
-        if not drop_cookies:
+    def fake_download(*, with_cookies: bool) -> dict[str, Any]:
+        calls.append(with_cookies)
+        if not with_cookies:
+            raise yt_dlp.utils.DownloadError("Sign in to confirm your age")
+        return {"title": "ok"}
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    assert task._download_smart() == {"title": "ok"}
+    assert calls == [False, True]  # cookie-free first, then with login
+
+
+def test_no_login_retry_when_no_browser_found(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import yt_dlp
+
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4")  # no session_browser set
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    monkeypatch.setattr("app.core.browser_setup.detect_cookie_browser", lambda *a, **k: None)
+
+    def fake_download(*, with_cookies: bool) -> dict[str, Any]:
+        raise yt_dlp.utils.DownloadError("Sign in to confirm your age")
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    with pytest.raises(yt_dlp.utils.DownloadError):
+        task._download_smart()  # nothing to log in with, so no retry
+
+
+def test_session_on_format_error_retries_without_cookies(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import yt_dlp
+
+    job = _smart_job(
+        db, "https://vimeo.com/1", dest, "v.mp4", use_session=True, session_browser="firefox"
+    )
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    calls: list[bool] = []
+
+    def fake_download(*, with_cookies: bool) -> dict[str, Any]:
+        calls.append(with_cookies)
+        if with_cookies:
             raise yt_dlp.utils.DownloadError("Requested format is not available")
         return {"title": "ok"}
 
     monkeypatch.setattr(task, "_download", fake_download)
-    assert task._download_with_cookie_fallback() == {"title": "ok"}
-    assert calls == [False, True]  # first with cookies, then without
+    assert task._download_smart() == {"title": "ok"}
+    assert calls == [True, False]  # opted into cookies first, then cookie-free
 
 
-def test_cookie_fallback_only_when_session_on(
-    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_unrelated_error_is_not_retried(db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch):
     import yt_dlp
 
-    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=False)
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
     task = SmartDownload(db, job, ffmpeg_path=None)
 
-    def fake_download(*, drop_cookies: bool = False) -> dict[str, Any]:
-        raise yt_dlp.utils.DownloadError("Requested format is not available")
+    def fake_download(*, with_cookies: bool) -> dict[str, Any]:
+        raise yt_dlp.utils.DownloadError("This live event will begin in 2 hours")
 
     monkeypatch.setattr(task, "_download", fake_download)
     with pytest.raises(yt_dlp.utils.DownloadError):
-        task._download_with_cookie_fallback()  # no cookies were used: no retry
+        task._download_smart()  # a scheduled premiere isn't a login wall
 
 
-def test_cookie_fallback_ignores_unrelated_errors(
-    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
-):
-    import yt_dlp
-
-    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=True)
+def test_build_options_includes_cookies_only_when_asked(db: Database, dest: Path):
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
     task = SmartDownload(db, job, ffmpeg_path=None)
-
-    def fake_download(*, drop_cookies: bool = False) -> dict[str, Any]:
-        raise yt_dlp.utils.DownloadError("Private video")
-
-    monkeypatch.setattr(task, "_download", fake_download)
-    with pytest.raises(yt_dlp.utils.DownloadError):
-        task._download_with_cookie_fallback()  # a private video won't be fixed cookie-free
+    assert "cookiesfrombrowser" not in task._build_options()
+    assert task._build_options(with_cookies=True)["cookiesfrombrowser"] == ("firefox",)
 
 
 def test_js_runtime_provisioned_for_youtube_or_session(

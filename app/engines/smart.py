@@ -38,9 +38,10 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
     ("Private video", "This video is private - its owner restricted access."),
     (
         "Sign in to confirm your age",
-        "This video is age-restricted. Grabline does not bypass age or login walls; "
-        "you can enable 'Use my browser session' in Settings to download it with "
-        "your own signed-in account.",
+        "This video is age-restricted. Grabline tried your browser login "
+        "automatically - to download it you need to be signed in to YouTube in "
+        "your browser (Firefox by default) on an age-verified account. Sign in "
+        "there, then try again.",
     ),
     (
         "confirm you're not a bot",
@@ -94,8 +95,29 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
 def _cookies_hide_formats(message: str) -> bool:
     """True when a yt-dlp failure is the 'cookies forced the JS-only web
     client, which returns no formats without a JS runtime' symptom - a retry
-    without cookies usually cures it. See _download_with_cookie_fallback."""
+    without cookies usually cures it. See _download_smart."""
     return "requested format is not available" in message.lower()
+
+
+#: yt-dlp failures a signed-in retry can get past (age gate, bot check,
+#: members-only, or an unauthenticated degraded/empty format set).
+_LOGIN_WALL_MARKERS = (
+    "sign in to confirm your age",
+    "confirm you're not a bot",
+    "sign in to confirm you're not a bot",
+    "members-only",
+    "join this channel",
+    "this video is available to",
+    "requested format is not available",
+    "sign in to",
+    "login required",
+)
+
+
+def _login_might_fix(message: str) -> bool:
+    """True when a browser login could get past this wall (see _download_smart)."""
+    lowered = message.lower()
+    return any(marker in lowered for marker in _LOGIN_WALL_MARKERS)
 
 
 def friendly_error(message: str) -> str:
@@ -457,7 +479,7 @@ class SmartDownload:
         self.db.set_job_status(self.job.id, JobStatus.DOWNLOADING)
         self._ensure_js_runtime()
         try:
-            info = self._download_with_cookie_fallback()
+            info = self._download_smart()
         except _StopRequested:
             return self._settle_stopped()
         except yt_dlp.utils.DownloadError as exc:
@@ -475,7 +497,7 @@ class SmartDownload:
 
     # ------------------------------------------------------------ internals
 
-    def _build_options(self) -> dict[str, Any]:
+    def _build_options(self, *, with_cookies: bool = False) -> dict[str, Any]:
         options = self.job.options
         base = Path(self.job.filename).stem or "download"
         outtmpl = str(Path(self.job.dest_dir) / f"{base}.%(ext)s")
@@ -538,8 +560,8 @@ class SmartDownload:
             start, end = float(trim[0] or 0), float(trim[1])
             ydl_opts["download_ranges"] = download_range_func(None, [(start, end)])
             ydl_opts["force_keyframes_at_cuts"] = True
-        if options.get("use_session"):
-            ydl_opts["cookiesfrombrowser"] = (options.get("session_browser") or "chrome",)
+        if with_cookies and (browser := self._cookie_browser()):
+            ydl_opts["cookiesfrombrowser"] = (browser,)
         if self.proxy:
             ydl_opts["proxy"] = self.proxy
         ydl_opts["postprocessors"] = postprocessors
@@ -578,33 +600,48 @@ class SmartDownload:
         except Exception:  # never let runtime setup crash the job
             log.exception("job %s: unexpected error provisioning a JS runtime", self.job.id)
 
-    def _download(self, *, drop_cookies: bool = False) -> dict[str, Any]:
+    def _cookie_browser(self) -> str | None:
+        """Which browser to read a login from: the one chosen in Settings, or
+        the auto-detected installed one. None if we can't find a browser."""
+        configured = self.job.options.get("session_browser")
+        if configured:
+            return str(configured)
+        from app.core.browser_setup import detect_cookie_browser
+
+        return detect_cookie_browser()
+
+    def _download(self, *, with_cookies: bool) -> dict[str, Any]:
         import yt_dlp
 
-        opts = self._build_options()
-        if drop_cookies:
-            opts.pop("cookiesfrombrowser", None)
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with yt_dlp.YoutubeDL(self._build_options(with_cookies=with_cookies)) as ydl:
             info = ydl.extract_info(self.job.url, download=True)
         if not isinstance(info, dict):
             raise DownloadError("No downloadable media was found at this address.")
         return info
 
-    def _download_with_cookie_fallback(self) -> dict[str, Any]:
-        """Download, but if browser cookies were used and the attempt fails
-        with 'format not available', retry once without them. Cookies make
-        yt-dlp prefer YouTube's JS-only 'web' client; on a machine with no
-        JavaScript runtime that returns no usable formats for videos that
-        download fine cookie-free, so dropping the cookies rescues them."""
+    def _download_smart(self) -> dict[str, Any]:
+        """Download with an automatic login retry so restricted videos work
+        without any toggle. First try is cookie-free (fast, private); if it
+        hits an age/login/bot wall and a browser login is available, retry
+        with that browser's cookies. If the user opted into session up front,
+        cookies go first and a stray format error retries cookie-free (the
+        JS-client trap)."""
         import yt_dlp
 
+        prefer_cookies = bool(self.job.options.get("use_session"))
+        browser = self._cookie_browser()
         try:
-            return self._download()
+            return self._download(with_cookies=prefer_cookies and browser is not None)
         except yt_dlp.utils.DownloadError as exc:
-            used_cookies = bool(self.job.options.get("use_session"))
-            if used_cookies and not self._stop_event.is_set() and _cookies_hide_formats(str(exc)):
-                log.info("job %s: format error with cookies; retrying without", self.job.id)
-                return self._download(drop_cookies=True)
+            if self._stop_event.is_set():
+                raise
+            message = str(exc)
+            if not prefer_cookies and browser and _login_might_fix(message):
+                log.info("job %s: auth wall - retrying with %s login", self.job.id, browser)
+                return self._download(with_cookies=True)
+            if prefer_cookies and _cookies_hide_formats(message):
+                log.info("job %s: format error with cookies - retrying without", self.job.id)
+                return self._download(with_cookies=False)
             raise
 
     def _hook(self, event: dict[str, Any]) -> None:
