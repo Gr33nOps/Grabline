@@ -26,11 +26,6 @@ def test_launch_command_runs_this_installation():
     assert launcher.launch_command(minimized=True)[-1] == "--minimized"
 
 
-def test_launch_command_frozen(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    assert launcher.launch_command() == [sys.executable]
-
-
 def test_menu_entry_written_with_icon(tmp_path: Path):
     entry = launcher.install_menu_entry(icon_png=b"\x89PNG-ish")
     assert entry is not None and entry.exists()

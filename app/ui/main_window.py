@@ -10,7 +10,16 @@ from functools import partial
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import (
+    QItemSelection,
+    QItemSelectionModel,
+    QPoint,
+    Qt,
+    QThread,
+    QTimer,
+    QUrl,
+    Signal,
+)
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -147,6 +156,7 @@ class MainWindow(QMainWindow):
             ("Pause", self._pause_selected),
             ("Resume", self._resume_selected),
             ("Cancel", self._cancel_selected),
+            ("Remove", self._remove_selected),
             ("Open Folder", self._open_folder),
             ("Settings", self._open_settings),
         ):
@@ -170,7 +180,9 @@ class MainWindow(QMainWindow):
         self.table = QTableWidget(0, len(_COLUMNS), self)
         self.table.setHorizontalHeaderLabels(_COLUMNS)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        # Extended: Ctrl/Shift-click to pick many rows and pause/remove them
+        # together (clean up finished downloads in one go).
+        self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_row_menu)
@@ -195,7 +207,7 @@ class MainWindow(QMainWindow):
         self._last_views: dict[int, JobView] = {}
         self._rates: dict[int, tuple[float, int]] = {}
         self._speed_ema: dict[int, float] = {}
-        self._selected_id: int | None = None
+        self._selected_ids: set[int] = set()
         self.clipboard_suppressor: Callable[[str], None] | None = None
         self._prev_status: dict[int, JobStatus] = {}
         self._was_active = False
@@ -232,6 +244,10 @@ class MainWindow(QMainWindow):
             action = QAction(label, self)
             action.triggered.connect(handler)
             file_menu.addAction(action)
+        file_menu.addSeparator()
+        clear_done = QAction("Clear Completed", self)
+        clear_done.triggered.connect(self._clear_completed)
+        file_menu.addAction(clear_done)
         file_menu.addSeparator()
         setup = QAction("Browser Setup…", self)
         setup.triggered.connect(self.open_setup)
@@ -533,35 +549,51 @@ class MainWindow(QMainWindow):
             self.manager.add_url(resolution.url, filename=filename)
         self.refresh()
 
-    def _selected_job_id(self) -> int | None:
-        row = self.table.currentRow()
-        if 0 <= row < len(self._row_job_ids):
-            return self._row_job_ids[row]
+    def _selected_job_ids(self) -> list[int]:
+        rows = self.table.selectionModel().selectedRows()
+        ids = [self._row_job_ids[i.row()] for i in rows if 0 <= i.row() < len(self._row_job_ids)]
         # Selection can be lost when the table rebuilds mid-download; fall back
-        # to the id we remembered so the toolbar buttons keep working.
-        if self._selected_id in self._row_job_ids:
-            return self._selected_id
-        return None
+        # to the ids we remembered so the toolbar buttons keep working.
+        if not ids:
+            ids = [job_id for job_id in self._selected_ids if job_id in self._row_job_ids]
+        return ids
 
     def _on_selection_changed(self) -> None:
-        row = self.table.currentRow()
-        if 0 <= row < len(self._row_job_ids):
-            self._selected_id = self._row_job_ids[row]
+        rows = self.table.selectionModel().selectedRows()
+        self._selected_ids = {
+            self._row_job_ids[i.row()] for i in rows if 0 <= i.row() < len(self._row_job_ids)
+        }
 
     def _pause_selected(self) -> None:
-        job_id = self._selected_job_id()
-        if job_id is not None:
+        for job_id in self._selected_job_ids():
             self.manager.pause(job_id)
 
     def _resume_selected(self) -> None:
-        job_id = self._selected_job_id()
-        if job_id is not None:
+        for job_id in self._selected_job_ids():
             self.manager.resume(job_id)
 
     def _cancel_selected(self) -> None:
-        job_id = self._selected_job_id()
-        if job_id is not None:
+        for job_id in self._selected_job_ids():
             self.manager.cancel(job_id)
+
+    def _remove_selected(self) -> None:
+        """Remove the selected downloads from the list (files stay on disk).
+        A download that is still running is skipped - cancel it first."""
+        removed = 0
+        for job_id in self._selected_job_ids():
+            view = self._last_views.get(job_id)
+            if view is not None and view.status is JobStatus.DOWNLOADING:
+                continue
+            self.manager.remove(job_id)
+            removed += 1
+        if removed:
+            self.refresh()
+
+    def _clear_completed(self) -> None:
+        for view in list(self._last_views.values()):
+            if view.status is JobStatus.COMPLETED:
+                self.manager.remove(view.id)
+        self.refresh()
 
     def _open_folder(self) -> None:
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.settings.download_dir)))
@@ -732,10 +764,21 @@ class MainWindow(QMainWindow):
         self._apply_filter()
 
     def _restore_selection(self) -> None:
-        """Re-select the remembered job after a rebuild so the toolbar keeps
-        acting on what the user picked."""
-        if self._selected_id in self._row_job_ids:
-            self.table.selectRow(self._row_job_ids.index(self._selected_id))
+        """Re-select the remembered jobs after a rebuild so the toolbar keeps
+        acting on what the user picked (multi-selection preserved)."""
+        present = [job_id for job_id in self._selected_ids if job_id in self._row_job_ids]
+        if not present:
+            return
+        model = self.table.model()
+        selection = QItemSelection()
+        for job_id in present:
+            row = self._row_job_ids.index(job_id)
+            selection.select(model.index(row, 0), model.index(row, len(_COLUMNS) - 1))
+        self.table.blockSignals(True)
+        self.table.selectionModel().select(
+            selection, QItemSelectionModel.SelectionFlag.ClearAndSelect
+        )
+        self.table.blockSignals(False)
 
     def _update_speed_line(self, views: list[JobView]) -> None:
         total = sum(v.downloaded for v in views if v.status is JobStatus.DOWNLOADING)

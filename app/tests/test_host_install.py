@@ -86,12 +86,10 @@ def test_launcher_script_end_to_end(tmp_path: Path):
     assert reply["type"] == "pong"
 
 
-def test_frozen_launcher_reruns_the_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    launcher = write_launcher(tmp_path / "bin")
-    content = launcher.read_text()
-    assert "--native-host" in content
-    assert "PYTHONPATH" not in content  # a frozen binary needs no import path
+def test_launcher_pins_pythonpath(tmp_path: Path):
+    content = write_launcher(tmp_path / "bin").read_text()
+    assert "-m app.native_host" in content
+    assert "PYTHONPATH" in content  # so the browser's own cwd can't hide the package
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="posix launcher script")

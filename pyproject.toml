@@ -24,9 +24,6 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
 ]
-package = [
-    "pyinstaller>=6.10",
-]
 
 [project.gui-scripts]
 grabline = "app.__main__:main"

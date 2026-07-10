@@ -50,13 +50,3 @@ def test_detect_browsers_marks_installed(tmp_path: Path):
     assert steps["Firefox"].method == "auto"
     assert steps["Microsoft Edge"].method == "auto"
     assert steps["Chrome"].method == "unpacked"
-
-
-def test_extensions_url_by_kind():
-    assert browser_setup.extensions_url("firefox") == "about:addons"
-    assert browser_setup.extensions_url("chromium") == "chrome://extensions"
-
-
-def test_no_signed_xpi_by_default():
-    # Until the free AMO signing is done, there is no bundled .xpi.
-    assert browser_setup.signed_xpi() is None

@@ -144,6 +144,34 @@ def test_link_panel_selection_and_filter(db: Database):
     assert panel.list.item(0).isHidden() and not panel.list.item(2).isHidden()
 
 
+def test_remove_selected_and_clear_completed(db: Database, tmp_path: Path):
+    from app.core.models import JobStatus
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        ids = [
+            db.create_job(f"http://x/{i}.bin", str(tmp_path), f"{i}.bin").id for i in range(3)
+        ]
+        db.set_job_status(ids[2], JobStatus.COMPLETED)
+        window = MainWindow(manager, settings)
+        window.refresh()
+        assert window.table.rowCount() == 3
+
+        # Remove two at once via the remembered multi-selection.
+        window._selected_ids = {ids[0], ids[1]}
+        window._remove_selected()
+        assert {v.id for v in manager.snapshot()} == {ids[2]}
+
+        # Clear the completed one.
+        window._clear_completed()
+        assert manager.snapshot() == []
+    finally:
+        manager.shutdown()
+
+
 def test_main_window_has_file_menu(db: Database, tmp_path: Path):
     _qapp()
     settings = Settings(db)

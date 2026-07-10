@@ -59,35 +59,9 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 
 ## Install
 
-### Windows
+Grabline runs from source. You need **Python 3.12+** and **git**.
 
-1. Download **`Grabline-Setup-windows.exe`** from the
-   [Releases page](https://github.com/Gr33nOps/Grabline/releases) and run it.
-   It installs per-user (no admin), registers the browser connector, and adds
-   shortcuts. If SmartScreen objects (the build is not code-signed), click
-   *More info → Run anyway*. (Prefer no installer? The plain
-   `Grabline-windows.zip` still works - unzip and run `Grabline.exe`.)
-2. On first launch a **Browser Setup** wizard walks you through connecting
-   your browser (one click for the app side; see the notes below per browser).
-
-### macOS
-
-1. Download `Grabline-macos.zip` from the
-   [Releases page](https://github.com/Gr33nOps/Grabline/releases) and unzip.
-2. Move `Grabline.app` to Applications. First launch: **right-click → Open**
-   (the build is not notarized), then confirm.
-
-### Linux
-
-1. Download `Grabline-linux.tar.gz` from the
-   [Releases page](https://github.com/Gr33nOps/Grabline/releases), extract,
-   and run `./Grabline`.
-2. The first run adds Grabline to your application menu - launch it from
-   there (or pin it to the dock) from then on.
-
-### From source - Linux / macOS
-
-Needs Python 3.12+ and git:
+### Linux / macOS
 
 ```bash
 git clone https://github.com/Gr33nOps/Grabline.git && cd Grabline
@@ -96,7 +70,14 @@ pip install -e .
 python -m app
 ```
 
-### From source - Windows
+The first launch adds Grabline to your application menu, so after that you can
+start it from the app grid/dock (no terminal).
+
+Debian/Ubuntu only: if the window doesn't appear
+(*"Could not load the Qt platform plugin xcb"*), install Qt's system
+libraries first: `sudo apt install libxcb-cursor0 libegl1 libxkbcommon0`.
+
+### Windows
 
 Install Python from [python.org](https://www.python.org/downloads/) -
 **not** the Microsoft Store (the Store build is sandboxed and hides the
@@ -113,10 +94,6 @@ py -m venv .venv
 The `.venv\Scripts\python -m …` style needs no activation and is immune to
 other Pythons on your PATH (MSYS2, Store aliases, and friends). If you have
 several Pythons, pick one explicitly: `py -3.12 -m venv .venv`.
-
-Debian/Ubuntu only: if the window doesn't appear
-(*"Could not load the Qt platform plugin xcb"*), install Qt's system
-libraries first: `sudo apt install libxcb-cursor0 libegl1 libxkbcommon0`.
 
 ---
 
@@ -206,12 +183,11 @@ app/
 ├── native_host/ Native Messaging host + per-browser registration
 └── tests/      failure-simulating media server, engine tests, kill -9 milestone
 extension/      Grabline Connect (MV3, Chrome + Firefox, readable in a sitting)
-packaging/      PyInstaller spec; installers built on release tags
 scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(200 tests, including an 8-connection download killed with SIGKILL and
+(230+ tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.

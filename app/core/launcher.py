@@ -3,9 +3,8 @@
 Everything here is per-user (no root) and idempotent. Linux gets the full
 treatment - an XDG desktop entry written on first run so Grabline shows up in
 the app grid/dock, and an autostart entry behind the Settings toggle. Windows
-autostart uses the HKCU Run key; macOS a LaunchAgent plist. Both the dev venv
-and the frozen (PyInstaller) binary work: entries launch whatever is running
-right now.
+autostart uses the HKCU Run key; macOS a LaunchAgent plist. Entries launch the
+current interpreter (``python -m app``), so a moved checkout heals itself.
 
 Qt-free: the caller supplies rendered icon bytes.
 """
@@ -26,8 +25,7 @@ _MAC_LABEL = "dev.grabline.desktop"
 
 def launch_command(*, minimized: bool = False) -> list[str]:
     """How to start this very installation of Grabline."""
-    frozen = getattr(sys, "frozen", False)
-    command = [sys.executable] if frozen else [sys.executable, "-m", "app"]
+    command = [sys.executable, "-m", "app"]
     if minimized:
         command.append("--minimized")
     return command
