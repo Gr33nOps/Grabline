@@ -9,7 +9,10 @@ from app.core.settings import Settings
 from app.db.database import Database
 
 
-def test_defaults(db: Database):
+def test_defaults(db: Database, monkeypatch: pytest.MonkeyPatch):
+    # No browser installed -> the session-browser default falls back to chrome;
+    # when one is present it's detected instead (see test_session_browser_*).
+    monkeypatch.setattr("app.core.browser_setup.detect_cookie_browser", lambda: None)
     settings = Settings(db)
     assert settings.download_dir == default_download_dir()
     assert settings.categories_enabled is True
@@ -19,6 +22,18 @@ def test_defaults(db: Database):
     assert settings.max_concurrent == 3
     assert settings.connections == 8
     assert settings.ffmpeg_path is None
+
+
+def test_session_browser_defaults_to_detected(db: Database, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("app.core.browser_setup.detect_cookie_browser", lambda: "firefox")
+    assert Settings(db).session_browser == "firefox"  # never explicitly set
+
+
+def test_session_browser_honours_explicit_choice(db: Database, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("app.core.browser_setup.detect_cookie_browser", lambda: "firefox")
+    settings = Settings(db)
+    settings.session_browser = "edge"  # user overrides detection
+    assert settings.session_browser == "edge"
 
 
 def test_roundtrip(db: Database, tmp_path: Path):

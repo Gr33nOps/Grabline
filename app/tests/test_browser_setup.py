@@ -50,3 +50,20 @@ def test_detect_browsers_marks_installed(tmp_path: Path):
     assert steps["Firefox"].method == "auto"
     assert steps["Microsoft Edge"].method == "auto"
     assert steps["Chrome"].method == "unpacked"
+
+
+def test_detect_cookie_browser_prefers_firefox_over_edge(tmp_path: Path):
+    home = tmp_path / "home"
+    (home / ".mozilla" / "firefox").mkdir(parents=True)
+    (home / ".config" / "microsoft-edge").mkdir(parents=True)  # present but unused
+    assert browser_setup.detect_cookie_browser("linux", home=home) == "firefox"
+
+
+def test_detect_cookie_browser_falls_back_to_installed(tmp_path: Path):
+    home = tmp_path / "home"
+    (home / ".config" / "google-chrome").mkdir(parents=True)
+    assert browser_setup.detect_cookie_browser("linux", home=home) == "chrome"
+
+
+def test_detect_cookie_browser_none_when_nothing_present(tmp_path: Path):
+    assert browser_setup.detect_cookie_browser("linux", home=tmp_path / "empty") is None

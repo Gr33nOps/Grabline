@@ -176,6 +176,10 @@ def test_friendly_errors():
     geo_message = "The uploader has not made this video available in your country"
     assert "region-blocked" in friendly_error(geo_message)
     assert "cookie" in friendly_error("Could not copy Chrome cookie database").lower()
+    fmt = friendly_error("ERROR: [youtube] abc: Requested format is not available")
+    assert "browser session" in fmt.lower()
+    bot = friendly_error("ERROR: [youtube] abc: Sign in to confirm you're not a bot")
+    assert "browser session" in bot.lower()
     browse_404 = (
         "ERROR: [soundcloud:user] discover: Unable to download JSON metadata: "
         "HTTP Error 404: Not Found"

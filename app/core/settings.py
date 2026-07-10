@@ -74,7 +74,14 @@ class Settings:
     @property
     def session_browser(self) -> str:
         raw = self._db.get_setting("session_browser")
-        return raw if raw in SESSION_BROWSERS else "chrome"
+        if raw in SESSION_BROWSERS:
+            return raw
+        # Never explicitly chosen: point at the browser that's actually set up
+        # here (Firefox before preinstalled-but-unused Edge) rather than a
+        # hardcoded "chrome" the person may not even have.
+        from app.core.browser_setup import detect_cookie_browser
+
+        return detect_cookie_browser() or "chrome"
 
     @session_browser.setter
     def session_browser(self, value: str) -> None:

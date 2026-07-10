@@ -7,6 +7,7 @@ and reports which browsers are installed.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from dataclasses import dataclass
@@ -77,6 +78,62 @@ def _chromium_root(name: str, home: Path, platform: str) -> Path | None:
         },
     }
     return roots.get(platform, {}).get(name)
+
+
+def _cookie_roots(platform: str, home: Path) -> dict[str, Path]:
+    """Browser key (as yt-dlp / SESSION_BROWSERS names it) -> the profile
+    root that only exists once that browser has actually been set up here."""
+    if platform == "win32":
+        local = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
+        roaming = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
+        return {
+            "firefox": roaming / "Mozilla" / "Firefox" / "Profiles",
+            "chrome": local / "Google" / "Chrome" / "User Data",
+            "brave": local / "BraveSoftware" / "Brave-Browser" / "User Data",
+            "chromium": local / "Chromium" / "User Data",
+            "opera": roaming / "Opera Software" / "Opera Stable",
+            "edge": local / "Microsoft" / "Edge" / "User Data",
+        }
+    if platform == "darwin":
+        support = home / "Library" / "Application Support"
+        return {
+            "firefox": support / "Firefox" / "Profiles",
+            "chrome": support / "Google" / "Chrome",
+            "brave": support / "BraveSoftware" / "Brave-Browser",
+            "chromium": support / "Chromium",
+            "opera": support / "com.operasoftware.Opera",
+            "edge": support / "Microsoft Edge",
+        }
+    config = home / ".config"
+    return {
+        "firefox": home / ".mozilla" / "firefox",
+        "chrome": config / "google-chrome",
+        "brave": config / "BraveSoftware" / "Brave-Browser",
+        "chromium": config / "chromium",
+        "opera": config / "opera",
+        "edge": config / "microsoft-edge",
+    }
+
+
+#: Preference when several browsers are present. Firefox first: an existing
+#: Firefox profile is a strong signal the person actually uses it, whereas
+#: Edge ships with Windows and is usually present but unused.
+_COOKIE_BROWSER_PREFERENCE = ("firefox", "chrome", "brave", "chromium", "opera", "edge")
+
+
+def detect_cookie_browser(platform: str | None = None, home: Path | None = None) -> str | None:
+    """The best browser to read a login session from: the first, by active-use
+    preference, whose profile directory exists. None when nothing is found, so
+    callers keep their own fallback. Used to seed the 'Browser session' choice
+    so it points at the browser the person is signed into, not a hardcoded one."""
+    platform = platform or sys.platform
+    home = home or Path.home()
+    roots = _cookie_roots(platform, home)
+    for key in _COOKIE_BROWSER_PREFERENCE:
+        root = roots.get(key)
+        if root is not None and root.exists():
+            return key
+    return None
 
 
 def detect_browsers(platform: str | None = None, home: Path | None = None) -> list[BrowserStep]:

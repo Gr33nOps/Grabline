@@ -42,6 +42,19 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
         "your own signed-in account.",
     ),
     (
+        "confirm you're not a bot",
+        "YouTube is asking to confirm you're not a bot - it does this to IPs it "
+        "doesn't recognise. Turn on 'Let Grabline use my browser session' in "
+        "Settings and pick the browser you watch YouTube in, then try again.",
+    ),
+    (
+        "Requested format is not available",
+        "YouTube returned no downloadable formats, which almost always means it "
+        "wants you signed in. Turn on 'Let Grabline use my browser session' in "
+        "Settings and pick the browser you're signed into YouTube with, then "
+        "try again.",
+    ),
+    (
         "available in your country",
         "This video is region-blocked and not available from your location.",
     ),
