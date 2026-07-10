@@ -17,11 +17,20 @@ hiddenimports = collect_submodules("yt_dlp")
 _cffi_datas, _cffi_binaries, _cffi_hidden = collect_all("curl_cffi")
 hiddenimports += _cffi_hidden
 
+# Ship the browser extension inside the binary so the Setup wizard can stage
+# it to a stable path and "Load unpacked" always has a valid folder.
+_extension_dir = os.path.join(SPECPATH, "..", "extension")
+_datas = list(_cffi_datas) + [(_extension_dir, "extension")]
+# A signed Firefox add-on, if one has been placed here (free AMO signing).
+_xpi = os.path.join(SPECPATH, "..", "dist", "grabline.xpi")
+if os.path.isfile(_xpi):
+    _datas.append((_xpi, "."))
+
 a = Analysis(
     [os.path.join(SPECPATH, "launch.py")],
     pathex=[os.path.join(SPECPATH, "..")],
     binaries=_cffi_binaries,
-    datas=_cffi_datas,
+    datas=_datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],

@@ -137,6 +137,11 @@ def main() -> int:
     window.job_completed.connect(on_job_completed)
     window.queue_drained.connect(on_queue_drained)
 
+    if not settings.setup_seen and not minimized:
+        # First launch: show the Browser Setup wizard once.
+        settings.setup_seen = True
+        QTimer.singleShot(400, window.open_setup)
+
     if settings.check_updates:
         # A few seconds after launch so it never delays the window appearing.
         QTimer.singleShot(3000, lambda: window.check_for_updates(quiet=True))

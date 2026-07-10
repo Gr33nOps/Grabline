@@ -157,6 +157,19 @@ def test_main_window_has_file_menu(db: Database, tmp_path: Path):
         manager.shutdown()
 
 
+def test_setup_dialog_builds_and_stages_extension(tmp_path, monkeypatch):
+    from app.ui.setup_dialog import SetupDialog
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    _qapp()
+    dialog = SetupDialog()
+    # The wizard stages the extension and shows its stable path.
+    from app.core import browser_setup
+
+    assert dialog._folder_edit.text() == str(browser_setup.stable_extension_dir())
+    assert (browser_setup.stable_extension_dir() / "manifest.json").is_file()
+
+
 def test_theme_apply_switches_palette():
     from app.ui import theme
 

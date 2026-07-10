@@ -48,6 +48,26 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
 
+      # A one-click Windows installer: installs the app, registers the native
+      # host and stages the extension, adds shortcuts. Per-user, no admin.
+      - name: Build Windows installer (Inno Setup)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          if (-not $v) { $v = "1.0.1" }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" packaging\grabline.iss
+          Get-ChildItem dist\Grabline-Setup-*.exe | Select-Object -First 1 |
+            Copy-Item -Destination Grabline-Setup-windows.exe
+
+      - name: Upload Windows installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Grabline-Setup-windows.exe
+          path: Grabline-Setup-windows.exe
+
   release:
     needs: build
     runs-on: ubuntu-latest

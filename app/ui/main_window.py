@@ -55,6 +55,7 @@ from app.ui.link_panel import LinkPanel
 from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
 from app.ui.settings_dialog import SettingsDialog
+from app.ui.setup_dialog import SetupDialog
 from app.ui.sparkline import Sparkline
 
 _COLUMNS = ("Name", "Size", "Progress", "Speed", "Status")
@@ -232,6 +233,9 @@ class MainWindow(QMainWindow):
             action.triggered.connect(handler)
             file_menu.addAction(action)
         file_menu.addSeparator()
+        setup = QAction("Browser Setup…", self)
+        setup.triggered.connect(self.open_setup)
+        file_menu.addAction(setup)
         updates = QAction("Check for Updates…", self)
         updates.triggered.connect(lambda: self.check_for_updates(quiet=False))
         file_menu.addAction(updates)
@@ -244,6 +248,9 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.quit()
+
+    def open_setup(self) -> None:
+        SetupDialog(self).exec()
 
     def _poll_handoffs(self) -> None:
         for handoff in self.manager.db.claim_handoffs():

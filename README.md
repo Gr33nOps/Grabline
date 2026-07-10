@@ -61,10 +61,14 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 
 ### Windows
 
-1. Download the latest `Grabline-windows.zip` from the
-   [Releases page](https://github.com/Gr33nOps/Grabline/releases) and unzip.
-2. Run `Grabline.exe`. If SmartScreen objects (the build is not code-signed),
-   click *More info → Run anyway*.
+1. Download **`Grabline-Setup-windows.exe`** from the
+   [Releases page](https://github.com/Gr33nOps/Grabline/releases) and run it.
+   It installs per-user (no admin), registers the browser connector, and adds
+   shortcuts. If SmartScreen objects (the build is not code-signed), click
+   *More info → Run anyway*. (Prefer no installer? The plain
+   `Grabline-windows.zip` still works - unzip and run `Grabline.exe`.)
+2. On first launch a **Browser Setup** wizard walks you through connecting
+   your browser (one click for the app side; see the notes below per browser).
 
 ### macOS
 
@@ -116,24 +120,24 @@ libraries first: `sudo apt install libxcb-cursor0 libegl1 libxkbcommon0`.
 
 ---
 
-## First-time setup (two minutes)
+## First-time setup
 
-1. **FFmpeg** - open **Settings**. If FFmpeg shows *Not found*, click
-   **Install FFmpeg**: Grabline downloads an official build over HTTPS and
-   verifies it against pinned SHA-256 checksums before installing. (Needed
-   for MP3 extraction, stream saving, and merging high qualities.)
-2. **Pair your browsers** - in **Settings**, click **Pair browsers**. This
-   registers Grabline with Chrome, Chromium, Edge, Brave, and Firefox in one
-   click (per-user, no admin rights).
-3. **Install the extension (Grabline Connect):**
-   - **Chrome / Edge / Brave:** open `chrome://extensions`, enable
-     *Developer mode*, click *Load unpacked*, and select the `extension/`
-     folder. This install is permanent.
-   - **Firefox:** see [extension/README.md](extension/README.md) - the
-     short version: get the zip signed for free on addons.mozilla.org
-     (unlisted) and install the resulting `.xpi` permanently, or use
-     `about:debugging` → *Load Temporary Add-on* for a quick session-only try.
-4. Click the Grabline toolbar icon - the popup should say **connected**.
+The **Browser Setup** wizard opens on first launch (also under **File →
+Browser Setup**) and does the browser side for you: it pairs the native host
+with one click and stages the extension at a stable folder it shows you.
+
+- **Chrome / Edge / Brave:** click *Open folder* in the wizard, then in
+  `chrome://extensions` enable *Developer mode* → *Load unpacked* → pick that
+  folder. Permanent. (Fully automatic install needs the Chrome Web Store; the
+  free path is this one manual step.)
+- **Firefox:** `about:debugging` → *Load Temporary Add-on* → `manifest.json`
+  in that folder. A permanent install comes with the free
+  [AMO signing](extension/README.md).
+
+Then, for MP3/streams, open **Settings** and click **Install FFmpeg** if it
+shows *Not found* (Grabline fetches an official build over HTTPS and verifies
+a pinned SHA-256). Click the Grabline toolbar icon in the browser - the popup
+should say **connected**.
 
 Optional but recommended: in **Settings**, tick **"Start Grabline when I log
 in"** - it will sit minimized in the tray, always ready for the browser,

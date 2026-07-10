@@ -180,6 +180,15 @@ class Settings:
     def check_updates(self, value: bool) -> None:
         self._set_bool("check_updates", value)
 
+    @property
+    def setup_seen(self) -> bool:
+        """Whether the first-run Browser Setup wizard has been shown."""
+        return self._get_bool("setup_seen", False)
+
+    @setup_seen.setter
+    def setup_seen(self, value: bool) -> None:
+        self._set_bool("setup_seen", value)
+
     # --- automatic retry of failed downloads ---
 
     @property
