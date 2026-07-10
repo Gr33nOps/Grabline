@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.core import naming
 from app.core.errors import DownloadError
@@ -544,17 +545,33 @@ class SmartDownload:
         ydl_opts["postprocessors"] = postprocessors
         return ydl_opts
 
+    def _needs_js_runtime(self) -> bool:
+        """YouTube now expects a JavaScript runtime to solve its 'n challenge';
+        without one, formats can come back throttled/unusable ("Requested
+        format is not available") - so provision it for every YouTube job, not
+        only signed-in ones. Other sites only need it when a browser session
+        pushes yt-dlp onto a JS-dependent client."""
+        if self.job.options.get("use_session"):
+            return True
+        host = (urlsplit(self.job.url).hostname or "").lower()
+        return host in ("youtu.be", "youtube.com", "youtube-nocookie.com") or host.endswith(
+            (".youtube.com", ".youtube-nocookie.com")
+        )
+
     def _ensure_js_runtime(self) -> None:
-        """When the user has opted into their browser session, make sure a JS
-        runtime is available: signing in pushes yt-dlp onto YouTube's web
-        client, whose 'n challenge' can only be solved with one. Deno is
-        fetched once (then reused); a failure here is non-fatal - the download
-        still tries, and the cookie-free fallback covers plain videos."""
-        if not self.job.options.get("use_session"):
+        """Make a JS runtime (Deno) available before yt-dlp runs, fetched once
+        and reused. Non-fatal: on failure the download still tries, and the
+        cookie-free fallback covers plain videos."""
+        if not self._needs_js_runtime():
             return
         from app.core import jsruntime
 
         try:
+            if jsruntime.find_deno() is None:
+                log.info(
+                    "job %s: fetching the JavaScript runtime YouTube needs (Deno, one-time ~40 MB)",
+                    self.job.id,
+                )
             self._deno_path = str(jsruntime.ensure_deno(proxy=self.proxy))
         except DownloadError as exc:
             log.warning("job %s: could not provision a JS runtime: %s", self.job.id, exc)

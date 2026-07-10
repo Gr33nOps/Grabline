@@ -158,7 +158,7 @@ def test_cookie_fallback_ignores_unrelated_errors(
         task._download_with_cookie_fallback()  # a private video won't be fixed cookie-free
 
 
-def test_js_runtime_provisioned_only_with_session(
+def test_js_runtime_provisioned_for_youtube_or_session(
     db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):
     from app.core import jsruntime
@@ -170,16 +170,27 @@ def test_js_runtime_provisioned_only_with_session(
         return Path("/x/deno")
 
     monkeypatch.setattr(jsruntime, "ensure_deno", fake_ensure)
+    monkeypatch.setattr(jsruntime, "find_deno", lambda *a, **k: None)
 
-    off = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
-    off._ensure_js_runtime()
-    assert calls == [] and off._deno_path is None  # session off: no runtime fetched
-
-    on = SmartDownload(
-        db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=True), ffmpeg_path=None
+    # Non-YouTube, no session: a JS runtime isn't needed, so it's not fetched.
+    other = SmartDownload(
+        db, _smart_job(db, "https://soundcloud.com/a/b", dest, "a.mp3"), ffmpeg_path=None
     )
-    on._ensure_js_runtime()
-    assert calls == ["deno"] and on._deno_path == "/x/deno"
+    other._ensure_js_runtime()
+    assert calls == [] and other._deno_path is None
+
+    # YouTube, no session: fetched anyway - YouTube needs it for the n challenge.
+    yt = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
+    yt._ensure_js_runtime()
+    assert calls == ["deno"] and yt._deno_path == "/x/deno"
+
+    # Non-YouTube but signed in: cookies push a JS-dependent client, so fetched.
+    calls.clear()
+    sess = SmartDownload(
+        db, _smart_job(db, "https://vimeo.com/1", dest, "v.mp4", use_session=True), ffmpeg_path=None
+    )
+    sess._ensure_js_runtime()
+    assert calls == ["deno"]
 
 
 def test_js_runtime_failure_is_non_fatal(db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch):
