@@ -23,15 +23,27 @@ _ENTRY_ID = "grabline"
 _MAC_LABEL = "dev.grabline.desktop"
 
 
-def launch_command(*, minimized: bool = False) -> list[str]:
-    """How to start this very installation of Grabline."""
-    command = [sys.executable, "-m", "app"]
+def launch_command(*, minimized: bool = False, windowless: bool = False) -> list[str]:
+    """How to start this very installation of Grabline.
+
+    ``windowless`` swaps python.exe for pythonw.exe on Windows so a login-time
+    autostart doesn't flash a console window (no-op elsewhere)."""
+    executable = sys.executable
+    if windowless and sys.platform == "win32":  # pragma: no cover - windows-only
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        if pythonw.exists():
+            executable = str(pythonw)
+    command = [executable, "-m", "app"]
     if minimized:
         command.append("--minimized")
     return command
 
 
 def _exec_line(command: list[str]) -> str:
+    """A shell command line for the platform. Windows Run keys and .bat use
+    double quotes; POSIX shells (and freedesktop Exec) use shlex quoting."""
+    if sys.platform == "win32":  # pragma: no cover - windows-only
+        return " ".join(f'"{part}"' if " " in part else part for part in command)
     return " ".join(shlex.quote(part) for part in command)
 
 
@@ -121,7 +133,7 @@ def autostart_enabled() -> bool:
 
 def set_autostart(enabled: bool) -> None:
     """Start Grabline (minimized to the tray) on login - or stop doing so."""
-    command = launch_command(minimized=True)
+    command = launch_command(minimized=True, windowless=True)
     if sys.platform == "win32":
         import winreg
 
