@@ -41,13 +41,22 @@
 
   globalThis.grablineSiteButton = ({ resolve, qualityPanel = false }) => {
     let enabled = true;
-    api.storage.local.get("disabledSites").then(({ disabledSites = [] }) => {
-      if (disabledSites.includes(location.hostname)) enabled = false;
-    });
+    let hoverGlobal = true; // master switch (popup): hover buttons off everywhere
+    api.storage.local.get(["disabledSites", "hoverButtons"]).then(
+      ({ disabledSites = [], hoverButtons = true }) => {
+        if (disabledSites.includes(location.hostname)) enabled = false;
+        hoverGlobal = hoverButtons;
+      },
+    );
     api.storage.onChanged.addListener((changes, area) => {
-      if (area === "local" && changes.disabledSites) {
+      if (area !== "local") return;
+      if (changes.disabledSites) {
         enabled = !(changes.disabledSites.newValue ?? []).includes(location.hostname);
         if (!enabled) hide();
+      }
+      if (changes.hoverButtons) {
+        hoverGlobal = changes.hoverButtons.newValue !== false;
+        if (!hoverGlobal) hide();
       }
     });
 
@@ -210,7 +219,7 @@
     document.addEventListener(
       "mouseover",
       (event) => {
-        if (!enabled || panelOpen || !(event.target instanceof Element)) return;
+        if (!enabled || !hoverGlobal || panelOpen || !(event.target instanceof Element)) return;
         let hit = null;
         try {
           hit = resolve(event.target);

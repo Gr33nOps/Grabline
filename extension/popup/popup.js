@@ -85,12 +85,26 @@ async function renderMediaList(tab) {
 
 async function wireToggles(tab) {
   const intercept = document.getElementById("toggle-intercept");
+  const hover = document.getElementById("toggle-hover");
   const overlay = document.getElementById("toggle-overlay");
   const images = document.getElementById("toggle-images");
   const { intercept: interceptOn = false } = await api.storage.local.get("intercept");
   intercept.checked = interceptOn;
   intercept.addEventListener("change", () => {
     void api.storage.local.set({ intercept: intercept.checked });
+  });
+
+  // Master switch for all hover buttons; when off, the per-site and images
+  // toggles below it have nothing to act on, so grey them out.
+  const { hoverButtons = true } = await api.storage.local.get("hoverButtons");
+  hover.checked = hoverButtons;
+  const reflectHover = () => {
+    overlay.disabled = images.disabled = !hover.checked;
+  };
+  reflectHover();
+  hover.addEventListener("change", () => {
+    void api.storage.local.set({ hoverButtons: hover.checked });
+    reflectHover();
   });
 
   const { overlayImages = false } = await api.storage.local.get("overlayImages");

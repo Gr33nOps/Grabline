@@ -33,6 +33,9 @@
   }
 
   let enabled = true;
+  // Master switch (popup): turn hover buttons off everywhere. Right-click and
+  // the toolbar popup still work.
+  let hoverGlobal = true;
   // Images are opt-in (popup toggle): a ⬇ on every profile picture and chat
   // thumbnail is noise, and right-click + the gallery grabber cover images.
   let imagesEnabled = false;
@@ -42,11 +45,12 @@
   // Which corner of the hovered element the ⬇ sits in (popup setting).
   let corner = "top-right";
 
-  api.storage.local.get(["disabledSites", "overlayImages", "buttonCorner"]).then(
-    ({ disabledSites = [], overlayImages = false, buttonCorner = "top-right" }) => {
+  api.storage.local.get(["disabledSites", "overlayImages", "buttonCorner", "hoverButtons"]).then(
+    ({ disabledSites = [], overlayImages = false, buttonCorner = "top-right", hoverButtons = true }) => {
       if (disabledSites.includes(location.hostname)) enabled = false;
       imagesEnabled = overlayImages;
       corner = buttonCorner;
+      hoverGlobal = hoverButtons;
     },
   );
   api.storage.onChanged.addListener((changes, area) => {
@@ -54,6 +58,10 @@
     if (changes.disabledSites) {
       enabled = !(changes.disabledSites.newValue ?? []).includes(location.hostname);
       if (!enabled) hideButton();
+    }
+    if (changes.hoverButtons) {
+      hoverGlobal = changes.hoverButtons.newValue !== false;
+      if (!hoverGlobal) hideButton();
     }
     if (changes.overlayImages) {
       imagesEnabled = Boolean(changes.overlayImages.newValue);
@@ -308,7 +316,7 @@
   document.addEventListener(
     "mouseover",
     (event) => {
-      if (!enabled) return;
+      if (!enabled || !hoverGlobal) return;
       const element = event.target;
       if (element === button) return;
       if (eligible(element)) {
