@@ -158,6 +158,52 @@ def test_cookie_fallback_ignores_unrelated_errors(
         task._download_with_cookie_fallback()  # a private video won't be fixed cookie-free
 
 
+def test_js_runtime_provisioned_only_with_session(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from app.core import jsruntime
+
+    calls: list[str] = []
+
+    def fake_ensure(**_kw: object) -> Path:
+        calls.append("deno")
+        return Path("/x/deno")
+
+    monkeypatch.setattr(jsruntime, "ensure_deno", fake_ensure)
+
+    off = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
+    off._ensure_js_runtime()
+    assert calls == [] and off._deno_path is None  # session off: no runtime fetched
+
+    on = SmartDownload(
+        db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=True), ffmpeg_path=None
+    )
+    on._ensure_js_runtime()
+    assert calls == ["deno"] and on._deno_path == "/x/deno"
+
+
+def test_js_runtime_failure_is_non_fatal(db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch):
+    from app.core import jsruntime
+    from app.core.errors import DownloadError
+
+    def boom(**_kw):
+        raise DownloadError("no network")
+
+    monkeypatch.setattr(jsruntime, "ensure_deno", boom)
+    task = SmartDownload(
+        db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=True), ffmpeg_path=None
+    )
+    task._ensure_js_runtime()  # must not raise
+    assert task._deno_path is None
+
+
+def test_deno_path_is_passed_to_ytdlp(db: Database, dest: Path):
+    task = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
+    assert "js_runtimes" not in task._build_options()
+    task._deno_path = "/opt/deno"
+    assert task._build_options()["js_runtimes"] == {"deno": {"path": "/opt/deno"}}
+
+
 def test_audio_extraction_requires_ffmpeg(server: MediaServer, db: Database, dest: Path):
     url = server.add("/a.mp4", payload(100_000, 58), content_type="video/mp4")
     job = _smart_job(db, url, dest, "a.mp3", audio_format="mp3")

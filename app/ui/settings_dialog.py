@@ -186,7 +186,10 @@ class SettingsDialog(QDialog):
         consent = QLabel(
             "Uses your real login - only for your own content. Heavy automated "
             "downloading can get accounts flagged. Cookies are read per download, "
-            "kept in memory only, and never stored or sent anywhere else."
+            "kept in memory only, and never stored or sent anywhere else. Needed "
+            "for age- or login-restricted videos; the first such download fetches "
+            "a small JavaScript runtime (Deno, ~40 MB, verified) that YouTube now "
+            "requires."
         )
         consent.setWordWrap(True)
         consent.setStyleSheet("color: gray; font-size: 11px;")

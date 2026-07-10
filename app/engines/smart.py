@@ -433,6 +433,7 @@ class SmartDownload:
         self._live = _LiveProgress()
         self._last_persist = 0.0
         self._known_files: set[str] = set()
+        self._deno_path: str | None = None  # JS runtime, provisioned on session use
 
     # ------------------------------------------------------------ control
 
@@ -453,6 +454,7 @@ class SmartDownload:
         import yt_dlp
 
         self.db.set_job_status(self.job.id, JobStatus.DOWNLOADING)
+        self._ensure_js_runtime()
         try:
             info = self._download_with_cookie_fallback()
         except _StopRequested:
@@ -491,6 +493,10 @@ class SmartDownload:
         }
         if self.ffmpeg_path:
             ydl_opts["ffmpeg_location"] = self.ffmpeg_path
+        if self._deno_path:
+            # Hand yt-dlp our managed Deno so it can solve YouTube's n challenge
+            # for the signed-in web client (see _ensure_js_runtime).
+            ydl_opts["js_runtimes"] = {"deno": {"path": self._deno_path}}
         if self.ratelimit:
             ydl_opts["ratelimit"] = float(self.ratelimit)
         # Postprocessing (audio extraction, tags, subtitle conversion) needs
@@ -537,6 +543,23 @@ class SmartDownload:
             ydl_opts["proxy"] = self.proxy
         ydl_opts["postprocessors"] = postprocessors
         return ydl_opts
+
+    def _ensure_js_runtime(self) -> None:
+        """When the user has opted into their browser session, make sure a JS
+        runtime is available: signing in pushes yt-dlp onto YouTube's web
+        client, whose 'n challenge' can only be solved with one. Deno is
+        fetched once (then reused); a failure here is non-fatal - the download
+        still tries, and the cookie-free fallback covers plain videos."""
+        if not self.job.options.get("use_session"):
+            return
+        from app.core import jsruntime
+
+        try:
+            self._deno_path = str(jsruntime.ensure_deno(proxy=self.proxy))
+        except DownloadError as exc:
+            log.warning("job %s: could not provision a JS runtime: %s", self.job.id, exc)
+        except Exception:  # never let runtime setup crash the job
+            log.exception("job %s: unexpected error provisioning a JS runtime", self.job.id)
 
     def _download(self, *, drop_cookies: bool = False) -> dict[str, Any]:
         import yt_dlp
