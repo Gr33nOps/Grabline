@@ -108,6 +108,7 @@ class Resolver:
         use_session: bool = False,
         session_browser: str = "chrome",
         proxy: str | None = None,
+        headers: dict[str, str] | None = None,
     ) -> Resolution:
         url = url.strip()
         scheme = urlsplit(url).scheme.lower()
@@ -149,7 +150,7 @@ class Resolver:
                 timeout=httpx.Timeout(20.0, connect=10.0),
                 proxy=proxy or None,
             ) as client:
-                result = probe(client, url)
+                result = probe(client, url, headers)
         except DownloadError as exc:
             return Resolution(
                 url=url,

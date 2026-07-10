@@ -44,6 +44,9 @@ class Resource:
     cut_from: int = 1
     cut_until: int = 0
     redirect_to: str | None = None
+    # Refuse (403) unless the request carries every one of these headers with
+    # the exact value - lets a test model a login-gated file.
+    required_headers: dict[str, str] | None = None
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -65,6 +68,15 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         request_number = owner.bump(path)
+        owner.record_headers(path, {k.lower(): v for k, v in self.headers.items()})
+
+        if resource.required_headers:
+            missing = any(
+                self.headers.get(name) != value for name, value in resource.required_headers.items()
+            )
+            if missing:
+                self.send_error(403)
+                return
 
         if resource.redirect_to is not None:
             self.send_response(302)
@@ -152,6 +164,7 @@ class MediaServer:
         self.resources: dict[str, Resource] = {}
         self._counts: Counter[str] = Counter()
         self._served: Counter[str] = Counter()
+        self._received: dict[str, dict[str, str]] = {}
         self._lock = threading.Lock()
         self._httpd: _Server | None = None
         self._thread: threading.Thread | None = None
@@ -191,6 +204,15 @@ class MediaServer:
     def add_served(self, path: str, count: int) -> None:
         with self._lock:
             self._served[path] += count
+
+    def record_headers(self, path: str, headers: dict[str, str]) -> None:
+        with self._lock:
+            self._received[path] = headers
+
+    def received_headers(self, path: str) -> dict[str, str]:
+        """The (lower-cased) headers of the most recent request for ``path``."""
+        with self._lock:
+            return dict(self._received.get(path, {}))
 
     def request_count(self, path: str) -> int:
         with self._lock:

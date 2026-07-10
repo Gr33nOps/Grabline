@@ -88,7 +88,7 @@ async function wireToggles(tab) {
   const hover = document.getElementById("toggle-hover");
   const overlay = document.getElementById("toggle-overlay");
   const images = document.getElementById("toggle-images");
-  const { intercept: interceptOn = false } = await api.storage.local.get("intercept");
+  const { intercept: interceptOn = true } = await api.storage.local.get("intercept");
   intercept.checked = interceptOn;
   intercept.addEventListener("change", () => {
     void api.storage.local.set({ intercept: intercept.checked });

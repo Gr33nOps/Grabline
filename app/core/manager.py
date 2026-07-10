@@ -287,10 +287,14 @@ class DownloadManager:
         url: str,
         dest_dir: str | Path | None = None,
         filename: str | None = None,
+        *,
+        headers: Mapping[str, str] | None = None,
     ) -> Job:
-        """Queue a direct (segmented) download."""
+        """Queue a direct (segmented) download. ``headers`` (cookies/referer
+        from the browser) let a login-gated file download too."""
         name = naming.sanitize_filename(filename) if filename else naming.filename_from_url(url)
-        job = self.db.create_job(url, self._dest_for(name, dest_dir), name)
+        options: dict[str, Any] = {"http_headers": dict(headers)} if headers else {}
+        job = self.db.create_job(url, self._dest_for(name, dest_dir), name, options=options)
         self._kick()
         return job
 
@@ -519,6 +523,7 @@ class DownloadManager:
             limiter=self.limiter,
             job_limiter=self._job_limiter_for(job),
             proxy=proxy,
+            headers=job.options.get("http_headers") or None,
         )
 
     def _kick(self) -> None:

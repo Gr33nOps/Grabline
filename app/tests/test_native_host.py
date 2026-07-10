@@ -96,6 +96,57 @@ def test_download_creates_handoff(db: Database):
     assert handoff.source == "extension"
 
 
+# ----------------------------------------- cookie pass-through (headers)
+
+
+def test_download_carries_cookie_referer_and_user_agent(db: Database):
+    handle_message(
+        db,
+        {
+            "type": "download",
+            "url": "https://example.com/gated.zip",
+            "cookie": "session=abc; theme=dark",
+            "referer": "https://example.com/account",
+            "userAgent": "Mozilla/5.0 (Grabline)",
+        },
+    )
+    headers = db.claim_handoffs()[0].headers
+    assert headers["Cookie"] == "session=abc; theme=dark"
+    assert headers["Referer"] == "https://example.com/account"
+    assert headers["User-Agent"] == "Mozilla/5.0 (Grabline)"
+
+
+def test_cookie_header_strips_crlf_injection(db: Database):
+    handle_message(
+        db,
+        {
+            "type": "download",
+            "url": "https://example.com/f.bin",
+            "cookie": "session=abc\r\nX-Evil: 1",
+        },
+    )
+    assert db.claim_handoffs()[0].headers["Cookie"] == "session=abcX-Evil: 1"
+
+
+def test_bad_header_values_are_dropped(db: Database):
+    handle_message(
+        db,
+        {
+            "type": "download",
+            "url": "https://example.com/f.bin",
+            "cookie": 42,  # not a string
+            "referer": "not-a-url",  # not http(s)
+            "userAgent": "   ",  # blank after strip
+        },
+    )
+    assert db.claim_handoffs()[0].headers == {}
+
+
+def test_download_without_headers_stores_empty(db: Database):
+    handle_message(db, {"type": "download", "url": "https://example.com/f.bin"})
+    assert db.claim_handoffs()[0].headers == {}
+
+
 def test_download_rejects_bad_urls(db: Database):
     for url in ("ftp://host/f", "javascript:alert(1)", "", None, 42, "x" * 9000):
         reply = handle_message(db, {"type": "download", "url": url})

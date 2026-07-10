@@ -62,6 +62,9 @@ class Handoff:
     payload: tuple[str, ...] = ()
     #: A quality label chosen in the in-page panel (F1.3), e.g. "1080p".
     quality: str | None = None
+    #: Extra HTTP headers (Cookie / Referer / User-Agent) so a login-gated
+    #: download the browser could reach can be fetched by the app too.
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

@@ -48,6 +48,23 @@ def test_probe_reads_content_disposition(server: MediaServer, client: httpx.Clie
     assert result.filename == "My Video.mp4"
 
 
+def test_probe_forwards_extra_headers(server: MediaServer, client: httpx.Client):
+    url = server.add(
+        "/gated.bin",
+        payload(4_000, 7),
+        required_headers={"Cookie": "session=abc"},
+    )
+    result = probe(client, url, {"Cookie": "session=abc"})
+    assert result.total_size == 4_000
+    assert server.received_headers("/gated.bin")["cookie"] == "session=abc"
+
+
+def test_probe_without_cookie_is_refused(server: MediaServer, client: httpx.Client):
+    url = server.add("/gated.bin", payload(4_000, 8), required_headers={"Cookie": "session=abc"})
+    with pytest.raises(DownloadError, match="HTTP 403"):
+        probe(client, url)
+
+
 def test_probe_http_error_is_friendly(server: MediaServer, client: httpx.Client):
     with pytest.raises(DownloadError, match="HTTP 404"):
         probe(client, server.url("/missing"))

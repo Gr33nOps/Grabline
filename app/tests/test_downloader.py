@@ -47,6 +47,28 @@ def test_segmented_download_completes_with_checksum(server: MediaServer, db: Dat
     assert server.request_count("/big.bin") >= 9  # probe + 8+ range requests
 
 
+def test_gated_download_passes_cookie_through(server: MediaServer, db: Database, dest: Path):
+    data = payload(2 * MB, 21)
+    url = server.add("/gated.bin", data, required_headers={"Cookie": "session=abc"})
+    job = db.create_job(url, str(dest), "gated.bin")
+
+    status = SegmentedDownload(db, job, connections=8, headers={"Cookie": "session=abc"}).run()
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "gated.bin") == sha256(data)
+    assert server.received_headers("/gated.bin")["cookie"] == "session=abc"
+
+
+def test_gated_download_without_cookie_fails(server: MediaServer, db: Database, dest: Path):
+    url = server.add("/gated.bin", payload(2 * MB, 22), required_headers={"Cookie": "session=abc"})
+    job = db.create_job(url, str(dest), "gated.bin")
+
+    status = SegmentedDownload(db, job, connections=8).run()
+
+    assert status is JobStatus.FAILED
+    assert not (dest / "gated.bin").exists()
+
+
 def test_single_connection_fallback_when_no_ranges(server: MediaServer, db: Database, dest: Path):
     data = payload(1 * MB, 11)
     url = server.add("/legacy.bin", data, supports_ranges=False)

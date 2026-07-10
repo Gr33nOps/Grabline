@@ -39,9 +39,12 @@ def _filename_from_disposition(header: str | None) -> str | None:
     return message.get_filename()
 
 
-def probe(client: httpx.Client, url: str) -> ProbeResult:
+def probe(
+    client: httpx.Client, url: str, extra_headers: dict[str, str] | None = None
+) -> ProbeResult:
+    headers = {"Range": "bytes=0-0", **(extra_headers or {})}
     try:
-        with client.stream("GET", url, headers={"Range": "bytes=0-0"}) as response:
+        with client.stream("GET", url, headers=headers) as response:
             status = response.status_code
             if status == 206:
                 resumable = True

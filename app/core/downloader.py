@@ -117,6 +117,7 @@ class SegmentedDownload:
         limiter: RateLimiter | None = None,
         job_limiter: RateLimiter | None = None,
         proxy: str | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.db = db
         self.job = job
@@ -133,6 +134,7 @@ class SegmentedDownload:
             timeout=httpx.Timeout(30.0, connect=15.0),
             limits=httpx.Limits(max_connections=connections + 2),
             proxy=proxy or None,
+            headers=headers or None,
         )
         self._checkpointer = _Checkpointer(db, checkpoint_interval)
         self._segments: list[Segment] = []

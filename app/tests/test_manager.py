@@ -39,6 +39,22 @@ def test_queue_respects_concurrency_and_completes_all(
         assert sha256_file(dest / f"f{i}.bin") == sha256(datas[i])
 
 
+def test_add_url_threads_headers_into_a_gated_download(
+    server: MediaServer, db: Database, dest: Path
+):
+    data = payload(400_000, 41)
+    url = server.add("/gated.bin", data, required_headers={"Cookie": "session=abc"})
+    manager = DownloadManager(db, max_concurrent=1)
+    try:
+        job = manager.add_url(url, dest, headers={"Cookie": "session=abc"})
+        assert job.options["http_headers"] == {"Cookie": "session=abc"}
+        wait_for(lambda: _status(db, job.id) is JobStatus.COMPLETED, timeout=60)
+    finally:
+        manager.shutdown()
+    assert sha256_file(dest / "gated.bin") == sha256(data)
+    assert server.received_headers("/gated.bin")["cookie"] == "session=abc"
+
+
 def test_manager_pause_and_resume(server: MediaServer, db: Database, dest: Path):
     data = payload(4 * MB, 9)
     url = server.add("/s.bin", data, chunk_size=32 * 1024, delay_per_chunk=0.03)

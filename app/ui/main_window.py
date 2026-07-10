@@ -80,9 +80,9 @@ _TABS: tuple[tuple[str, tuple[JobStatus, ...]], ...] = (
 
 
 class _ResolveThread(QThread):
-    # Resolution, page_title (str | None), quality label (str | None, F1.3),
-    # fallback URLs (tuple[str, ...] - sniffed streams to try if this one dies)
-    resolved = Signal(object, object, object, object)
+    # Resolution, page_title (str|None), quality label (str|None, F1.3),
+    # fallback URLs (tuple[str,...]), extra HTTP headers (dict[str,str])
+    resolved = Signal(object, object, object, object, object)
 
     def __init__(
         self,
@@ -92,6 +92,7 @@ class _ResolveThread(QThread):
         page_title: str | None,
         quality: str | None = None,
         fallbacks: tuple[str, ...] = (),
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__()
         self._resolver = resolver
@@ -99,6 +100,7 @@ class _ResolveThread(QThread):
         self._page_title = page_title
         self._quality = quality
         self._fallbacks = fallbacks
+        self._headers = headers or {}
         self._use_session = settings.use_browser_session
         self._browser = settings.session_browser
         self._proxy = settings.proxy
@@ -109,8 +111,11 @@ class _ResolveThread(QThread):
             use_session=self._use_session,
             session_browser=self._browser,
             proxy=self._proxy,
+            headers=self._headers or None,
         )
-        self.resolved.emit(resolution, self._page_title, self._quality, self._fallbacks)
+        self.resolved.emit(
+            resolution, self._page_title, self._quality, self._fallbacks, self._headers
+        )
 
 
 class _FileOpThread(QThread):
@@ -280,6 +285,7 @@ class MainWindow(QMainWindow):
                     page_title=handoff.page_title,
                     quality=handoff.quality,
                     fallbacks=handoff.payload,
+                    headers=handoff.headers,
                 )
 
     def _open_gallery(self, urls: list[str], page_title: str | None) -> None:
@@ -430,13 +436,17 @@ class MainWindow(QMainWindow):
         page_title: str | None = None,
         quality: str | None = None,
         fallbacks: tuple[str, ...] = (),
+        headers: dict[str, str] | None = None,
     ) -> None:
         """Entry point shared by the toolbar, tray, clipboard, and extension.
         A ``quality`` label (F1.3 in-page panel) skips the quality dialog;
         ``fallbacks`` are sniffed stream URLs tried in order if ``url``
-        resolves to nothing (blob players on streaming sites)."""
+        resolves to nothing (blob players on streaming sites); ``headers``
+        are browser cookies/referer passed through for login-gated files."""
         self.statusBar().showMessage(f"Analyzing {url} …")
-        thread = _ResolveThread(self.resolver, url, self.settings, page_title, quality, fallbacks)
+        thread = _ResolveThread(
+            self.resolver, url, self.settings, page_title, quality, fallbacks, headers
+        )
         thread.resolved.connect(self._on_resolved)
         thread.finished.connect(lambda: self._resolve_threads.remove(thread))
         self._resolve_threads.append(thread)
@@ -448,6 +458,7 @@ class MainWindow(QMainWindow):
         page_title: str | None,
         quality: str | None = None,
         fallbacks: tuple[str, ...] = (),
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.statusBar().showMessage("Ready")
         if resolution.kind is None:
@@ -459,6 +470,7 @@ class MainWindow(QMainWindow):
                     page_title=page_title,
                     quality=quality,
                     fallbacks=tuple(fallbacks[1:]),
+                    headers=headers,
                 )
                 return
             QMessageBox.information(self, "Grabline", resolution.message or "No media found.")
@@ -546,7 +558,7 @@ class MainWindow(QMainWindow):
                     probe.content_type if probe is not None else None,
                 )
             )
-            self.manager.add_url(resolution.url, filename=filename)
+            self.manager.add_url(resolution.url, filename=filename, headers=headers or None)
         self.refresh()
 
     def _selected_job_ids(self) -> list[int]:

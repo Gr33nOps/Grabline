@@ -16,13 +16,14 @@ from app.native_host.protocol import ProtocolError, read_message, write_message
 
 log = logging.getLogger(__name__)
 
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 4
 
 _MAX_URL_LENGTH = 8192
 _MAX_TEXT_LENGTH = 512
 _MAX_GALLERY_ITEMS = 300
 _MAX_STATUS_ITEMS = 50
 _MAX_FALLBACK_ITEMS = 5
+_MAX_HEADER_LENGTH = 8192  # cookies can be long; cap so a bad value can't flood
 
 #: Labels the in-page quality panel (F1.3) may pin; anything else is dropped
 #: and the app shows its own panel instead.
@@ -46,6 +47,31 @@ def _valid_url(value: object) -> str | None:
     if parts.scheme not in ("http", "https") or not parts.netloc:
         return None
     return value
+
+
+def _clean_header(value: object) -> str | None:
+    """A single-line header value, length-capped. Newlines are stripped so a
+    crafted cookie can't inject extra headers (CRLF)."""
+    if not isinstance(value, str):
+        return None
+    value = value.replace("\r", "").replace("\n", "").strip()
+    return value[:_MAX_HEADER_LENGTH] if value else None
+
+
+def _download_headers(message: dict[str, Any]) -> dict[str, str]:
+    """The extra HTTP headers to reuse for a browser-sent download so a
+    login-gated file the browser could reach is reachable by the app too."""
+    headers: dict[str, str] = {}
+    cookie = _clean_header(message.get("cookie"))
+    if cookie:
+        headers["Cookie"] = cookie
+    referer = _valid_url(message.get("referer"))
+    if referer:
+        headers["Referer"] = referer
+    user_agent = _clean_header(message.get("userAgent"))
+    if user_agent:
+        headers["User-Agent"] = user_agent
+    return headers
 
 
 def handle_message(db: Database, message: dict[str, Any]) -> dict[str, Any]:
@@ -79,6 +105,7 @@ def handle_message(db: Database, message: dict[str, Any]) -> dict[str, Any]:
             source=_clean_text(message.get("source")) or "extension",
             quality=quality,
             payload=fallbacks,
+            headers=_download_headers(message),
         )
         return {
             "type": "queued",

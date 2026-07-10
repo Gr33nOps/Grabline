@@ -14,7 +14,18 @@ const MAX_ITEMS_PER_TAB = 30;
 
 // ---------------------------------------------------------------- native
 
-async function sendToGrabline(url, tab, quality = null, fallbackUrls = []) {
+// The cookies a request to `url` would carry, as a Cookie header. Lets the app
+// fetch a login-gated file that the browser could reach.
+async function cookieHeaderFor(url) {
+  try {
+    const cookies = await api.cookies.getAll({ url });
+    return cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  } catch {
+    return "";
+  }
+}
+
+async function sendToGrabline(url, tab, { quality = null, fallbackUrls = [], credentials = false } = {}) {
   const message = {
     type: "download",
     url,
@@ -23,6 +34,11 @@ async function sendToGrabline(url, tab, quality = null, fallbackUrls = []) {
     source: "extension",
     quality,
     fallbackUrls,
+    referer: tab?.url ?? null,
+    userAgent: navigator.userAgent,
+    // Cookies only for file downloads (interception / right-click a link),
+    // never for media grabs - yt-dlp handles logins its own way there.
+    cookie: credentials ? await cookieHeaderFor(url) : "",
   };
   try {
     const reply = await api.runtime.sendNativeMessage(HOST_NAME, message);
@@ -205,7 +221,8 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
     info.srcUrl ??
     (/^https?:\/\/\S+$/.test(selected) ? selected : null) ??
     info.pageUrl;
-  if (url) await sendToGrabline(url, tab);
+  // A right-clicked link may be a login-gated file, so pass cookies along.
+  if (url) await sendToGrabline(url, tab, { credentials: Boolean(info.linkUrl) });
 });
 
 // ------------------------------------------------- network sniffer (F1.4)
@@ -280,8 +297,9 @@ api.tabs.onUpdated.addListener((tabId, changeInfo) => {
 });
 
 // --------------------------------------------------- interception (F1.5)
-// Off by default; toggle lives in the popup. chrome.downloads based - the
-// download is cancelled the moment it starts and the app re-requests it.
+// On by default (toggle lives in the popup), but only fires when the app is
+// running - see the listener below. chrome.downloads based: the download is
+// cancelled the moment it starts and the app re-requests it.
 
 const INTERCEPT_EXTENSIONS =
   /\.(mp4|mkv|webm|mov|avi|m4v|mp3|m4a|flac|wav|ogg|opus|aac|zip|rar|7z|tar|gz|xz|bz2|iso|img|pdf|docx?|xlsx?|pptx?|epub|exe|msi|dmg|pkg|appimage|deb|rpm|apk|bin)(\?|$)/i;
@@ -298,15 +316,23 @@ function shouldIntercept(item) {
 }
 
 api.downloads.onCreated.addListener(async (item) => {
-  const { intercept = false } = await api.storage.local.get("intercept");
+  // On by default, but only take a download away from the browser when the
+  // Grabline app is actually running to receive it - otherwise the file would
+  // just vanish. If the app is off, the browser download proceeds normally.
+  const { intercept = true } = await api.storage.local.get("intercept");
   if (!intercept || !shouldIntercept(item)) return;
+  const pong = await pingGrabline();
+  if (!pong || !pong.appRunning) return;
   try {
     await api.downloads.cancel(item.id);
     await api.downloads.erase({ id: item.id });
   } catch {
     return; // too late to take over; let the browser finish it
   }
-  await sendToGrabline(item.finalUrl || item.url, null);
+  // A synthetic tab carries the referring page; cookies make gated files work.
+  await sendToGrabline(item.finalUrl || item.url, { url: item.referrer || null }, {
+    credentials: true,
+  });
 });
 
 // ------------------------------------------------------------- messages
@@ -338,7 +364,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       const tab = await tabForMessage(sender, message);
       const fallbackUrls = message.sniff ? await sniffedUrlsFor(tab?.id) : [];
-      return sendToGrabline(message.url, tab, message.quality ?? null, fallbackUrls);
+      return sendToGrabline(message.url, tab, { quality: message.quality ?? null, fallbackUrls });
     })().then(sendResponse);
     return true; // async response
   }

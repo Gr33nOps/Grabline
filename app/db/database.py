@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS handoffs (
     source     TEXT NOT NULL DEFAULT 'extension',
     payload    TEXT NOT NULL DEFAULT '[]',
     quality    TEXT,
+    headers    TEXT NOT NULL DEFAULT '{}',
     claimed    INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -85,6 +86,7 @@ _JOBS_MIGRATIONS = {
 _HANDOFFS_MIGRATIONS = {
     "payload": "ALTER TABLE handoffs ADD COLUMN payload TEXT NOT NULL DEFAULT '[]'",
     "quality": "ALTER TABLE handoffs ADD COLUMN quality TEXT",
+    "headers": "ALTER TABLE handoffs ADD COLUMN headers TEXT NOT NULL DEFAULT '{}'",
 }
 
 
@@ -301,12 +303,22 @@ class Database:
         source: str = "extension",
         payload: Sequence[str] = (),
         quality: str | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> int:
         with self._lock, self._conn:
             cur = self._conn.execute(
-                "INSERT INTO handoffs (url, page_url, page_title, source, payload, quality) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (url, page_url, page_title, source, json.dumps(list(payload)), quality),
+                "INSERT INTO handoffs "
+                "(url, page_url, page_title, source, payload, quality, headers) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    url,
+                    page_url,
+                    page_title,
+                    source,
+                    json.dumps(list(payload)),
+                    quality,
+                    json.dumps(dict(headers or {})),
+                ),
             )
         handoff_id = cur.lastrowid
         if handoff_id is None:  # pragma: no cover - sqlite always sets it
@@ -333,6 +345,7 @@ class Database:
                 source=row["source"],
                 payload=tuple(json.loads(row["payload"] or "[]")),
                 quality=row["quality"],
+                headers=json.loads(row["headers"] or "{}"),
             )
             for row in rows
         ]
