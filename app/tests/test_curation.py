@@ -87,7 +87,9 @@ def test_video_size_estimates_add_audio_when_needed():
 def test_format_specs():
     options = {o.label: o for o in curate_formats(_youtube_like_info())}
     assert options["Best"].format_spec == "bv*+ba/b"
-    assert options["1080p"].format_spec == "bv*[height<=1080]+ba/b[height<=1080]"
+    # Tier selectors fall back to best-available so a video lacking that exact
+    # tier still downloads instead of failing "Requested format is not available".
+    assert options["1080p"].format_spec == "bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b"
     assert options["MP3"].format_spec == "ba/b"
     assert options["MP3"].audio_format == "mp3"
     assert options["M4A"].format_spec == "ba[ext=m4a]/ba/b"
@@ -157,7 +159,8 @@ def test_option_for_label_prefers_curated_options():
 def test_option_for_label_falls_back_to_generic_tiers():
     # No curated list at all (F1.3 handoff before inspection details exist).
     option = option_for_label("720p")
-    assert option is not None and option.format_spec == "bv*[height<=720]+ba/b[height<=720]"
+    assert option is not None
+    assert option.format_spec == "bv*[height<=720]+ba/b[height<=720]/bv*+ba/b"
     audio = option_for_label("mp3")
     assert audio is not None and audio.audio_format == "mp3"
 

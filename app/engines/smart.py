@@ -186,6 +186,15 @@ class PlaylistInfo:
     entries: tuple[PlaylistEntry, ...]
 
 
+def _tier_format(tier: int) -> str:
+    """A quality-tier selector that never dead-ends. Prefers the best
+    video+audio at or below ``tier`` (then a muxed stream at that cap), but
+    falls back to the best available format - so a video that has no stream at
+    that exact tier still downloads instead of failing "Requested format is
+    not available"."""
+    return f"bv*[height<={tier}]+ba/b[height<={tier}]/bv*+ba/b"
+
+
 def generic_quality_options() -> tuple[QualityOption, ...]:
     """Static picker for playlist batches, where per-video sizes are unknown.
     yt-dlp resolves the actual formats per entry at download time."""
@@ -195,7 +204,7 @@ def generic_quality_options() -> tuple[QualityOption, ...]:
             QualityOption(
                 label=f"{tier}p",
                 kind="video",
-                format_spec=f"bv*[height<={tier}]+ba/b[height<={tier}]",
+                format_spec=_tier_format(tier),
                 height=tier,
             )
         )
@@ -320,7 +329,7 @@ def curate_formats(info: dict[str, Any]) -> tuple[QualityOption, ...]:
                 QualityOption(
                     label=f"{tier}p",
                     kind="video",
-                    format_spec=f"bv*[height<={tier}]+ba/b[height<={tier}]",
+                    format_spec=_tier_format(tier),
                     height=tier,
                     estimated_size=tier_estimate(tier),
                 )
