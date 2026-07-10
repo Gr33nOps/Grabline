@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -101,6 +102,60 @@ def test_smart_download_cancel_removes_partials(server: MediaServer, db: Databas
     assert results == [JobStatus.CANCELLED]
     leftovers = [p.name for p in dest.iterdir() if "cancelclip" in p.name]
     assert leftovers == []
+
+
+def test_cookie_fallback_retries_without_cookies(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Cookies force YouTube's JS-only web client; on a JS-less PC that yields
+    # "format not available". The engine must retry cookie-free and succeed.
+    import yt_dlp
+
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=True)
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    calls: list[bool] = []
+
+    def fake_download(*, drop_cookies: bool = False) -> dict[str, Any]:
+        calls.append(drop_cookies)
+        if not drop_cookies:
+            raise yt_dlp.utils.DownloadError("Requested format is not available")
+        return {"title": "ok"}
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    assert task._download_with_cookie_fallback() == {"title": "ok"}
+    assert calls == [False, True]  # first with cookies, then without
+
+
+def test_cookie_fallback_only_when_session_on(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import yt_dlp
+
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=False)
+    task = SmartDownload(db, job, ffmpeg_path=None)
+
+    def fake_download(*, drop_cookies: bool = False) -> dict[str, Any]:
+        raise yt_dlp.utils.DownloadError("Requested format is not available")
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    with pytest.raises(yt_dlp.utils.DownloadError):
+        task._download_with_cookie_fallback()  # no cookies were used: no retry
+
+
+def test_cookie_fallback_ignores_unrelated_errors(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import yt_dlp
+
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=True)
+    task = SmartDownload(db, job, ffmpeg_path=None)
+
+    def fake_download(*, drop_cookies: bool = False) -> dict[str, Any]:
+        raise yt_dlp.utils.DownloadError("Private video")
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    with pytest.raises(yt_dlp.utils.DownloadError):
+        task._download_with_cookie_fallback()  # a private video won't be fixed cookie-free
 
 
 def test_audio_extraction_requires_ffmpeg(server: MediaServer, db: Database, dest: Path):

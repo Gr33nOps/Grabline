@@ -43,16 +43,15 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
     ),
     (
         "confirm you're not a bot",
-        "YouTube is asking to confirm you're not a bot - it does this to IPs it "
-        "doesn't recognise. Turn on 'Let Grabline use my browser session' in "
-        "Settings and pick the browser you watch YouTube in, then try again.",
+        "YouTube is temporarily blocking automated access from your connection "
+        "(a bot check). Wait a little and try again, or try a different network.",
     ),
     (
         "Requested format is not available",
-        "YouTube returned no downloadable formats, which almost always means it "
-        "wants you signed in. Turn on 'Let Grabline use my browser session' in "
-        "Settings and pick the browser you're signed into YouTube with, then "
-        "try again.",
+        "YouTube didn't return a usable video format. This is usually temporary "
+        "- try again shortly. If it only fails with 'Let Grabline use my browser "
+        "session' turned on, turn it off: on a PC without a JavaScript runtime, "
+        "browser cookies can make YouTube hide the downloadable formats.",
     ),
     (
         "available in your country",
@@ -89,6 +88,13 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
         "actually signed in with under Settings.",
     ),
 )
+
+
+def _cookies_hide_formats(message: str) -> bool:
+    """True when a yt-dlp failure is the 'cookies forced the JS-only web
+    client, which returns no formats without a JS runtime' symptom - a retry
+    without cookies usually cures it. See _download_with_cookie_fallback."""
+    return "requested format is not available" in message.lower()
 
 
 def friendly_error(message: str) -> str:
@@ -448,7 +454,7 @@ class SmartDownload:
 
         self.db.set_job_status(self.job.id, JobStatus.DOWNLOADING)
         try:
-            info = self._download()
+            info = self._download_with_cookie_fallback()
         except _StopRequested:
             return self._settle_stopped()
         except yt_dlp.utils.DownloadError as exc:
@@ -532,14 +538,34 @@ class SmartDownload:
         ydl_opts["postprocessors"] = postprocessors
         return ydl_opts
 
-    def _download(self) -> dict[str, Any]:
+    def _download(self, *, drop_cookies: bool = False) -> dict[str, Any]:
         import yt_dlp
 
-        with yt_dlp.YoutubeDL(self._build_options()) as ydl:
+        opts = self._build_options()
+        if drop_cookies:
+            opts.pop("cookiesfrombrowser", None)
+        with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(self.job.url, download=True)
         if not isinstance(info, dict):
             raise DownloadError("No downloadable media was found at this address.")
         return info
+
+    def _download_with_cookie_fallback(self) -> dict[str, Any]:
+        """Download, but if browser cookies were used and the attempt fails
+        with 'format not available', retry once without them. Cookies make
+        yt-dlp prefer YouTube's JS-only 'web' client; on a machine with no
+        JavaScript runtime that returns no usable formats for videos that
+        download fine cookie-free, so dropping the cookies rescues them."""
+        import yt_dlp
+
+        try:
+            return self._download()
+        except yt_dlp.utils.DownloadError as exc:
+            used_cookies = bool(self.job.options.get("use_session"))
+            if used_cookies and not self._stop_event.is_set() and _cookies_hide_formats(str(exc)):
+                log.info("job %s: format error with cookies; retrying without", self.job.id)
+                return self._download(drop_cookies=True)
+            raise
 
     def _hook(self, event: dict[str, Any]) -> None:
         if self._stop_event.is_set():
