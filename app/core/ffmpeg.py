@@ -63,17 +63,6 @@ def find_ffmpeg(settings: Settings | None = None) -> str | None:
     return shutil.which("ffmpeg")
 
 
-def find_ffprobe(settings: Settings | None = None) -> str | None:
-    if settings is not None and settings.ffmpeg_path:
-        sibling = Path(settings.ffmpeg_path).parent / _executable("ffprobe")
-        if sibling.is_file():
-            return str(sibling)
-    managed = managed_binary("ffprobe")
-    if managed.is_file():
-        return str(managed)
-    return shutil.which("ffprobe")
-
-
 def ensure_ffmpeg(
     *,
     bin_dir: Path | None = None,
@@ -97,14 +86,13 @@ def ensure_ffmpeg(
             "install FFmpeg manually and set its path in Settings"
         )
     target_dir.mkdir(parents=True, exist_ok=True)
-    extracted: list[Path] = []
     with httpx.Client(
         follow_redirects=True,
         timeout=httpx.Timeout(60.0, connect=15.0),
         proxy=proxy or None,
     ) as client:
         for archive in archives:
-            extracted += _install_archive(client, archive, target_dir, progress)
+            _install_archive(client, archive, target_dir, progress)
     ffmpeg_path = managed_binary("ffmpeg", target_dir)
     if not ffmpeg_path.is_file():
         raise DownloadError("the verified FFmpeg archive did not contain an ffmpeg binary")

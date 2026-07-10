@@ -44,10 +44,7 @@ class _FfmpegInstaller(QThread):
 
     def run(self) -> None:
         try:
-            path = ensure_ffmpeg(
-                progress=lambda got, total: self.progressed.emit(got, total),
-                proxy=self._proxy,
-            )
+            path = ensure_ffmpeg(progress=self.progressed.emit, proxy=self._proxy)
             self.succeeded.emit(str(path))
         except DownloadError as exc:
             self.failed.emit(str(exc))
