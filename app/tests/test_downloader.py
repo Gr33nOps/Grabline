@@ -47,6 +47,26 @@ def test_segmented_download_completes_with_checksum(server: MediaServer, db: Dat
     assert server.request_count("/big.bin") >= 9  # probe + 8+ range requests
 
 
+def test_finalize_survives_fsync_failure(
+    server: MediaServer, db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Windows' FlushFileBuffers rejects fsync on some handles with EBADF; a
+    # download whose bytes are all on disk must still finalize, not fail.
+    data = payload(500_000, 37)
+    url = server.add("/f.bin", data)
+    job = db.create_job(url, str(dest), "f.bin")
+
+    def boom(_fd: int) -> None:
+        raise OSError(9, "Bad file descriptor")
+
+    monkeypatch.setattr("app.core.downloader.os.fsync", boom)
+    status = SegmentedDownload(db, job, connections=4).run()
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "f.bin") == sha256(data)
+    assert not (dest / "f.bin.gl-part").exists()
+
+
 def test_gated_download_passes_cookie_through(server: MediaServer, db: Database, dest: Path):
     data = payload(2 * MB, 21)
     url = server.add("/gated.bin", data, required_headers={"Cookie": "session=abc"})
