@@ -152,9 +152,7 @@ def test_remove_selected_and_clear_completed(db: Database, tmp_path: Path):
     settings.download_dir = tmp_path
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
-        ids = [
-            db.create_job(f"http://x/{i}.bin", str(tmp_path), f"{i}.bin").id for i in range(3)
-        ]
+        ids = [db.create_job(f"http://x/{i}.bin", str(tmp_path), f"{i}.bin").id for i in range(3)]
         db.set_job_status(ids[2], JobStatus.COMPLETED)
         window = MainWindow(manager, settings)
         window.refresh()
