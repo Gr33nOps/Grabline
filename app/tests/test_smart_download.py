@@ -188,9 +188,14 @@ def test_build_options_includes_cookies_only_when_asked(db: Database, dest: Path
 
 def test_build_options_passes_detected_runtime_by_name(db: Database, dest: Path):
     task = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
-    assert "js_runtimes" not in task._build_options()
+    opts = task._build_options()
+    assert "js_runtimes" not in opts and "remote_components" not in opts
     task._js_runtime = ("node", "/usr/bin/node")  # an existing Node, not Deno
-    assert task._build_options()["js_runtimes"] == {"node": {"path": "/usr/bin/node"}}
+    opts = task._build_options()
+    assert opts["js_runtimes"] == {"node": {"path": "/usr/bin/node"}}
+    # A runtime without the EJS solver only yields storyboards, so we must also
+    # let yt-dlp fetch the solver (CLI: --remote-components ejs:github).
+    assert opts["remote_components"] == ["ejs:github"]
 
 
 def test_existing_runtime_used_without_downloading(

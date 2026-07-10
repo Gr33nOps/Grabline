@@ -543,6 +543,11 @@ class SmartDownload:
             # it can solve YouTube's n challenge (see _ensure_js_runtime).
             name, path = self._js_runtime
             ydl_opts["js_runtimes"] = {name: {"path": path}}
+            # A runtime alone isn't enough: yt-dlp will NOT download the EJS
+            # challenge-solver script unless remote components are allowed, and
+            # without the solver the n challenge is skipped and only storyboard
+            # images come back. This is the CLI's --remote-components ejs:github.
+            ydl_opts["remote_components"] = ["ejs:github"]
         if self.ratelimit:
             ydl_opts["ratelimit"] = float(self.ratelimit)
         # Postprocessing (audio extraction, tags, subtitle conversion) needs
