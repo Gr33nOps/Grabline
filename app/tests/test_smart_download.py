@@ -186,11 +186,35 @@ def test_build_options_includes_cookies_only_when_asked(db: Database, dest: Path
     assert task._build_options(with_cookies=True)["cookiesfrombrowser"] == ("firefox",)
 
 
-def test_js_runtime_provisioned_for_youtube_or_session(
+def test_build_options_passes_detected_runtime_by_name(db: Database, dest: Path):
+    task = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
+    assert "js_runtimes" not in task._build_options()
+    task._js_runtime = ("node", "/usr/bin/node")  # an existing Node, not Deno
+    assert task._build_options()["js_runtimes"] == {"node": {"path": "/usr/bin/node"}}
+
+
+def test_existing_runtime_used_without_downloading(
     db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):
     from app.core import jsruntime
 
+    monkeypatch.setattr(jsruntime, "detect_js_runtime", lambda *a, **k: ("node", "/usr/bin/node"))
+
+    def no_download(**_kw: object) -> Path:
+        raise AssertionError("must not download when a runtime already exists")
+
+    monkeypatch.setattr(jsruntime, "ensure_deno", no_download)
+    task = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
+    task._ensure_js_runtime()
+    assert task._js_runtime == ("node", "/usr/bin/node")
+
+
+def test_downloads_deno_when_no_runtime_and_only_for_youtube_or_session(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from app.core import jsruntime
+
+    monkeypatch.setattr(jsruntime, "detect_js_runtime", lambda *a, **k: None)
     calls: list[str] = []
 
     def fake_ensure(**_kw: object) -> Path:
@@ -198,34 +222,27 @@ def test_js_runtime_provisioned_for_youtube_or_session(
         return Path("/x/deno")
 
     monkeypatch.setattr(jsruntime, "ensure_deno", fake_ensure)
-    monkeypatch.setattr(jsruntime, "find_deno", lambda *a, **k: None)
 
-    # Non-YouTube, no session: a JS runtime isn't needed, so it's not fetched.
+    # Non-YouTube, no session: not needed, so nothing is fetched.
     other = SmartDownload(
         db, _smart_job(db, "https://soundcloud.com/a/b", dest, "a.mp3"), ffmpeg_path=None
     )
     other._ensure_js_runtime()
-    assert calls == [] and other._deno_path is None
+    assert calls == [] and other._js_runtime is None
 
-    # YouTube, no session: fetched anyway - YouTube needs it for the n challenge.
+    # YouTube, no session: Deno fetched because nothing is installed.
     yt = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
     yt._ensure_js_runtime()
-    assert calls == ["deno"] and yt._deno_path == "/x/deno"
-
-    # Non-YouTube but signed in: cookies push a JS-dependent client, so fetched.
-    calls.clear()
-    sess = SmartDownload(
-        db, _smart_job(db, "https://vimeo.com/1", dest, "v.mp4", use_session=True), ffmpeg_path=None
-    )
-    sess._ensure_js_runtime()
-    assert calls == ["deno"]
+    assert calls == ["deno"] and yt._js_runtime == ("deno", "/x/deno")
 
 
 def test_js_runtime_failure_is_non_fatal(db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch):
     from app.core import jsruntime
     from app.core.errors import DownloadError
 
-    def boom(**_kw):
+    monkeypatch.setattr(jsruntime, "detect_js_runtime", lambda *a, **k: None)
+
+    def boom(**_kw: object) -> Path:
         raise DownloadError("no network")
 
     monkeypatch.setattr(jsruntime, "ensure_deno", boom)
@@ -233,14 +250,7 @@ def test_js_runtime_failure_is_non_fatal(db: Database, dest: Path, monkeypatch: 
         db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4", use_session=True), ffmpeg_path=None
     )
     task._ensure_js_runtime()  # must not raise
-    assert task._deno_path is None
-
-
-def test_deno_path_is_passed_to_ytdlp(db: Database, dest: Path):
-    task = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
-    assert "js_runtimes" not in task._build_options()
-    task._deno_path = "/opt/deno"
-    assert task._build_options()["js_runtimes"] == {"deno": {"path": "/opt/deno"}}
+    assert task._js_runtime is None
 
 
 def test_audio_extraction_requires_ffmpeg(server: MediaServer, db: Database, dest: Path):

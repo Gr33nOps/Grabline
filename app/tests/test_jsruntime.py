@@ -93,6 +93,28 @@ def test_ensure_deno_reuses_existing_on_path(tmp_path: Path, monkeypatch: pytest
     assert str(path) == "/usr/bin/deno"
 
 
+def test_detect_js_runtime_prefers_managed_deno(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("app.core.jsruntime.shutil.which", lambda _: "/usr/bin/node")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    jsruntime.managed_deno(bin_dir).write_bytes(FAKE_DENO)  # our install wins
+    assert jsruntime.detect_js_runtime(bin_dir) == ("deno", str(jsruntime.managed_deno(bin_dir)))
+
+
+def test_detect_js_runtime_finds_installed_node(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # No managed Deno, no deno on PATH, but node is installed -> use node.
+    which = {"node": "/usr/bin/node"}
+    monkeypatch.setattr("app.core.jsruntime.shutil.which", lambda exe: which.get(exe))
+    assert jsruntime.detect_js_runtime(tmp_path / "bin") == ("node", "/usr/bin/node")
+
+
+def test_detect_js_runtime_none_when_nothing_installed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr("app.core.jsruntime.shutil.which", lambda _: None)
+    assert jsruntime.detect_js_runtime(tmp_path / "bin") is None
+
+
 def test_find_deno_prefers_managed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("app.core.jsruntime.shutil.which", lambda _: "/usr/bin/deno")
     bin_dir = tmp_path / "bin"

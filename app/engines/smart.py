@@ -56,6 +56,18 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
         "browser cookies can make YouTube hide the downloadable formats.",
     ),
     (
+        "n challenge",
+        "YouTube needs a JavaScript runtime to unlock this video's formats. "
+        "Grabline installs one (Deno) automatically; if this keeps happening, "
+        "install Node.js and restart Grabline.",
+    ),
+    (
+        "Only images are available",
+        "YouTube needs a JavaScript runtime to unlock this video's formats. "
+        "Grabline installs one (Deno) automatically; if this keeps happening, "
+        "install Node.js and restart Grabline.",
+    ),
+    (
         "available in your country",
         "This video is region-blocked and not available from your location.",
     ),
@@ -456,7 +468,7 @@ class SmartDownload:
         self._live = _LiveProgress()
         self._last_persist = 0.0
         self._known_files: set[str] = set()
-        self._deno_path: str | None = None  # JS runtime, provisioned on session use
+        self._js_runtime: tuple[str, str] | None = None  # (yt-dlp name, path)
 
     # ------------------------------------------------------------ control
 
@@ -516,10 +528,12 @@ class SmartDownload:
         }
         if self.ffmpeg_path:
             ydl_opts["ffmpeg_location"] = self.ffmpeg_path
-        if self._deno_path:
-            # Hand yt-dlp our managed Deno so it can solve YouTube's n challenge
-            # for the signed-in web client (see _ensure_js_runtime).
-            ydl_opts["js_runtimes"] = {"deno": {"path": self._deno_path}}
+        if self._js_runtime:
+            # yt-dlp only auto-enables Deno, and only if it's on PATH; hand it
+            # whichever runtime we found (Node/Bun/Deno/QuickJS) by name+path so
+            # it can solve YouTube's n challenge (see _ensure_js_runtime).
+            name, path = self._js_runtime
+            ydl_opts["js_runtimes"] = {name: {"path": path}}
         if self.ratelimit:
             ydl_opts["ratelimit"] = float(self.ratelimit)
         # Postprocessing (audio extraction, tags, subtitle conversion) needs
@@ -581,20 +595,25 @@ class SmartDownload:
         )
 
     def _ensure_js_runtime(self) -> None:
-        """Make a JS runtime (Deno) available before yt-dlp runs, fetched once
-        and reused. Non-fatal: on failure the download still tries, and the
-        cookie-free fallback covers plain videos."""
+        """Make a JS runtime available before yt-dlp runs: prefer one already
+        installed (Node/Bun/Deno/QuickJS - yt-dlp won't auto-enable them, so we
+        pass them explicitly), and only download Deno if nothing is present.
+        Non-fatal: on failure the download still tries."""
         if not self._needs_js_runtime():
             return
         from app.core import jsruntime
 
+        found = jsruntime.detect_js_runtime()
+        if found is not None:
+            log.info("job %s: using %s as the JavaScript runtime", self.job.id, found[0])
+            self._js_runtime = found
+            return
         try:
-            if jsruntime.find_deno() is None:
-                log.info(
-                    "job %s: fetching the JavaScript runtime YouTube needs (Deno, one-time ~40 MB)",
-                    self.job.id,
-                )
-            self._deno_path = str(jsruntime.ensure_deno(proxy=self.proxy))
+            log.info(
+                "job %s: no JavaScript runtime found - fetching Deno (one-time ~40 MB)",
+                self.job.id,
+            )
+            self._js_runtime = ("deno", str(jsruntime.ensure_deno(proxy=self.proxy)))
         except DownloadError as exc:
             log.warning("job %s: could not provision a JS runtime: %s", self.job.id, exc)
         except Exception:  # never let runtime setup crash the job

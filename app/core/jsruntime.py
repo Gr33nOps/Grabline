@@ -93,6 +93,32 @@ def find_deno(bin_dir: Path | None = None) -> str | None:
     return shutil.which("deno")
 
 
+#: JS runtimes yt-dlp can drive, as (yt-dlp name, executable). Deno first -
+#: it's what yt-dlp recommends and what we can auto-install; then whatever the
+#: user already has. yt-dlp does NOT auto-enable node/bun/quickjs even when
+#: installed, so we must detect them and pass them in explicitly.
+_JS_RUNTIMES: tuple[tuple[str, str], ...] = (
+    ("deno", "deno"),
+    ("node", "node"),
+    ("bun", "bun"),
+    ("quickjs", "qjs"),
+)
+
+
+def detect_js_runtime(bin_dir: Path | None = None) -> tuple[str, str] | None:
+    """The (yt-dlp name, path) of a JavaScript runtime already available -
+    our managed Deno first, then any Deno/Node/Bun/QuickJS on PATH. None when
+    nothing is installed (the caller then downloads Deno)."""
+    managed = managed_deno(bin_dir)
+    if managed.is_file():
+        return ("deno", str(managed))
+    for name, exe in _JS_RUNTIMES:
+        found = shutil.which(exe)
+        if found:
+            return (name, found)
+    return None
+
+
 def ensure_deno(
     *,
     bin_dir: Path | None = None,
