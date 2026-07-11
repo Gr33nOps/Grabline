@@ -26,7 +26,9 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 OutputBaseFilename=Grabline-Setup-{#AppVersion}
-OutputDir=dist
+; Paths are relative to this .iss file (packaging\windows\), so reach up to the
+; repo root where PyInstaller wrote dist\grabline\ and where CI expects the exe.
+OutputDir=..\..\dist
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -38,7 +40,7 @@ WizardStyle=modern
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Files]
-Source: "dist\grabline\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\..\dist\grabline\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
