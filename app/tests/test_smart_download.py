@@ -104,29 +104,71 @@ def test_smart_download_cancel_removes_partials(server: MediaServer, db: Databas
     assert leftovers == []
 
 
-def test_age_wall_auto_retries_with_login(
+def test_normal_video_takes_the_fast_path(
     db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    # An age-restricted video: first cookie-free try hits the wall, so the
-    # engine must automatically retry with the browser login - no toggle.
+    # The speed fix: a normal video is one attempt with no JS runtime and no
+    # cookies, so yt-dlp uses the fast jsless clients and starts quickly.
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    calls: list[tuple[bool, bool]] = []
+
+    def fake_download(*, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
+        calls.append((with_cookies, with_runtime))
+        return {"title": "ok"}
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    assert task._download_smart() == {"title": "ok"}
+    assert calls == [(False, False)]  # no runtime, no cookies, no retry
+
+
+def test_age_wall_escalates_to_runtime_and_login(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Age-restricted: the fast try hits the wall, so escalate to the runtime
+    # plus the browser login - automatically, no toggle.
     import yt_dlp
 
     job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
     task = SmartDownload(db, job, ffmpeg_path=None)
-    calls: list[bool] = []
+    monkeypatch.setattr(task, "_ensure_js_runtime", lambda: None)
+    calls: list[tuple[bool, bool]] = []
 
-    def fake_download(*, with_cookies: bool) -> dict[str, Any]:
-        calls.append(with_cookies)
+    def fake_download(*, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
+        calls.append((with_cookies, with_runtime))
         if not with_cookies:
             raise yt_dlp.utils.DownloadError("Sign in to confirm your age")
         return {"title": "ok"}
 
     monkeypatch.setattr(task, "_download", fake_download)
     assert task._download_smart() == {"title": "ok"}
-    assert calls == [False, True]  # cookie-free first, then with login
+    assert calls == [(False, False), (True, True)]  # fast, then runtime + login
 
 
-def test_no_login_retry_when_no_browser_found(
+def test_format_error_escalates_to_runtime_without_login(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # A bare format error means the n challenge was skipped: add the runtime
+    # (+ solver), but no login - it isn't an auth wall.
+    import yt_dlp
+
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    monkeypatch.setattr(task, "_ensure_js_runtime", lambda: None)
+    calls: list[tuple[bool, bool]] = []
+
+    def fake_download(*, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
+        calls.append((with_cookies, with_runtime))
+        if not with_runtime:
+            raise yt_dlp.utils.DownloadError("Requested format is not available")
+        return {"title": "ok"}
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    assert task._download_smart() == {"title": "ok"}
+    assert calls == [(False, False), (False, True)]  # fast, then runtime, no cookies
+
+
+def test_no_login_escalation_when_no_browser_found(
     db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):
     import yt_dlp
@@ -135,34 +177,12 @@ def test_no_login_retry_when_no_browser_found(
     task = SmartDownload(db, job, ffmpeg_path=None)
     monkeypatch.setattr("app.core.browser_setup.detect_cookie_browser", lambda *a, **k: None)
 
-    def fake_download(*, with_cookies: bool) -> dict[str, Any]:
+    def fake_download(*, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
         raise yt_dlp.utils.DownloadError("Sign in to confirm your age")
 
     monkeypatch.setattr(task, "_download", fake_download)
     with pytest.raises(yt_dlp.utils.DownloadError):
-        task._download_smart()  # nothing to log in with, so no retry
-
-
-def test_session_on_format_error_retries_without_cookies(
-    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
-):
-    import yt_dlp
-
-    job = _smart_job(
-        db, "https://vimeo.com/1", dest, "v.mp4", use_session=True, session_browser="firefox"
-    )
-    task = SmartDownload(db, job, ffmpeg_path=None)
-    calls: list[bool] = []
-
-    def fake_download(*, with_cookies: bool) -> dict[str, Any]:
-        calls.append(with_cookies)
-        if with_cookies:
-            raise yt_dlp.utils.DownloadError("Requested format is not available")
-        return {"title": "ok"}
-
-    monkeypatch.setattr(task, "_download", fake_download)
-    assert task._download_smart() == {"title": "ok"}
-    assert calls == [True, False]  # opted into cookies first, then cookie-free
+        task._download_smart()  # an auth wall with no browser to log in with
 
 
 def test_unrelated_error_is_not_retried(db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch):
@@ -170,13 +190,16 @@ def test_unrelated_error_is_not_retried(db: Database, dest: Path, monkeypatch: p
 
     job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
     task = SmartDownload(db, job, ffmpeg_path=None)
+    calls: list[tuple[bool, bool]] = []
 
-    def fake_download(*, with_cookies: bool) -> dict[str, Any]:
+    def fake_download(*, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
+        calls.append((with_cookies, with_runtime))
         raise yt_dlp.utils.DownloadError("This live event will begin in 2 hours")
 
     monkeypatch.setattr(task, "_download", fake_download)
     with pytest.raises(yt_dlp.utils.DownloadError):
-        task._download_smart()  # a scheduled premiere isn't a login wall
+        task._download_smart()  # a scheduled premiere isn't runtime- or login-fixable
+    assert calls == [(False, False)]  # tried once, no slow retry
 
 
 def test_build_options_includes_cookies_only_when_asked(db: Database, dest: Path):
@@ -186,15 +209,14 @@ def test_build_options_includes_cookies_only_when_asked(db: Database, dest: Path
     assert task._build_options(with_cookies=True)["cookiesfrombrowser"] == ("firefox",)
 
 
-def test_build_options_passes_detected_runtime_by_name(db: Database, dest: Path):
+def test_build_options_passes_runtime_only_on_escalation(db: Database, dest: Path):
     task = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
-    opts = task._build_options()
-    assert "js_runtimes" not in opts and "remote_components" not in opts
     task._js_runtime = ("node", "/usr/bin/node")  # an existing Node, not Deno
-    opts = task._build_options()
+    # Fast path omits the runtime even when one is available (that's the speed win).
+    assert "js_runtimes" not in task._build_options()
+    # Escalated path passes the runtime by name plus the EJS solver fetch.
+    opts = task._build_options(with_runtime=True)
     assert opts["js_runtimes"] == {"node": {"path": "/usr/bin/node"}}
-    # A runtime without the EJS solver only yields storyboards, so we must also
-    # let yt-dlp fetch the solver (CLI: --remote-components ejs:github).
     assert opts["remote_components"] == ["ejs:github"]
 
 

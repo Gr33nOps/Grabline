@@ -104,32 +104,39 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _cookies_hide_formats(message: str) -> bool:
-    """True when a yt-dlp failure is the 'cookies forced the JS-only web
-    client, which returns no formats without a JS runtime' symptom - a retry
-    without cookies usually cures it. See _download_smart."""
-    return "requested format is not available" in message.lower()
-
-
-#: yt-dlp failures a signed-in retry can get past (age gate, bot check,
-#: members-only, or an unauthenticated degraded/empty format set).
-_LOGIN_WALL_MARKERS = (
+#: yt-dlp failures a browser login gets past (age gate, bot check, members-only,
+#: private). These need cookies, not just a JS runtime.
+_AUTH_WALL_MARKERS = (
     "sign in to confirm your age",
     "confirm you're not a bot",
     "sign in to confirm you're not a bot",
     "members-only",
     "join this channel",
     "this video is available to",
-    "requested format is not available",
-    "sign in to",
     "login required",
+    "private video",
+    "sign in to",
+)
+
+#: yt-dlp failures a JS runtime (+ EJS solver) cures: YouTube's n challenge was
+#: skipped, so only throttled/storyboard formats came back.
+_RUNTIME_MARKERS = (
+    "requested format is not available",
+    "only images are available",
+    "n challenge",
 )
 
 
-def _login_might_fix(message: str) -> bool:
-    """True when a browser login could get past this wall (see _download_smart)."""
+def _looks_like_auth_wall(message: str) -> bool:
+    """True when a browser login could get past this failure (see _download_smart)."""
     lowered = message.lower()
-    return any(marker in lowered for marker in _LOGIN_WALL_MARKERS)
+    return any(marker in lowered for marker in _AUTH_WALL_MARKERS)
+
+
+def _runtime_might_help(message: str) -> bool:
+    """True when providing a JS runtime + EJS solver could cure this failure."""
+    lowered = message.lower()
+    return any(marker in lowered for marker in _RUNTIME_MARKERS)
 
 
 def friendly_error(message: str) -> str:
@@ -498,7 +505,6 @@ class SmartDownload:
         import yt_dlp
 
         self.db.set_job_status(self.job.id, JobStatus.DOWNLOADING)
-        self._ensure_js_runtime()
         try:
             info = self._download_smart()
         except _StopRequested:
@@ -518,7 +524,9 @@ class SmartDownload:
 
     # ------------------------------------------------------------ internals
 
-    def _build_options(self, *, with_cookies: bool = False) -> dict[str, Any]:
+    def _build_options(
+        self, *, with_cookies: bool = False, with_runtime: bool = False
+    ) -> dict[str, Any]:
         options = self.job.options
         base = Path(self.job.filename).stem or "download"
         outtmpl = str(Path(self.job.dest_dir) / f"{base}.%(ext)s")
@@ -537,16 +545,15 @@ class SmartDownload:
         }
         if self.ffmpeg_path:
             ydl_opts["ffmpeg_location"] = self.ffmpeg_path
-        if self._js_runtime:
-            # yt-dlp only auto-enables Deno, and only if it's on PATH; hand it
-            # whichever runtime we found (Node/Bun/Deno/QuickJS) by name+path so
-            # it can solve YouTube's n challenge (see _ensure_js_runtime).
+        if with_runtime and self._js_runtime:
+            # The slow path, used only on escalation: hand yt-dlp the runtime we
+            # found (yt-dlp only auto-enables Deno, and only if on PATH) so it can
+            # solve YouTube's n challenge, plus allow the EJS solver download
+            # (without it the challenge is skipped and only storyboards come
+            # back). The fast path omits both so normal videos use the jsless
+            # android_vr/tv clients and start quickly.
             name, path = self._js_runtime
             ydl_opts["js_runtimes"] = {name: {"path": path}}
-            # A runtime alone isn't enough: yt-dlp will NOT download the EJS
-            # challenge-solver script unless remote components are allowed, and
-            # without the solver the n challenge is skipped and only storyboard
-            # images come back. This is the CLI's --remote-components ejs:github.
             ydl_opts["remote_components"] = ["ejs:github"]
         if self.ratelimit:
             ydl_opts["ratelimit"] = float(self.ratelimit)
@@ -643,39 +650,44 @@ class SmartDownload:
 
         return detect_cookie_browser()
 
-    def _download(self, *, with_cookies: bool) -> dict[str, Any]:
+    def _download(self, *, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
         import yt_dlp
 
-        with yt_dlp.YoutubeDL(self._build_options(with_cookies=with_cookies)) as ydl:
+        opts = self._build_options(with_cookies=with_cookies, with_runtime=with_runtime)
+        with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(self.job.url, download=True)
         if not isinstance(info, dict):
             raise DownloadError("No downloadable media was found at this address.")
         return info
 
     def _download_smart(self) -> dict[str, Any]:
-        """Download with an automatic login retry so restricted videos work
-        without any toggle. First try is cookie-free (fast, private); if it
-        hits an age/login/bot wall and a browser login is available, retry
-        with that browser's cookies. If the user opted into session up front,
-        cookies go first and a stray format error retries cookie-free (the
-        JS-client trap)."""
+        """Fast first, capable second. The first attempt uses no JS runtime and
+        no cookies, so yt-dlp picks YouTube's jsless android_vr/tv clients and
+        normal videos start in seconds. Only if that fails in a way a runtime
+        or a login could fix do we escalate to the slow path (Deno + EJS solver,
+        plus the browser login on an auth wall) - so age/login-restricted videos
+        still work, without making every video pay for it."""
         import yt_dlp
 
-        prefer_cookies = bool(self.job.options.get("use_session"))
-        browser = self._cookie_browser()
         try:
-            return self._download(with_cookies=prefer_cookies and browser is not None)
+            return self._download(with_cookies=False, with_runtime=False)
         except yt_dlp.utils.DownloadError as exc:
             if self._stop_event.is_set():
                 raise
             message = str(exc)
-            if not prefer_cookies and browser and _login_might_fix(message):
-                log.info("job %s: auth wall - retrying with %s login", self.job.id, browser)
-                return self._download(with_cookies=True)
-            if prefer_cookies and _cookies_hide_formats(message):
-                log.info("job %s: format error with cookies - retrying without", self.job.id)
-                return self._download(with_cookies=False)
-            raise
+            browser = self._cookie_browser()
+            wants_login = browser is not None and (
+                _looks_like_auth_wall(message) or bool(self.job.options.get("use_session"))
+            )
+            if not (_runtime_might_help(message) or wants_login):
+                raise  # unrecoverable (removed, geo-blocked, ...) - fail fast, no slow retry
+            log.info(
+                "job %s: fast path failed - escalating (runtime%s)",
+                self.job.id,
+                f" + {browser} login" if wants_login else "",
+            )
+            self._ensure_js_runtime()  # provisions Deno for YouTube/session jobs; no-op otherwise
+            return self._download(with_cookies=wants_login, with_runtime=True)
 
     def _hook(self, event: dict[str, Any]) -> None:
         if self._stop_event.is_set():
