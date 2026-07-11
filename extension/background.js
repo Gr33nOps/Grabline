@@ -10,7 +10,7 @@ const HOST_NAME = "dev.grabline.host";
 const MENU_ID = "grabline-download";
 const GALLERY_MENU_ID = "grabline-gallery";
 const LINKS_MENU_ID = "grabline-links";
-const MAX_ITEMS_PER_TAB = 30;
+const MAX_ITEMS_PER_TAB = 12;
 
 // ---------------------------------------------------------------- native
 
@@ -256,11 +256,15 @@ function classify(details) {
 async function recordMedia(tabId, item) {
   const key = `tab:${tabId}`;
   const stored = await api.storage.session.get(key);
-  const items = stored[key] ?? [];
-  if (items.some((existing) => existing.url === item.url)) return;
+  // Dedupe by URL but move it back to the top with a fresh timestamp: media
+  // that's still being fetched (the reel you're watching, the stream that's
+  // playing) stays current, while things you scrolled past sink and fall off
+  // the small cap - so the list reflects what's playing now, not a history.
+  const items = (stored[key] ?? []).filter((existing) => existing.url !== item.url);
   items.unshift(item);
-  await api.storage.session.set({ [key]: items.slice(0, MAX_ITEMS_PER_TAB) });
-  updateBadge(tabId, Math.min(items.length, MAX_ITEMS_PER_TAB));
+  const trimmed = items.slice(0, MAX_ITEMS_PER_TAB);
+  await api.storage.session.set({ [key]: trimmed });
+  updateBadge(tabId, trimmed.length);
 }
 
 function updateBadge(tabId, count) {

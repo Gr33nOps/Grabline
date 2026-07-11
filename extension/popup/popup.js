@@ -15,14 +15,35 @@ function humanBytes(count) {
   return `${value.toFixed(index ? 1 : 0)} ${units[index]}`;
 }
 
-function shortName(url) {
+// Generic stream/segment leaf names that carry no meaning - fall back to the
+// page title for these (master.m3u8, videoplayback, a hex hash, ...).
+const UGLY_LEAF =
+  /^(master|index|playlist|manifest|chunklist|videoplayback|video|audio|media|stream|init|segment|seg|frag|output|dash|hls|prog)\b/i;
+
+function cleanTitle(title) {
+  // Drop a trailing " - YouTube" / " • Instagram" / " | Site" suffix.
+  return (title || "")
+    .replace(
+      /\s*[-|•·—–]\s*(YouTube|Instagram|Vimeo|TikTok|Twitter|X|Facebook|Dailymotion|Twitch|SoundCloud|Reddit)\s*$/i,
+      "",
+    )
+    .trim();
+}
+
+// A human name for a sniffed media item: the real filename when the URL has
+// one, otherwise the page/video title (a movie stream's URL is usually a hash).
+function mediaName(item, tab) {
   try {
-    const parsed = new URL(url);
-    const leaf = parsed.pathname.split("/").filter(Boolean).pop();
-    return leaf || parsed.hostname;
+    const leaf = decodeURIComponent(
+      new URL(item.url).pathname.split("/").filter(Boolean).pop() || "",
+    );
+    const base = leaf.replace(/\.[a-z0-9]{2,4}$/i, "");
+    const named = leaf && base.length >= 3 && !UGLY_LEAF.test(base) && !/^[0-9a-f]{12,}$/i.test(base);
+    if (named) return leaf;
   } catch {
-    return url;
+    /* unparsable URL - fall through to the title */
   }
+  return cleanTitle(tab?.title) || item.kind || "media";
 }
 
 async function activeTab() {
@@ -52,8 +73,11 @@ async function renderMediaList(tab) {
   const list = document.getElementById("media-list");
   const key = `tab:${tab.id}`;
   const stored = await api.storage.session.get(key);
-  const items = stored[key] ?? [];
-  if (!items.length) return;
+  const all = stored[key] ?? [];
+  if (!all.length) return;
+  // Most-recent first (what's playing now), and only a handful - not the last
+  // 20 reels you already scrolled past.
+  const items = [...all].sort((a, b) => (b.seenAt ?? 0) - (a.seenAt ?? 0)).slice(0, 6);
   list.textContent = "";
   for (const item of items) {
     const row = document.createElement("li");
@@ -62,7 +86,7 @@ async function renderMediaList(tab) {
     kind.textContent = item.kind;
     const name = document.createElement("span");
     name.className = "name";
-    name.textContent = shortName(item.url);
+    name.textContent = mediaName(item, tab);
     name.title = item.url;
     const size = document.createElement("span");
     size.className = "size";
