@@ -209,18 +209,21 @@ app/
 ├── native_host/ Native Messaging host + per-browser registration
 └── tests/      failure-simulating media server, engine tests, kill -9 milestone
 extension/      Grabline Connect (MV3, Chrome + Firefox, readable in a sitting)
+packaging/      PyInstaller spec + per-OS installers (Windows/macOS/Linux)
 scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(225 tests, including an 8-connection download killed with SIGKILL and
+(262 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.
 
 Store packaging for the extension: `python scripts/package_extension.py`
 builds Chrome Web Store and Firefox (AMO) zips; the listing kit lives in
-[docs/store-listing.md](docs/store-listing.md).
+[docs/store-listing.md](docs/store-listing.md). Desktop installers for all
+three OSes are built by GitHub Actions on a version tag - see
+[packaging/README.md](packaging/README.md).
 
 ## License
 
