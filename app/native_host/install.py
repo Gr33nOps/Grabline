@@ -126,6 +126,16 @@ def _package_root() -> Path:
     return Path(paths.__file__).resolve().parents[2]
 
 
+def frozen_host_path() -> Path | None:
+    """In a PyInstaller build the Native Messaging host is a sibling console
+    executable (``grabline-host``); the browser manifests point straight at it,
+    so no launcher script is written. None when running from source."""
+    if not getattr(sys, "frozen", False):
+        return None
+    exe = "grabline-host.exe" if sys.platform == "win32" else "grabline-host"
+    return Path(sys.executable).with_name(exe)
+
+
 def write_launcher(bin_dir: Path | None = None) -> Path:
     """A tiny script that runs ``python -m app.native_host``; the manifests
     point at it. PYTHONPATH is pinned to where the ``app`` package lives,
@@ -171,7 +181,13 @@ def install(
 ) -> list[Path]:
     """Write manifests for every known browser location. Returns paths written."""
     platform = platform or sys.platform
-    launcher = write_launcher(bin_dir) if not dry_run else (paths.bin_dir() / "grabline-host")
+    frozen = frozen_host_path()
+    if frozen is not None:
+        launcher = frozen  # installed grabline-host exe; no wrapper script needed
+    elif not dry_run:
+        launcher = write_launcher(bin_dir)
+    else:
+        launcher = paths.bin_dir() / "grabline-host"
     written: list[Path] = []
     if platform == "win32":  # pragma: no cover - registry path, windows-only
         return _install_windows_registry(launcher, dry_run=dry_run)
@@ -215,6 +231,9 @@ def _install_windows_registry(
 
 
 def _launcher_path() -> Path:
+    frozen = frozen_host_path()
+    if frozen is not None:
+        return frozen
     name = "grabline-host.bat" if sys.platform == "win32" else "grabline-host"
     return paths.bin_dir() / name
 

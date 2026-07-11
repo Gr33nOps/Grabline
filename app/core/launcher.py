@@ -28,6 +28,13 @@ def launch_command(*, minimized: bool = False, windowless: bool = False) -> list
 
     ``windowless`` swaps python.exe for pythonw.exe on Windows so a login-time
     autostart doesn't flash a console window (no-op elsewhere)."""
+    if getattr(sys, "frozen", False):
+        # Frozen build: the executable *is* Grabline (already windowed), so
+        # there's no interpreter or ``-m app`` module to invoke.
+        command = [sys.executable]
+        if minimized:
+            command.append("--minimized")
+        return command
     executable = sys.executable
     if windowless and sys.platform == "win32":  # pragma: no cover - windows-only
         pythonw = Path(sys.executable).with_name("pythonw.exe")

@@ -13,6 +13,7 @@ from app.native_host import CHROME_EXTENSION_IDS, FIREFOX_EXTENSION_IDS, HOST_NA
 from app.native_host.install import (
     browser_targets,
     check,
+    frozen_host_path,
     install,
     is_store_python,
     write_launcher,
@@ -32,6 +33,36 @@ def test_darwin_targets(tmp_path: Path):
     targets = {t.browser: t for t in browser_targets("darwin", home=tmp_path)}
     assert "Chrome" in targets and "Firefox" in targets
     assert "Library" in str(targets["Chrome"].manifest_dir)
+
+
+def test_frozen_host_path_none_from_source():
+    # Running under pytest is not a frozen build, so there is no sibling exe.
+    assert frozen_host_path() is None
+
+
+def test_frozen_host_path_points_at_sibling_exe(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", "/opt/Grabline/grabline")
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert frozen_host_path() == Path("/opt/Grabline/grabline-host")
+
+
+def test_frozen_install_points_manifests_at_the_host_exe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # A frozen build registers the sibling grabline-host exe directly - no
+    # launcher wrapper script is written.
+    exe = tmp_path / "grabline"
+    exe.write_text("")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(exe))
+
+    written = install(platform="linux", home=tmp_path, bin_dir=tmp_path / "bin")
+
+    assert len(written) == 5
+    manifest = json.loads(written[0].read_text())
+    assert manifest["path"] == str(tmp_path / "grabline-host")
+    assert not (tmp_path / "bin" / "grabline-host").exists()  # no wrapper written
 
 
 def test_install_writes_manifests_and_launcher(tmp_path: Path):

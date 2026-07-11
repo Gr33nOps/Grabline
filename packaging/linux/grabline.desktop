@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Grabline
+GenericName=Download Manager
+Comment=Fast, free, open-source download manager with a browser button
+Exec=grabline
+Icon=grabline
+Terminal=false
+Categories=Network;FileTransfer;Utility;
+Keywords=download;downloader;video;youtube;idm;manager;
+StartupWMClass=Grabline

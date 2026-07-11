@@ -26,6 +26,14 @@ def test_launch_command_runs_this_installation():
     assert launcher.launch_command(minimized=True)[-1] == "--minimized"
 
 
+def test_launch_command_frozen_is_the_exe_itself(monkeypatch: pytest.MonkeyPatch):
+    # A frozen build's executable IS Grabline; there's no "-m app" to run.
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", "/opt/Grabline/grabline")
+    assert launcher.launch_command() == ["/opt/Grabline/grabline"]
+    assert launcher.launch_command(minimized=True) == ["/opt/Grabline/grabline", "--minimized"]
+
+
 def test_menu_entry_written_with_icon(tmp_path: Path):
     entry = launcher.install_menu_entry(icon_png=b"\x89PNG-ish")
     assert entry is not None and entry.exists()

@@ -32,6 +32,24 @@ def _icon_png() -> bytes:
     return bytes(bytearray(buffer.data().data()))
 
 
+def _register_native_host_once(settings: Settings) -> None:
+    """On the first run of an installed (frozen) build, register the Native
+    Messaging host so the browser extension pairs without the user opening
+    Settings. Idempotent and best-effort; re-pairing lives in Settings. Only
+    frozen builds self-register - from source the user runs the installer
+    command, so we don't scribble manifests into a dev machine's browsers."""
+    if settings.host_registered or not getattr(sys, "frozen", False):
+        return
+    try:
+        from app.native_host.install import install
+
+        install()
+        settings.host_registered = True
+        log.info("registered the Native Messaging host for installed browsers")
+    except Exception:  # never block startup on pairing
+        log.warning("first-run native-host registration failed", exc_info=True)
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -57,6 +75,7 @@ def main() -> int:
 
     settings = Settings(db)
     settings.download_dir.mkdir(parents=True, exist_ok=True)
+    _register_native_host_once(settings)
     theme.remember_default(app)
     theme.apply_theme(app, settings.theme)
     manager = DownloadManager(db, settings=settings)

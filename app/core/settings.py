@@ -52,6 +52,16 @@ class Settings:
         self._set_bool("categories_enabled", value)
 
     @property
+    def host_registered(self) -> bool:
+        """Whether the Native Messaging host has been auto-registered once (on
+        first run of an installed build). Re-pairing is available in Settings."""
+        return self._get_bool("host_registered", False)
+
+    @host_registered.setter
+    def host_registered(self, value: bool) -> None:
+        self._set_bool("host_registered", value)
+
+    @property
     def clipboard_watcher(self) -> bool:
         """F0.5: offer to download URLs copied to the clipboard. Off by
         default - an offer on every copied link is intrusive, and the browser

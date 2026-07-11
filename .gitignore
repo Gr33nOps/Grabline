@@ -6,6 +6,12 @@ __pycache__/
 build/
 dist/
 
+# Generated packaging icons (rebuilt in CI by packaging/make_icons.py)
+packaging/grabline.png
+packaging/grabline.ico
+packaging/grabline.icns
+packaging/grabline.iconset/
+
 # Environments
 .venv/
 venv/

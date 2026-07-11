@@ -1,0 +1,125 @@
+# PyInstaller spec: builds two executables into one shared onedir bundle.
+#
+#   grabline       - the windowed desktop GUI
+#   grabline-host  - the console Native Messaging host (needs real stdio)
+#
+# Sharing one bundle (via MERGE) means PySide6/yt-dlp are packed once, not
+# twice. Build:  pyinstaller packaging/grabline.spec --noconfirm
+#
+# Cross-platform: this same spec runs on the Windows/macOS/Linux GitHub
+# runners; per-OS installers are assembled from the resulting bundle.
+
+import sys
+from pathlib import Path
+
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+SPEC_DIR = Path(SPECPATH).resolve()
+ROOT = SPEC_DIR.parent
+
+
+def _icon(name: str) -> str | None:
+    """Use a platform icon only if it's been generated; None keeps the build
+    working without it (PyInstaller errors on a missing icon path)."""
+    path = SPEC_DIR / name
+    return str(path) if path.exists() else None
+
+# yt-dlp imports its 1000+ site extractors lazily; curl_cffi ships a native
+# libcurl. Both must be collected explicitly or the frozen app can't resolve
+# YouTube et al. PySide6's own PyInstaller hook handles Qt plugins.
+ytdlp_datas, ytdlp_bins, ytdlp_hidden = collect_all("yt_dlp")
+curl_datas, curl_bins, curl_hidden = collect_all("curl_cffi")
+
+hidden = ytdlp_hidden + curl_hidden + collect_submodules("app")
+datas = ytdlp_datas + curl_datas
+binaries = ytdlp_bins + curl_bins
+
+# Trim Qt modules the app never touches - keeps the bundle from ballooning.
+qt_excludes = [
+    "PySide6.QtQml",
+    "PySide6.QtQuick",
+    "PySide6.QtQuick3D",
+    "PySide6.Qt3DCore",
+    "PySide6.QtWebEngineCore",
+    "PySide6.QtWebEngineWidgets",
+    "PySide6.QtWebEngineQuick",
+    "PySide6.QtWebView",
+    "PySide6.QtMultimedia",
+    "PySide6.QtCharts",
+    "PySide6.QtDataVisualization",
+    "PySide6.QtPdf",
+    "PySide6.QtBluetooth",
+    "PySide6.QtNfc",
+    "PySide6.QtSensors",
+    "PySide6.QtPositioning",
+    "PySide6.QtSql",
+    "PySide6.QtTest",
+    "PySide6.QtDesigner",
+]
+
+a_gui = Analysis(
+    [str(SPEC_DIR / "entry_gui.py")],
+    pathex=[str(ROOT)],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hidden,
+    excludes=qt_excludes + ["tkinter"],
+)
+a_host = Analysis(
+    [str(SPEC_DIR / "entry_host.py")],
+    pathex=[str(ROOT)],
+    binaries=[],
+    datas=[],
+    hiddenimports=collect_submodules("app.native_host") + collect_submodules("app.core"),
+    excludes=["PySide6", "tkinter"],  # the host never touches Qt
+)
+
+# MERGE dedupes shared dependencies: grabline-host reuses grabline's copies.
+MERGE((a_gui, "grabline", "grabline"), (a_host, "grabline-host", "grabline-host"))
+
+pyz_gui = PYZ(a_gui.pure)
+pyz_host = PYZ(a_host.pure)
+
+exe_gui = EXE(
+    pyz_gui,
+    a_gui.scripts,
+    [],
+    exclude_binaries=True,
+    name="grabline",
+    console=False,  # windowed: no console flashes on launch
+    icon=_icon("grabline.ico"),
+)
+exe_host = EXE(
+    pyz_host,
+    a_host.scripts,
+    [],
+    exclude_binaries=True,
+    name="grabline-host",
+    console=True,  # console subsystem: real stdio for Native Messaging
+)
+
+coll = COLLECT(
+    exe_gui,
+    a_gui.binaries,
+    a_gui.datas,
+    exe_host,
+    a_host.binaries,
+    a_host.datas,
+    name="grabline",
+)
+
+# macOS: wrap the GUI in a .app bundle (Spotlight-searchable, Dock icon).
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="Grabline.app",
+        icon=_icon("grabline.icns"),
+        bundle_identifier="dev.grabline.app",
+        info_plist={
+            "CFBundleName": "Grabline",
+            "CFBundleDisplayName": "Grabline",
+            "CFBundleExecutable": "grabline",
+            "LSMinimumSystemVersion": "11.0",
+            "NSHighResolutionCapable": True,
+        },
+    )

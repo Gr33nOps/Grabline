@@ -57,9 +57,35 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 
 ---
 
-## Install
+## Download & install
 
-Grabline runs from source. You need **Python 3.12+** and **git**.
+Grab the installer for your system from the
+[**latest release**](https://github.com/Gr33nOps/Grabline/releases/latest)
+— no Python needed. After installing, Grabline shows up in your
+Start Menu / Spotlight / app grid like any other program, and pairs itself
+with your browsers on first launch (then install the extension below).
+
+| System | File | How |
+|---|---|---|
+| **Windows** | `Grabline-Setup-*.exe` | Run it → Grabline installs and appears in the Start Menu |
+| **macOS** | `Grabline-*.dmg` | Open it, drag **Grabline** to Applications |
+| **Linux** | `Grabline-*-x86_64.AppImage` | `chmod +x` it and run; it adds itself to your app grid |
+
+> The installers are **not code-signed yet**, so the OS warns on first launch:
+> - **Windows:** SmartScreen → *More info* → *Run anyway*.
+> - **macOS:** right-click the app → *Open* → *Open* (or System Settings →
+>   Privacy & Security → *Open Anyway*).
+>
+> This is normal for open-source apps without a paid signing certificate.
+
+**Browser extension:** after installing the app, add **Grabline Connect**
+(Firefox now; Chrome/Edge/Brave coming). See
+[extension/README.md](extension/README.md). The app already registered the
+native host, so the extension's popup should say *connected*.
+
+## Install from source
+
+Prefer to run from source? You need **Python 3.12+** and **git**.
 
 ### Linux / macOS
 
