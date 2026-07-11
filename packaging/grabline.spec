@@ -31,7 +31,11 @@ ytdlp_datas, ytdlp_bins, ytdlp_hidden = collect_all("yt_dlp")
 curl_datas, curl_bins, curl_hidden = collect_all("curl_cffi")
 
 hidden = ytdlp_hidden + curl_hidden + collect_submodules("app")
-datas = ytdlp_datas + curl_datas
+# Ship the browser extension inside the app so the Browser Setup wizard can
+# stage it (Load unpacked / temporary add-on) - an installed build has no repo
+# checkout to copy it from. browser_setup._source_extension_dir() reads it back
+# from sys._MEIPASS/extension.
+datas = ytdlp_datas + curl_datas + [(str(ROOT / "extension"), "extension")]
 binaries = ytdlp_bins + curl_bins
 
 # Trim Qt modules the app never touches - keeps the bundle from ballooning.

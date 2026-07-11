@@ -37,7 +37,12 @@ class BrowserStep:
 
 
 def _source_extension_dir() -> Path:
-    """The repo's extension folder (paths.py is app/core/paths.py)."""
+    """Where the extension files ship. In a frozen (installed) build they're
+    bundled inside the app via PyInstaller datas, unpacked to ``sys._MEIPASS``;
+    from source it's the repo's ``extension/`` next to the app package."""
+    if getattr(sys, "frozen", False):
+        base = getattr(sys, "_MEIPASS", None) or Path(sys.executable).parent
+        return Path(base) / "extension"
     return Path(paths.__file__).resolve().parents[2] / "extension"
 
 
