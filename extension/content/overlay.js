@@ -130,22 +130,31 @@
     return false;
   }
 
+  const BUTTON_SIZE = 34;
+
+  function placeButton(rect) {
+    const size = BUTTON_SIZE;
+    const left = corner.endsWith("left") ? rect.left + 8 : rect.right - size - 8;
+    const top = corner.startsWith("bottom") ? rect.bottom - size - 8 : rect.top + 8;
+    button.style.left = `${Math.min(Math.max(4, left), window.innerWidth - size - 4)}px`;
+    button.style.top = `${Math.min(Math.max(4, top), window.innerHeight - size - 4)}px`;
+  }
+
   function showButtonFor(element) {
     attachHost();
     const rect = element.getBoundingClientRect();
     if (rect.width < 40 || rect.height < 40) return;
     currentTarget = element;
-    const size = 34;
-    const left = corner.endsWith("left") ? rect.left + 8 : rect.right - size - 8;
-    const top = corner.startsWith("bottom") ? rect.bottom - size - 8 : rect.top + 8;
-    button.style.left = `${Math.min(Math.max(4, left), window.innerWidth - size - 4)}px`;
-    button.style.top = `${Math.min(Math.max(4, top), window.innerHeight - size - 4)}px`;
+    placeButton(rect);
     button.style.display = "block";
     button.style.background = "#2563eb";
     button.textContent = "⬇";
+    startFollowing();
   }
 
   function hideButton() {
+    clearTimeout(hideTimer);
+    stopFollowing();
     button.style.display = "none";
     currentTarget = null;
   }
@@ -153,6 +162,41 @@
   function scheduleHide() {
     clearTimeout(hideTimer);
     hideTimer = setTimeout(hideButton, HIDE_DELAY_MS);
+  }
+
+  // Keep the button glued to its media while shown. Native scrolling fires
+  // "scroll", but reels/shorts feeds move with CSS transforms that don't - so
+  // we re-read the target's box every frame. The loop stops the instant the
+  // button hides, so it only runs during an actual hover.
+  let followId = 0;
+
+  function reposition() {
+    if (!currentTarget) return;
+    if (!currentTarget.isConnected) return hideButton();
+    const rect = currentTarget.getBoundingClientRect();
+    const offscreen =
+      rect.bottom < 0 ||
+      rect.top > window.innerHeight ||
+      rect.right < 0 ||
+      rect.left > window.innerWidth;
+    if (offscreen || rect.width < 40 || rect.height < 40) return hideButton();
+    placeButton(rect);
+  }
+
+  function startFollowing() {
+    if (!followId) followId = requestAnimationFrame(followFrame);
+  }
+
+  function stopFollowing() {
+    if (followId) cancelAnimationFrame(followId);
+    followId = 0;
+  }
+
+  function followFrame() {
+    followId = 0;
+    if (button.style.display === "none") return;
+    reposition();
+    if (button.style.display !== "none") followId = requestAnimationFrame(followFrame);
   }
 
   // ------------------------------------------------- gallery grab (F2.2)
@@ -313,22 +357,43 @@
     return false;
   });
 
+  // Find a <video>/<audio> under the pointer even when the site paints its own
+  // controls or a click-catching layer on top (reels, shorts, live players):
+  // elementsFromPoint returns the whole stack at that spot, including elements
+  // sitting *behind* others. That's what makes the button appear on media the
+  // page covers, which plain event.target matching misses.
+  function mediaUnderPointer(x, y) {
+    for (const el of document.elementsFromPoint(x, y)) {
+      if (el === host) continue;
+      if (el instanceof HTMLMediaElement) return el;
+    }
+    return null;
+  }
+
   document.addEventListener(
     "mouseover",
     (event) => {
-      if (!enabled || !hoverGlobal) return;
-      const element = event.target;
-      if (element === button) return;
-      if (eligible(element)) {
+      if (!enabled || !hoverGlobal || event.target === host) return;
+      // Videos (incl. streams/reels) win, found even when covered; images stay
+      // opt-in and are only taken from the direct target (never through a layer).
+      let media = mediaUnderPointer(event.clientX, event.clientY);
+      if (!media && event.target instanceof HTMLImageElement) media = event.target;
+      if (media && eligible(media)) {
         clearTimeout(hideTimer);
-        showButtonFor(element);
-      } else if (currentTarget && !currentTarget.contains(element)) {
+        showButtonFor(media);
+      } else if (currentTarget && !currentTarget.contains(event.target)) {
         scheduleHide();
       }
     },
     { passive: true },
   );
-  document.addEventListener("scroll", hideButton, { passive: true, capture: true });
+  document.addEventListener("scroll", reposition, { passive: true, capture: true });
+  window.addEventListener("resize", reposition, { passive: true });
+  // Switching tab or window must not leave a stale button stuck on the page.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) hideButton();
+  });
+  window.addEventListener("blur", hideButton);
 
   button.addEventListener("mouseenter", () => clearTimeout(hideTimer));
   button.addEventListener("mouseleave", scheduleHide);

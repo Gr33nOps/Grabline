@@ -245,6 +245,11 @@
       { passive: true },
     );
     document.addEventListener("scroll", hide, { passive: true, capture: true });
+    // Switching tab or window must not leave a stale button behind.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) hide();
+    });
+    window.addEventListener("blur", hide);
 
     button.addEventListener("mouseenter", () => clearTimeout(hideTimer));
     button.addEventListener("mouseleave", () => {
