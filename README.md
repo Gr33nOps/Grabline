@@ -1,8 +1,38 @@
+<div align="center">
+
+<img src="extension/icons/icon128.png" width="104" height="104" alt="Grabline logo" />
+
 # Grabline
 
-**A fast, free, open-source download manager - the modern, cross-platform
-answer to IDM. Accelerated multi-connection downloads, a real browser button,
-and a proper quality picker for video and audio, all in one app.**
+**The modern, cross-platform, open-source answer to IDM.**
+
+Accelerated multi-connection downloads · a real browser button · a full quality picker for video & audio.
+
+[![Download][download-badge]][releases]
+[![License: AGPL-3.0][license-badge]][license]
+![Platforms][platform-badge]
+![Python][python-badge]
+[![Tests][ci-badge]][ci]
+
+### [⬇&nbsp; Download for Windows · macOS · Linux][releases]
+
+[Features](#-why-grabline) · [Install](#-download--install) · [Everyday use](#-everyday-use) · [Browser extension](extension/README.md)
+
+<!-- Tip: drop a screenshot at docs/screenshots/queue.png and uncomment the line below -->
+<!-- <img src="docs/screenshots/queue.png" width="840" alt="Grabline queue window" /> -->
+
+</div>
+
+[releases]: https://github.com/Gr33nOps/Grabline/releases/latest
+[license]: LICENSE
+[ci]: https://github.com/Gr33nOps/Grabline/actions/workflows/ci.yml
+[download-badge]: https://img.shields.io/github/v/release/Gr33nOps/Grabline?label=Download&color=2ea44f&sort=semver
+[license-badge]: https://img.shields.io/badge/License-AGPL--3.0-blue
+[platform-badge]: https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
+[python-badge]: https://img.shields.io/badge/Python-3.12%2B-3776ab
+[ci-badge]: https://img.shields.io/github/actions/workflow/status/Gr33nOps/Grabline/ci.yml?branch=main&label=tests
+
+---
 
 Grabline downloads everything: a plain file, a 4K video, a whole folder of
 links, a streaming lecture. Point it at a URL - paste it, drop it on the
@@ -13,7 +43,7 @@ also get a quality panel: 4K → 144p, MP3/M4A with tags and cover art,
 subtitles, and clip trimming. Windows, macOS, and Linux. No ads, no
 telemetry, no paid tier. AGPL-3.0.
 
-## Why Grabline
+## ✨ Why Grabline
 
 A real download-accelerator core, a browser button that just works, and the
 video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
@@ -57,7 +87,7 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 
 ---
 
-## Download & install
+## ⬇️ Download & install
 
 Grab the installer for your system from the
 [**latest release**](https://github.com/Gr33nOps/Grabline/releases/latest)
@@ -83,7 +113,7 @@ with your browsers on first launch (then install the extension below).
 [extension/README.md](extension/README.md). The app already registered the
 native host, so the extension's popup should say *connected*.
 
-## Install from source
+## 🛠️ Install from source
 
 Prefer to run from source? You need **Python 3.12+** and **git**.
 
@@ -123,7 +153,7 @@ several Pythons, pick one explicitly: `py -3.12 -m venv .venv`.
 
 ---
 
-## First-time setup
+## 🚀 First-time setup
 
 The **Browser Setup** wizard opens on first launch (also under **File →
 Browser Setup**) and does the browser side for you: it pairs the native host
@@ -149,7 +179,7 @@ the tray menu.
 
 ---
 
-## Everyday use
+## 🎯 Everyday use
 
 | You do | Grabline does |
 |---|---|
@@ -168,7 +198,7 @@ the tray menu.
 Popup toggles: hover button on/off per site, hover button on images (off by
 default), button position (any corner), download takeover (off by default).
 
-## Music
+## 🎵 Music
 
 SoundCloud, Bandcamp, YouTube Music, Mixcloud, and every other non-DRM
 music site yt-dlp knows: hover ⬇ → MP3, tagged with cover art. Spotify
@@ -176,7 +206,7 @@ tracks, Apple Music, TIDAL, Deezer, and Amazon Music are **DRM-protected
 and are refused with a clear message** - Grabline does not and will not
 bypass DRM. (Spotify *podcasts* are not DRM-protected and download fine.)
 
-## The CLI
+## ⌨️ The CLI
 
 The same engines, headless:
 
@@ -187,7 +217,7 @@ python -m app.cli "https://…" ~/Downloads --quality mp3
 python -m app.cli "https://…/playlist" ~/Downloads --playlist --limit 10
 ```
 
-## Honest limits
+## ⚖️ Honest limits
 
 - **No DRM circumvention** - Netflix, Prime Video, Disney+, Spotify tracks
   and friends are refused with a clear message, not a workaround.
@@ -197,7 +227,7 @@ python -m app.cli "https://…/playlist" ~/Downloads --playlist --limit 10
 - You are responsible for the terms of service of the sites you use and for
   your local law.
 
-## For developers
+## 🧑‍💻 For developers
 
 ```
 app/
@@ -225,7 +255,7 @@ builds Chrome Web Store and Firefox (AMO) zips; the listing kit lives in
 three OSes are built by GitHub Actions on a version tag - see
 [packaging/README.md](packaging/README.md).
 
-## License
+## 📄 License
 
 [AGPL-3.0](LICENSE). yt-dlp (Unlicense) and PySide6 (LGPL) are compatible
 dependencies; FFmpeg is fetched by the user's machine on first run and never
