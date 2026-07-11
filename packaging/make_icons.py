@@ -16,9 +16,11 @@ import sys
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent
+ROOT = OUT.parent
+_FALLBACK_ICON = ROOT / "extension" / "icons" / "icon128.png"
 
 
-def _png(size: int) -> bytes:
+def _qt_png(size: int) -> bytes:
     from PySide6.QtCore import QBuffer, QIODevice
     from PySide6.QtGui import QGuiApplication
 
@@ -30,6 +32,25 @@ def _png(size: int) -> bytes:
     buffer.open(QIODevice.OpenModeFlag.WriteOnly)
     pixmap.save(buffer, "PNG")
     return bytes(bytearray(buffer.data().data()))
+
+
+def _fallback_png(size: int) -> bytes:
+    """The shipped Grabline mark, resized - used when Qt can't render (e.g. a
+    headless runner missing Qt's platform libs)."""
+    from PIL import Image
+
+    image = Image.open(_FALLBACK_ICON).convert("RGBA").resize((size, size), Image.LANCZOS)
+    out = io.BytesIO()
+    image.save(out, format="PNG")
+    return out.getvalue()
+
+
+def _png(size: int) -> bytes:
+    try:
+        return _qt_png(size)
+    except Exception as exc:  # Qt unavailable: fall back to the shipped icon
+        print(f"Qt render failed ({exc}); using the bundled icon")
+        return _fallback_png(size)
 
 
 def main() -> int:
