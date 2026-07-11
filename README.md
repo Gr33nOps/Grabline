@@ -108,76 +108,22 @@ with your browsers on first launch (then install the extension below).
 >
 > This is normal for open-source apps without a paid signing certificate.
 
-**Browser extension:** after installing the app, add **Grabline Connect**
-(Firefox now; Chrome/Edge/Brave coming). See
-[extension/README.md](extension/README.md). The app already registered the
-native host, so the extension's popup should say *connected*.
+## 🚀 First run
 
-## 🛠️ Install from source
+Grabline sets itself up — no config files, no terminal:
 
-Prefer to run from source? You need **Python 3.12+** and **git**.
+1. **It pairs with your browsers automatically** on first launch.
+2. The **Browser Setup** window (also under **File → Browser Setup**) shows a
+   one-click **Add Grabline to \<your browser\>** button — click it, then click
+   **Add** in the browser. Done. (The extension ships inside the app, so
+   there's nothing to download separately.)
+3. For MP3 and streams, open **Settings → Tools** and click **Install FFmpeg**
+   if it says *Not found* — Grabline fetches an official build over HTTPS and
+   verifies a pinned checksum.
 
-### Linux / macOS
-
-```bash
-git clone https://github.com/Gr33nOps/Grabline.git && cd Grabline
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-python -m app
-```
-
-The first launch adds Grabline to your application menu, so after that you can
-start it from the app grid/dock (no terminal).
-
-Debian/Ubuntu only: if the window doesn't appear
-(*"Could not load the Qt platform plugin xcb"*), install Qt's system
-libraries first: `sudo apt install libxcb-cursor0 libegl1 libxkbcommon0`.
-
-### Windows
-
-Install Python from [python.org](https://www.python.org/downloads/) -
-**not** the Microsoft Store (the Store build is sandboxed and hides the
-browser-pairing files from your browsers; Grabline detects this and refuses).
-Then, in PowerShell:
-
-```powershell
-git clone https://github.com/Gr33nOps/Grabline.git; cd Grabline
-py -m venv .venv
-.venv\Scripts\python -m pip install -e .
-.venv\Scripts\python -m app
-```
-
-The `.venv\Scripts\python -m …` style needs no activation and is immune to
-other Pythons on your PATH (MSYS2, Store aliases, and friends). If you have
-several Pythons, pick one explicitly: `py -3.12 -m venv .venv`.
-
----
-
-## 🚀 First-time setup
-
-The **Browser Setup** wizard opens on first launch (also under **File →
-Browser Setup**) and does the browser side for you: it pairs the native host
-with one click and stages the extension at a stable folder it shows you.
-
-- **Chrome / Edge / Brave:** click *Open folder* in the wizard, then in
-  `chrome://extensions` enable *Developer mode* → *Load unpacked* → pick that
-  folder. Permanent. (Fully automatic install needs the Chrome Web Store; the
-  free path is this one manual step.)
-- **Firefox:** `about:debugging` → *Load Temporary Add-on* → `manifest.json`
-  in that folder. A permanent install comes with the free
-  [AMO signing](extension/README.md).
-
-Then, for MP3/streams, open **Settings** and click **Install FFmpeg** if it
-shows *Not found* (Grabline fetches an official build over HTTPS and verifies
-a pinned SHA-256). Click the Grabline toolbar icon in the browser - the popup
-should say **connected**.
-
-Optional but recommended: in **Settings**, tick **"Start Grabline when I log
-in"** - it will sit minimized in the tray, always ready for the browser,
-exactly like IDM. Closing the window keeps it in the tray; *Quit* lives in
-the tray menu.
-
----
+The toolbar button's popup should say **connected**. Optional: in **Settings**,
+tick **Start Grabline when I log in** so it waits in the tray, always ready —
+like IDM.
 
 ## 🎯 Everyday use
 
@@ -229,6 +175,20 @@ python -m app.cli "https://…/playlist" ~/Downloads --playlist --limit 10
 
 ## 🧑‍💻 For developers
 
+Run from source (Python 3.12+ and git):
+
+```bash
+git clone https://github.com/Gr33nOps/Grabline.git && cd Grabline
+python3 -m venv .venv && source .venv/bin/activate   # Windows: py -m venv .venv
+pip install -e .
+python -m app
+```
+
+On Windows use Python from [python.org](https://www.python.org/downloads/), not
+the Microsoft Store (its sandbox hides the browser-pairing files). On Debian/
+Ubuntu, if the window doesn't appear:
+`sudo apt install libxcb-cursor0 libegl1 libxkbcommon0`.
+
 ```
 app/
 ├── core/       resolver, segmented downloader, queue manager, settings,
@@ -244,7 +204,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(262 tests, including an 8-connection download killed with SIGKILL and
+(266 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.
