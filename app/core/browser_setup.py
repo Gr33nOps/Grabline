@@ -7,13 +7,22 @@ and reports which browsers are installed.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from app.core import paths
+
+#: Public store listing for each browser family, where the user clicks a single
+#: "Add" to install. No app can install an extension silently - a browser will
+#: only add one from its own store (one click) or via a manual developer load.
+#: Fill CHROME_WEBSTORE_URL once the extension is published there.
+AMO_LISTING_URL = "https://addons.mozilla.org/firefox/addon/grabline-connect/"
+CHROME_WEBSTORE_URL: str | None = None
 
 #: How each browser can install Grabline Connect for free.
 #: "auto"  - a free store / signed add-on exists, so it can be one click.
@@ -63,6 +72,102 @@ def install_extension_files() -> Path:
         shutil.rmtree(target, ignore_errors=True)
     shutil.copytree(source, target)
     return target
+
+
+def _classify_browser(identifier: str) -> tuple[str, str] | None:
+    """Map an OS browser identifier (desktop file, ProgId, bundle id) onto a
+    (family, display name), where family is 'firefox' or 'chromium'. Order
+    matters: Brave/Edge strings also contain 'chrome'-ish substrings."""
+    ident = identifier.lower()
+    if "firefox" in ident or "mozilla" in ident:
+        return ("firefox", "Firefox")
+    if "brave" in ident:
+        return ("chromium", "Brave")
+    if "edge" in ident or "msedge" in ident:
+        return ("chromium", "Microsoft Edge")
+    if "chromium" in ident:
+        return ("chromium", "Chromium")
+    if "chrome" in ident:
+        return ("chromium", "Chrome")
+    if "opera" in ident:
+        return ("chromium", "Opera")
+    return None
+
+
+def _linux_default_browser_id() -> str | None:
+    result = subprocess.run(  # argument list only - no shell (S1)
+        ["xdg-settings", "get", "default-web-browser"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    return result.stdout.strip() or None if result.returncode == 0 else None
+
+
+def _windows_default_browser_id() -> str | None:  # pragma: no cover - windows-only
+    if sys.platform == "win32":
+        import winreg
+
+        key = r"SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as handle:
+            prog_id, _ = winreg.QueryValueEx(handle, "ProgId")
+        return str(prog_id)
+    return None
+
+
+def _darwin_default_browser_id(home: Path) -> str | None:  # pragma: no cover - macos-only
+    plist = (
+        home
+        / "Library/Preferences/com.apple.LaunchServices"
+        / "com.apple.launchservices.secure.plist"
+    )
+    result = subprocess.run(
+        ["plutil", "-convert", "json", "-o", "-", str(plist)],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if result.returncode != 0:
+        return None
+    for handler in json.loads(result.stdout).get("LSHandlers", []):
+        if handler.get("LSHandlerURLScheme") == "https":
+            value = handler.get("LSHandlerRoleAll") or handler.get("LSHandlerRoleViewer")
+            return str(value) if value else None
+    return None
+
+
+def default_browser(
+    platform: str | None = None, home: Path | None = None
+) -> tuple[str, str] | None:
+    """The OS default web browser as (family, display name), or None if it
+    can't be determined - family is 'firefox' or 'chromium'. Used to point the
+    'Add the extension' button at the right store."""
+    platform = platform or sys.platform
+    home = home or Path.home()
+    try:
+        if platform == "win32":
+            identifier = _windows_default_browser_id()
+        elif platform == "darwin":
+            identifier = _darwin_default_browser_id(home)
+        else:
+            identifier = _linux_default_browser_id()
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    return _classify_browser(identifier) if identifier else None
+
+
+def extension_install_url(platform: str | None = None, home: Path | None = None) -> str | None:
+    """The one-click store install page for the default browser, or None when
+    there isn't one yet (then the wizard's manual 'Load unpacked' path applies)."""
+    browser = default_browser(platform, home)
+    if browser is None:
+        return None
+    family = browser[0]
+    if family == "firefox":
+        return AMO_LISTING_URL
+    if family == "chromium":
+        return CHROME_WEBSTORE_URL
+    return None
 
 
 def _chromium_root(name: str, home: Path, platform: str) -> Path | None:

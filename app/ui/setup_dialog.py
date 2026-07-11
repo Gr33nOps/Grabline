@@ -47,8 +47,29 @@ class SetupDialog(QDialog):
         pair_row.addWidget(pair_button)
         layout.addLayout(pair_row)
 
-        # Step 2 - the extension folder at a stable path.
-        layout.addWidget(self._heading("2. Load the extension"))
+        # Step 2 - the extension.
+        layout.addWidget(self._heading("2. Add the extension"))
+
+        # One-click path: open the store listing in the user's default browser,
+        # where they click a single "Add". No app can install an extension
+        # itself - the browser only accepts one from its own store. Shown only
+        # when that browser has a live store listing; otherwise the manual
+        # "Load unpacked" path below applies.
+        browser = browser_setup.default_browser()
+        store_url = browser_setup.extension_install_url()
+        if browser and store_url:
+            add_button = QPushButton(f"➜  Add Grabline to {browser[1]}")
+            add_button.setStyleSheet("font-weight: 600; padding: 6px;")
+            add_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(store_url)))
+            layout.addWidget(add_button)
+            hint = QLabel(
+                f"Opens the store page in {browser[1]} - click <b>Add</b> there. "
+                "Or use the manual folder below for any browser."
+            )
+            hint.setWordWrap(True)
+            hint.setStyleSheet("color: gray; font-size: 11px;")
+            layout.addWidget(hint)
+
         folder_row = QHBoxLayout()
         self._folder_edit = QLineEdit()
         self._folder_edit.setReadOnly(True)

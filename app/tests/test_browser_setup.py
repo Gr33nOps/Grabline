@@ -67,3 +67,37 @@ def test_detect_cookie_browser_falls_back_to_installed(tmp_path: Path):
 
 def test_detect_cookie_browser_none_when_nothing_present(tmp_path: Path):
     assert browser_setup.detect_cookie_browser("linux", home=tmp_path / "empty") is None
+
+
+def test_classify_browser_maps_families():
+    classify = browser_setup._classify_browser
+    assert classify("firefox.desktop") == ("firefox", "Firefox")
+    assert classify("org.mozilla.firefox") == ("firefox", "Firefox")
+    assert classify("brave-browser.desktop") == ("chromium", "Brave")
+    assert classify("MSEdgeHTM") == ("chromium", "Microsoft Edge")
+    assert classify("ChromeHTML") == ("chromium", "Chrome")
+    assert classify("chromium.desktop") == ("chromium", "Chromium")
+    assert classify("something-else") is None
+
+
+def test_default_browser_reads_linux_setting(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(browser_setup, "_linux_default_browser_id", lambda: "firefox.desktop")
+    assert browser_setup.default_browser(platform="linux") == ("firefox", "Firefox")
+
+
+def test_default_browser_none_when_tool_fails(monkeypatch: pytest.MonkeyPatch):
+    def boom() -> str | None:
+        raise FileNotFoundError("no xdg-settings")
+
+    monkeypatch.setattr(browser_setup, "_linux_default_browser_id", boom)
+    assert browser_setup.default_browser(platform="linux") is None
+
+
+def test_extension_install_url_picks_the_store(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(browser_setup, "default_browser", lambda *a, **k: ("firefox", "Firefox"))
+    assert browser_setup.extension_install_url() == browser_setup.AMO_LISTING_URL
+    # Chromium has no live store URL yet -> None (manual load path applies).
+    monkeypatch.setattr(browser_setup, "default_browser", lambda *a, **k: ("chromium", "Chrome"))
+    assert browser_setup.extension_install_url() is None
+    monkeypatch.setattr(browser_setup, "default_browser", lambda *a, **k: None)
+    assert browser_setup.extension_install_url() is None
