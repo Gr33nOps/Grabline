@@ -6,10 +6,8 @@ URL will start immediately or wait for the next app launch.
 
 from __future__ import annotations
 
-import contextlib
 import os
 import sys
-from collections.abc import Iterator
 from pathlib import Path
 
 from app.core import paths
@@ -69,13 +67,3 @@ def _pid_running_windows(pid: int) -> bool:  # pragma: no cover - windows-only
         return exit_code.value == STILL_ACTIVE
     finally:
         kernel32.CloseHandle(handle)
-
-
-@contextlib.contextmanager
-def running_marker(path: Path | None = None) -> Iterator[None]:
-    """Context manager the app holds for its lifetime."""
-    write_pid(path)
-    try:
-        yield
-    finally:
-        clear_pid(path)
