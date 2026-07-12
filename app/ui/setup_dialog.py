@@ -50,25 +50,29 @@ class SetupDialog(QDialog):
         # Step 2 - the extension.
         layout.addWidget(self._heading("2. Add the extension"))
 
-        # One-click path: open the store listing in the user's default browser,
-        # where they click a single "Add". No app can install an extension
-        # itself - the browser only accepts one from its own store. Shown only
-        # when that browser has a live store listing; otherwise the manual
-        # "Load unpacked" path below applies.
+        # A prominent action for the detected default browser. No app can
+        # install an extension itself - the browser only accepts one from its
+        # own store (one click) or a manual developer load. So: if that browser
+        # has a live store listing, the button opens it; otherwise it opens the
+        # extension folder and the extensions page to Load unpacked in one go.
         browser = browser_setup.default_browser()
-        store_url = browser_setup.extension_install_url()
-        if browser and store_url:
+        self._store_url = browser_setup.extension_install_url()
+        self._add_hint: QLabel | None = None
+        if browser is not None:
             add_button = QPushButton(f"➜  Add Grabline to {browser[1]}")
             add_button.setStyleSheet("font-weight: 600; padding: 6px;")
-            add_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(store_url)))
+            add_button.clicked.connect(self._add_to_browser)
             layout.addWidget(add_button)
-            hint = QLabel(
-                f"Opens the store page in {browser[1]} - click <b>Add</b> there. "
-                "Or use the manual folder below for any browser."
+            self._add_hint = QLabel(
+                f"Opens the store page in {browser[1]} - click <b>Add</b> there."
+                if self._store_url
+                else f"{browser[1]} has no store install yet, so this opens the "
+                "extension folder and the extensions page - turn on "
+                "<b>Developer mode</b> and <b>Load unpacked</b> it (one time)."
             )
-            hint.setWordWrap(True)
-            hint.setStyleSheet("color: gray; font-size: 11px;")
-            layout.addWidget(hint)
+            self._add_hint.setWordWrap(True)
+            self._add_hint.setStyleSheet("color: gray; font-size: 11px;")
+            layout.addWidget(self._add_hint)
 
         folder_row = QHBoxLayout()
         self._folder_edit = QLineEdit()
@@ -140,6 +144,21 @@ class SetupDialog(QDialog):
             self._folder_edit.setText(str(path))
         except (OSError, FileNotFoundError) as exc:
             self._folder_edit.setText(f"(could not prepare extension: {exc})")
+
+    def _add_to_browser(self) -> None:
+        if self._store_url:
+            QDesktopServices.openUrl(QUrl(self._store_url))
+            return
+        # No store listing yet (Chromium before the Web Store): open the staged
+        # folder and copy the extensions URL so Load unpacked is a paste away.
+        self._open_folder()
+        QGuiApplication.clipboard().setText("chrome://extensions")
+        if self._add_hint is not None:
+            self._add_hint.setText(
+                "Opened the extension folder and copied <b>chrome://extensions</b>. "
+                "Paste it in a new tab, turn on <b>Developer mode</b>, click "
+                "<b>Load unpacked</b>, and pick that folder."
+            )
 
     def _pair(self) -> None:
         try:
