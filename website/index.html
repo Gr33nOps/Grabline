@@ -900,8 +900,9 @@
             Installers aren’t code-signed yet, so the OS warns on first launch — on Windows
             choose <b>More info → Run anyway</b>; on macOS <b>right-click → Open</b>. Normal
             for open-source apps without a paid signing certificate. On Linux, if the
-            AppImage won’t start, grab the <b>.tar.gz</b> from the releases page (no FUSE
-            needed) — extract it and run <code>./grabline/grabline</code>.
+            AppImage won’t start, grab the
+            <a id="tarballLink" href="https://github.com/Gr33nOps/Grabline/releases/latest" style="color: var(--accent)"><b>.tar.gz</b></a>
+            (no FUSE needed) — extract it and run <code>./grabline/grabline</code>.
             <a href="https://github.com/Gr33nOps/Grabline/releases" style="color: var(--accent)">All releases →</a>
           </p>
         </div>
@@ -994,6 +995,11 @@
           document.getElementById("heroVersion").textContent = tag ? "Latest: " + tag : "Latest release";
           const dv = document.getElementById("dlVersion");
           if (dv && tag) dv.textContent = tag;
+
+          // Direct link for the FUSE-free Linux tarball, when the release has one.
+          const tarball = assets.find((a) => /linux.*\.tar\.gz$/i.test(a.name));
+          const tarballLink = document.getElementById("tarballLink");
+          if (tarball && tarballLink) tarballLink.href = tarball.browser_download_url;
 
           document.querySelectorAll(".plat").forEach((card) => {
             const os = card.getAttribute("data-os");
