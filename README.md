@@ -99,7 +99,7 @@ with your browsers on first launch (then install the extension below).
 |---|---|---|
 | **Windows** | `Grabline-Setup-*.exe` | Run it → Grabline installs and appears in the Start Menu |
 | **macOS** | `Grabline-*.dmg` | Open it, drag **Grabline** to Applications |
-| **Linux** | `Grabline-*-x86_64.AppImage` | `chmod +x` it and run; it adds itself to your app grid |
+| **Linux** | `Grabline-*-x86_64.AppImage` | `chmod +x` it and run; it adds itself to your app grid. No FUSE? Use the `.tar.gz` — extract and run `./grabline/grabline` |
 
 > The installers are **not code-signed yet**, so the OS warns on first launch:
 > - **Windows:** SmartScreen → *More info* → *Run anyway*.
