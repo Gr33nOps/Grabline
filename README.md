@@ -16,7 +16,7 @@ Accelerated multi-connection downloads · a real browser button · a full qualit
 
 ### [⬇&nbsp; Download for Windows · macOS · Linux][releases]
 
-[Features](#-why-grabline) · [Install](#-download--install) · [Everyday use](#-everyday-use) · [Browser extension](extension/README.md)
+[Website](https://gr33nops.github.io/Grabline/) · [Features](#-why-grabline) · [Install](#-download--install) · [Everyday use](#-everyday-use) · [Browser extension](extension/README.md)
 
 <!-- Tip: drop a screenshot at docs/screenshots/queue.png and uncomment the line below -->
 <!-- <img src="docs/screenshots/queue.png" width="840" alt="Grabline queue window" /> -->
@@ -142,7 +142,7 @@ like IDM.
 | Copy a URL anywhere | An unobtrusive "Download with Grabline?" offer (can be turned off) |
 
 Popup toggles: hover button on/off per site, hover button on images (off by
-default), button position (any corner), download takeover (off by default).
+default), button position (any corner), download takeover (on by default - it only takes over while the app is running).
 
 ## 🎵 Music
 
@@ -204,7 +204,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(266 tests, including an 8-connection download killed with SIGKILL and
+(268 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.
