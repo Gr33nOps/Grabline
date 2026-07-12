@@ -183,3 +183,31 @@ def test_snapshot_reports_progress(server: MediaServer, db: Database, dest: Path
     assert view.status is JobStatus.COMPLETED
     assert view.downloaded == len(data)
     assert view.total_size == len(data)
+
+
+def test_connection_budget_is_shared_across_active_jobs(db: Database, dest: Path):
+    # A job starting while others run gets a slice of the connection budget,
+    # not another full set of sockets that would starve its siblings.
+    from app.core.downloader import SegmentedDownload
+
+    def segmented(url: str, name: str) -> SegmentedDownload:
+        task = manager._create_task(db.create_job(url, str(dest), name))
+        assert isinstance(task, SegmentedDownload)
+        return task
+
+    manager = DownloadManager(db, max_concurrent=3)
+    try:
+        manager._connections_override = 16
+        alone = segmented("https://x.test/a.bin", "a.bin")
+        assert alone.connections == 16  # nothing else running: full budget
+
+        manager._active[1] = alone  # simulate one running download
+        second = segmented("https://x.test/b.bin", "b.bin")
+        assert second.connections == 8  # 16 // 2
+
+        manager._active[2] = second
+        third = segmented("https://x.test/c.bin", "c.bin")
+        assert third.connections == 5  # 16 // 3
+    finally:
+        manager._active.clear()
+        manager.shutdown()

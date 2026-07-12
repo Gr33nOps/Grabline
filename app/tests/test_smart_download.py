@@ -104,11 +104,16 @@ def test_smart_download_cancel_removes_partials(server: MediaServer, db: Databas
     assert leftovers == []
 
 
+def _no_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin 'no JS runtime installed' so tests don't depend on the machine."""
+    monkeypatch.setattr("app.core.jsruntime.detect_js_runtime", lambda *a, **k: None)
+
+
 def test_normal_video_takes_the_fast_path(
     db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    # The speed fix: a normal video is one attempt with no JS runtime and no
-    # cookies, so yt-dlp uses the fast jsless clients and starts quickly.
+    # No runtime installed anywhere: one jsless attempt, no cookies, no retry.
+    _no_runtime(monkeypatch)
     job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
     task = SmartDownload(db, job, ffmpeg_path=None)
     calls: list[tuple[bool, bool]] = []
@@ -122,16 +127,43 @@ def test_normal_video_takes_the_fast_path(
     assert calls == [(False, False)]  # no runtime, no cookies, no retry
 
 
+def test_installed_runtime_is_used_from_the_start(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # The 'every YouTube video is slow' fix: an already-installed runtime is
+    # used on attempt one (solver cached -> seconds), not after a doomed
+    # jsless attempt plus a fresh escalation per video.
+    monkeypatch.setattr(
+        "app.core.jsruntime.detect_js_runtime", lambda *a, **k: ("node", "/usr/bin/node")
+    )
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    calls: list[tuple[bool, bool]] = []
+
+    def fake_download(*, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
+        calls.append((with_cookies, with_runtime))
+        return {"title": "ok"}
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    assert task._download_smart() == {"title": "ok"}
+    assert calls == [(False, True)]  # runtime on, still no cookies, one attempt
+
+
 def test_age_wall_escalates_to_runtime_and_login(
     db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    # Age-restricted: the fast try hits the wall, so escalate to the runtime
-    # plus the browser login - automatically, no toggle.
+    # Age-restricted: the first try hits the wall, so retry with the browser
+    # login (and provision a runtime for the signed-in client) - no toggle.
     import yt_dlp
 
+    _no_runtime(monkeypatch)
     job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
     task = SmartDownload(db, job, ffmpeg_path=None)
-    monkeypatch.setattr(task, "_ensure_js_runtime", lambda: None)
+
+    def fake_ensure() -> None:  # a successful Deno provisioning
+        task._js_runtime = ("deno", "/x/deno")
+
+    monkeypatch.setattr(task, "_ensure_js_runtime", fake_ensure)
     calls: list[tuple[bool, bool]] = []
 
     def fake_download(*, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
@@ -152,9 +184,14 @@ def test_format_error_escalates_to_runtime_without_login(
     # (+ solver), but no login - it isn't an auth wall.
     import yt_dlp
 
+    _no_runtime(monkeypatch)
     job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
     task = SmartDownload(db, job, ffmpeg_path=None)
-    monkeypatch.setattr(task, "_ensure_js_runtime", lambda: None)
+
+    def fake_ensure() -> None:
+        task._js_runtime = ("deno", "/x/deno")
+
+    monkeypatch.setattr(task, "_ensure_js_runtime", fake_ensure)
     calls: list[tuple[bool, bool]] = []
 
     def fake_download(*, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
@@ -173,6 +210,7 @@ def test_no_login_escalation_when_no_browser_found(
 ):
     import yt_dlp
 
+    _no_runtime(monkeypatch)
     job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4")  # no session_browser set
     task = SmartDownload(db, job, ffmpeg_path=None)
     monkeypatch.setattr("app.core.browser_setup.detect_cookie_browser", lambda *a, **k: None)
@@ -188,6 +226,7 @@ def test_no_login_escalation_when_no_browser_found(
 def test_unrelated_error_is_not_retried(db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch):
     import yt_dlp
 
+    _no_runtime(monkeypatch)
     job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox")
     task = SmartDownload(db, job, ffmpeg_path=None)
     calls: list[tuple[bool, bool]] = []

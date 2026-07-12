@@ -516,10 +516,18 @@ class DownloadManager:
         if job.kind is JobKind.HLS:
             # FFmpeg-driven jobs are not rate-limited (Phase 3 polish).
             return HlsDownload(self.db, job, ffmpeg_path=find_ffmpeg(self.settings), proxy=proxy)
+        # Share the link: a job starting while others run takes a proportional
+        # slice of the connection budget instead of piling another full set of
+        # sockets onto the same line - N established flows starve a late
+        # sibling down to a trickle (TCP fairness is per-flow, not per-job).
+        # A lone job still gets everything, and dynamic segmentation makes the
+        # most of whatever slice a busy start receives.
+        active = len(self._active)
+        connections = self.connections if active == 0 else max(3, self.connections // (active + 1))
         return SegmentedDownload(
             self.db,
             job,
-            connections=self.connections,
+            connections=connections,
             limiter=self.limiter,
             job_limiter=self._job_limiter_for(job),
             proxy=proxy,

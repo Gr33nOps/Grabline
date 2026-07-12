@@ -25,12 +25,16 @@ async function cookieHeaderFor(url) {
   }
 }
 
-async function sendToGrabline(url, tab, { quality = null, fallbackUrls = [], credentials = false } = {}) {
+async function sendToGrabline(
+  url,
+  tab,
+  { quality = null, fallbackUrls = [], credentials = false, title = null } = {},
+) {
   const message = {
     type: "download",
     url,
     pageUrl: tab?.url ?? null,
-    pageTitle: tab?.title ?? null,
+    pageTitle: title ?? tab?.title ?? null,
     source: "extension",
     quality,
     fallbackUrls,
@@ -43,6 +47,7 @@ async function sendToGrabline(url, tab, { quality = null, fallbackUrls = [], cre
   try {
     const reply = await api.runtime.sendNativeMessage(HOST_NAME, message);
     await api.storage.session.set({ lastNativeError: null });
+    if (typeof reply?.appRunning === "boolean") noteAppRunning(reply.appRunning);
     if (reply?.type === "queued" && tab?.id != null) track(url, tab.id);
     return reply ?? { type: "error", message: "empty reply from host" };
   } catch (error) {
@@ -56,6 +61,7 @@ async function pingGrabline() {
   try {
     const reply = await api.runtime.sendNativeMessage(HOST_NAME, { type: "ping" });
     await api.storage.session.set({ lastNativeError: null });
+    if (typeof reply?.appRunning === "boolean") noteAppRunning(reply.appRunning);
     return reply;
   } catch (error) {
     const detail = error?.message ?? String(error);
@@ -254,6 +260,14 @@ function classify(details) {
 }
 
 async function recordMedia(tabId, item) {
+  // Name the media by what the tab is showing right now - the URL leaf of a
+  // stream is usually a meaningless hash, but the tab title is the video.
+  try {
+    const tab = await api.tabs.get(tabId);
+    item.title = tab?.title || null;
+  } catch {
+    item.title = null;
+  }
   const key = `tab:${tabId}`;
   const stored = await api.storage.session.get(key);
   // Dedupe by URL but move it back to the top with a fresh timestamp: media
@@ -315,6 +329,37 @@ function shouldIntercept(item) {
   return /^https?:/i.test(url);
 }
 
+// While we're taking downloads over, hide Chromium's download shelf/bubble so
+// the intercepted download doesn't flash in the browser UI before Grabline
+// picks it up. Feature-detected: needs the downloads.ui/downloads.shelf
+// permissions (present in the Chrome store build; a no-op on Firefox, which
+// has neither API - a momentary flash there is unavoidable with the
+// downloads-API takeover). Re-shown whenever interception is off or the app
+// isn't running, so native browser downloads stay visible.
+let lastAppRunning = false;
+
+async function updateDownloadUi() {
+  const { intercept = true } = await api.storage.local.get("intercept");
+  const visible = !(intercept && lastAppRunning);
+  try {
+    if (api.downloads.setUiOptions) await api.downloads.setUiOptions({ enabled: visible });
+    else if (api.downloads.setShelfEnabled) api.downloads.setShelfEnabled(visible);
+  } catch {
+    /* permission not granted in this build - keep the browser UI as is */
+  }
+}
+
+function noteAppRunning(running) {
+  if (running !== lastAppRunning) {
+    lastAppRunning = running;
+    void updateDownloadUi();
+  }
+}
+
+api.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.intercept) void updateDownloadUi();
+});
+
 api.downloads.onCreated.addListener(async (item) => {
   // On by default, but only take a download away from the browser when the
   // Grabline app is actually running to receive it - otherwise the file would
@@ -329,10 +374,17 @@ api.downloads.onCreated.addListener(async (item) => {
   } catch {
     return; // too late to take over; let the browser finish it
   }
-  // A synthetic tab carries the referring page; cookies make gated files work.
-  await sendToGrabline(item.finalUrl || item.url, { url: item.referrer || null }, {
-    credentials: true,
-  });
+  // A synthetic tab carries the referring page AND a human name: the page
+  // title (the movie/video the user is looking at), else the filename the
+  // browser had chosen. Without this the app only has the URL leaf, which on
+  // CDNs is a random hash - the "downloads named random numbers" report.
+  const [active] = await api.tabs.query({ active: true, lastFocusedWindow: true });
+  const chosenName = (item.filename || "").split(/[\\/]/).pop() || null;
+  await sendToGrabline(
+    item.finalUrl || item.url,
+    { url: item.referrer || active?.url || null, title: active?.title || chosenName },
+    { credentials: true },
+  );
 });
 
 // ------------------------------------------------------------- messages
@@ -364,7 +416,11 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       const tab = await tabForMessage(sender, message);
       const fallbackUrls = message.sniff ? await sniffedUrlsFor(tab?.id) : [];
-      return sendToGrabline(message.url, tab, { quality: message.quality ?? null, fallbackUrls });
+      return sendToGrabline(message.url, tab, {
+        quality: message.quality ?? null,
+        fallbackUrls,
+        title: message.title ?? null,
+      });
     })().then(sendResponse);
     return true; // async response
   }

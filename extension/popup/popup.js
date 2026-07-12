@@ -31,19 +31,21 @@ function cleanTitle(title) {
 }
 
 // A human name for a sniffed media item: the real filename when the URL has
-// one, otherwise the page/video title (a movie stream's URL is usually a hash).
+// one, otherwise the title captured when the media was sniffed (what was
+// playing then), otherwise the tab's title now. A stream URL is usually a hash.
 function mediaName(item, tab) {
   try {
     const leaf = decodeURIComponent(
       new URL(item.url).pathname.split("/").filter(Boolean).pop() || "",
     );
     const base = leaf.replace(/\.[a-z0-9]{2,4}$/i, "");
-    const named = leaf && base.length >= 3 && !UGLY_LEAF.test(base) && !/^[0-9a-f]{12,}$/i.test(base);
+    const named =
+      leaf && base.length >= 3 && !UGLY_LEAF.test(base) && !/^[0-9a-f]{12,}$/i.test(base);
     if (named) return leaf;
   } catch {
     /* unparsable URL - fall through to the title */
   }
-  return cleanTitle(tab?.title) || item.kind || "media";
+  return cleanTitle(item.title) || cleanTitle(tab?.title) || item.kind || "media";
 }
 
 async function activeTab() {
@@ -96,7 +98,12 @@ async function renderMediaList(tab) {
     grab.addEventListener("click", async () => {
       grab.disabled = true;
       grab.textContent = "Sent ✓";
-      const reply = await api.runtime.sendMessage({ cmd: "grab", url: item.url, tabId: tab.id });
+      const reply = await api.runtime.sendMessage({
+        cmd: "grab",
+        url: item.url,
+        tabId: tab.id,
+        title: mediaName(item, tab),
+      });
       if (reply?.type === "error") {
         grab.textContent = "Failed";
         grab.disabled = false;

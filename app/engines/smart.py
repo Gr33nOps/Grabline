@@ -405,6 +405,16 @@ class SmartEngine:
             "extract_flat": "in_playlist",
             "skip_download": True,
         }
+        from app.core import jsruntime
+
+        runtime = jsruntime.detect_js_runtime()
+        if runtime is not None:
+            # Same setup the download will use: an already-installed runtime
+            # (solver cached -> ~1s) yields the full format list instead of a
+            # degraded jsless set, and keeps analyze/download consistent.
+            name, path = runtime
+            opts["js_runtimes"] = {name: {"path": path}}
+            opts["remote_components"] = ["ejs:github"]
         if use_session:
             opts["cookiesfrombrowser"] = (session_browser,)
         if proxy:
@@ -661,33 +671,53 @@ class SmartDownload:
         return info
 
     def _download_smart(self) -> dict[str, Any]:
-        """Fast first, capable second. The first attempt uses no JS runtime and
-        no cookies, so yt-dlp picks YouTube's jsless android_vr/tv clients and
-        normal videos start in seconds. Only if that fails in a way a runtime
-        or a login could fix do we escalate to the slow path (Deno + EJS solver,
-        plus the browser login on an auth wall) - so age/login-restricted videos
-        still work, without making every video pay for it."""
+        """Best cheap setup first, one escalation on failure.
+
+        A JS runtime that is already on the machine (Node/Deno/Bun on PATH, or
+        our managed Deno from a past escalation) is used from the FIRST attempt:
+        with yt-dlp's solver cached it costs a second or two and buys complete,
+        full-speed formats. Without it, every video used to pay a doomed jsless
+        attempt and then a fresh escalation - the 'every YouTube download is
+        slow' report. What never happens up front is the expensive part:
+        downloading Deno (~40 MB) or reading browser cookies. Those are added
+        only when the failure says they would help (auth wall -> cookies,
+        format collapse -> provision a runtime)."""
         import yt_dlp
 
+        from app.core import jsruntime
+
+        if self._js_runtime is None:
+            self._js_runtime = jsruntime.detect_js_runtime()
+        prefer_cookies = (
+            bool(self.job.options.get("use_session")) and self._cookie_browser() is not None
+        )
         try:
-            return self._download(with_cookies=False, with_runtime=False)
+            return self._download(
+                with_cookies=prefer_cookies, with_runtime=self._js_runtime is not None
+            )
         except yt_dlp.utils.DownloadError as exc:
             if self._stop_event.is_set():
                 raise
             message = str(exc)
             browser = self._cookie_browser()
-            wants_login = browser is not None and (
-                _looks_like_auth_wall(message) or bool(self.job.options.get("use_session"))
+            add_login = (
+                browser is not None and not prefer_cookies and _looks_like_auth_wall(message)
             )
-            if not (_runtime_might_help(message) or wants_login):
+            add_runtime = self._js_runtime is None and _runtime_might_help(message)
+            if not (add_login or add_runtime):
                 raise  # unrecoverable (removed, geo-blocked, ...) - fail fast, no slow retry
             log.info(
-                "job %s: fast path failed - escalating (runtime%s)",
+                "job %s: retrying with%s%s",
                 self.job.id,
-                f" + {browser} login" if wants_login else "",
+                " a JS runtime" if add_runtime or self._js_runtime is None else "",
+                f" + {browser} login" if add_login else "",
             )
-            self._ensure_js_runtime()  # provisions Deno for YouTube/session jobs; no-op otherwise
-            return self._download(with_cookies=wants_login, with_runtime=True)
+            if self._js_runtime is None:
+                self._ensure_js_runtime()  # may download Deno once; no-op off YouTube
+            return self._download(
+                with_cookies=prefer_cookies or add_login,
+                with_runtime=self._js_runtime is not None,
+            )
 
     def _hook(self, event: dict[str, Any]) -> None:
         if self._stop_event.is_set():

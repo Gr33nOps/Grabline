@@ -48,6 +48,13 @@ def _manifest_for(target: str, manifest: dict[str, Any]) -> dict[str, Any]:
         result["background"] = {"service_worker": manifest["background"]["service_worker"]}
     elif target == "firefox":
         result["background"] = {"scripts": manifest["background"]["scripts"]}
+        # Chromium-only permissions (download-shelf hiding); Firefox has no
+        # such API and AMO validation should see a clean permission list.
+        result["permissions"] = [
+            p
+            for p in manifest.get("permissions", [])
+            if p not in ("downloads.shelf", "downloads.ui")
+        ]
     else:  # pragma: no cover - argparse restricts choices
         raise ValueError(f"unknown target: {target}")
     return result
