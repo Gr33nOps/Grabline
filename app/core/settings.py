@@ -109,7 +109,7 @@ class Settings:
 
     @property
     def connections(self) -> int:
-        return max(1, min(16, self._get_int("connections", 8)))
+        return max(1, min(128, self._get_int("connections", 8)))
 
     @connections.setter
     def connections(self, value: int) -> None:
@@ -219,7 +219,8 @@ class Settings:
 
     @property
     def auto_retry_max(self) -> int:
-        return max(0, min(20, self._get_int("auto_retry_max", 5)))
+        """Auto-retry attempts per download; 0 means retry forever."""
+        return max(0, min(99, self._get_int("auto_retry_max", 5)))
 
     @auto_retry_max.setter
     def auto_retry_max(self, value: int) -> None:

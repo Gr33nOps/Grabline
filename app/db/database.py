@@ -245,6 +245,14 @@ class Database:
                 ),
             )
 
+    def update_job_url(self, job_id: int, url: str) -> None:
+        """Point a job at a new URL (mirror failover). The size belongs to the
+        old URL, so it's cleared and re-probed on the next run."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE jobs SET url = ?, total_size = NULL WHERE id = ?", (url, job_id)
+            )
+
     def update_job_total(self, job_id: int, total_size: int) -> None:
         with self._lock, self._conn:
             self._conn.execute(

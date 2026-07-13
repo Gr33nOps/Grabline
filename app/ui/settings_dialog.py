@@ -102,8 +102,12 @@ class SettingsDialog(QDialog):
         self.concurrent_spin.setValue(settings.max_concurrent)
         dl_form.addRow("Simultaneous downloads:", self.concurrent_spin)
         self.connections_spin = QSpinBox()
-        self.connections_spin.setRange(1, 16)
+        self.connections_spin.setRange(1, 128)
         self.connections_spin.setValue(settings.connections)
+        self.connections_spin.setToolTip(
+            "8-16 saturates most connections. Beyond ~32 many servers throttle "
+            "or ban the extra sockets - more is not always faster."
+        )
         dl_form.addRow("Connections per download:", self.connections_spin)
         self.speed_spin = QSpinBox()
         self.speed_spin.setRange(0, 1_000_000)
@@ -142,9 +146,14 @@ class SettingsDialog(QDialog):
         self.retry_check = QCheckBox("Auto-retry failed downloads, up to")
         self.retry_check.setChecked(settings.auto_retry)
         self.retry_spin = QSpinBox()
-        self.retry_spin.setRange(0, 20)
+        self.retry_spin.setRange(0, 99)
         self.retry_spin.setValue(settings.auto_retry_max)
         self.retry_spin.setSuffix(" times")
+        self.retry_spin.setSpecialValueText("Forever")
+        self.retry_spin.setToolTip(
+            "Forever keeps retrying with capped backoff - downloads survive "
+            "internet drops, VPN reconnects, and router reboots on their own."
+        )
         retry_row.addWidget(self.retry_check)
         retry_row.addWidget(self.retry_spin)
         retry_row.addStretch(1)

@@ -93,7 +93,7 @@ def test_schedule_retry_theme_roundtrip(db: Database):
     settings.speed_full_from = "23:30"
     settings.speed_full_to = "06:15"
     settings.auto_retry = False
-    settings.auto_retry_max = 99  # clamped to 20
+    settings.auto_retry_max = 250  # clamped to 99 (0 means retry forever)
     settings.theme = "dark"
 
     fresh = Settings(db)
@@ -101,7 +101,7 @@ def test_schedule_retry_theme_roundtrip(db: Database):
     assert fresh.speed_full_from == "23:30"
     assert fresh.speed_full_to == "06:15"
     assert fresh.auto_retry is False
-    assert fresh.auto_retry_max == 20
+    assert fresh.auto_retry_max == 99
     assert fresh.theme == "dark"
 
 

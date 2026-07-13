@@ -558,7 +558,14 @@ class MainWindow(QMainWindow):
                     probe.content_type if probe is not None else None,
                 )
             )
-            self.manager.add_url(resolution.url, filename=filename, headers=headers or None)
+            # Any remaining sniffed stream URLs ride along as mirrors: if this
+            # URL later dies for good, the download switches to the next one.
+            self.manager.add_url(
+                resolution.url,
+                filename=filename,
+                headers=headers or None,
+                mirrors=list(fallbacks) or None,
+            )
         self.refresh()
 
     def _selected_job_ids(self) -> list[int]:
@@ -647,6 +654,8 @@ class MainWindow(QMainWindow):
         )
         limit_speed = menu.addAction("Limit speed…")
         limit_speed.setEnabled(view.status is not JobStatus.COMPLETED)
+        set_connections = menu.addAction("Connections…")
+        set_connections.setEnabled(view.status is not JobStatus.COMPLETED)
 
         done = view.status is JobStatus.COMPLETED and file_path.exists()
         copy_hash = menu.addAction("Copy SHA-256")
@@ -682,6 +691,8 @@ class MainWindow(QMainWindow):
             GifDialog(ffmpeg_path, file_path, self).exec()
         elif chosen is limit_speed:
             self._limit_speed(view)
+        elif chosen is set_connections:
+            self._set_connections(view)
         elif chosen is copy_hash:
             self._copy_hash(file_path)
         elif chosen is verify_hash:
@@ -746,6 +757,19 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Extracted to {Path(str(result)).name}", 6000)
 
         self._run_file_op(lambda: archive.extract(path), done)
+
+    def _set_connections(self, view: JobView) -> None:
+        connections, accepted = QInputDialog.getInt(
+            self,
+            "Connections",
+            f"Parallel connections for this download\n"
+            f"(0 = automatic; beyond ~32 servers often throttle)  -  {view.display_name}",
+            value=0,
+            minValue=0,
+            maxValue=128,
+        )
+        if accepted:
+            self.manager.set_job_connections(view.id, connections)
 
     def _limit_speed(self, view: JobView) -> None:
         kbps, accepted = QInputDialog.getInt(

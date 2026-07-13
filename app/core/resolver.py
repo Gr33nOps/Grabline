@@ -88,7 +88,9 @@ def _hls_variants(url: str, proxy: str | None = None) -> tuple[HlsVariant, ...]:
     """Quality choices from a master playlist; empty for media playlists
     or when the manifest cannot be fetched (FFmpeg reports the real error)."""
     try:
-        with httpx.Client(follow_redirects=True, timeout=10, proxy=proxy or None) as client:
+        with httpx.Client(
+            follow_redirects=True, http2=True, timeout=10, proxy=proxy or None
+        ) as client:
             response = client.get(url)
             if response.status_code != 200:
                 return ()
@@ -147,6 +149,7 @@ class Resolver:
         try:
             with httpx.Client(
                 follow_redirects=True,
+                http2=True,
                 timeout=httpx.Timeout(20.0, connect=10.0),
                 proxy=proxy or None,
             ) as client:

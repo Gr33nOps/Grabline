@@ -26,11 +26,15 @@ def _icon(name: str) -> str | None:
 
 # yt-dlp imports its 1000+ site extractors lazily; curl_cffi ships a native
 # libcurl. Both must be collected explicitly or the frozen app can't resolve
-# YouTube et al. PySide6's own PyInstaller hook handles Qt plugins.
+# YouTube et al. PySide6's own PyInstaller hook handles Qt plugins. The h2
+# stack is imported lazily by httpx only when http2=True, so it must be
+# collected too or frozen builds silently lose HTTP/2.
 ytdlp_datas, ytdlp_bins, ytdlp_hidden = collect_all("yt_dlp")
 curl_datas, curl_bins, curl_hidden = collect_all("curl_cffi")
 
 hidden = ytdlp_hidden + curl_hidden + collect_submodules("app")
+for h2_pkg in ("h2", "hpack", "hyperframe"):
+    hidden += collect_submodules(h2_pkg)
 # Ship the browser extension inside the app so the Browser Setup wizard can
 # stage it (Load unpacked / temporary add-on) - an installed build has no repo
 # checkout to copy it from. browser_setup._source_extension_dir() reads it back

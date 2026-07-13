@@ -49,11 +49,17 @@ A real download-accelerator core, a browser button that just works, and the
 video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 
 **Accelerated engine**
-- Up to 16 parallel connections per file, with **dynamic segmentation** -
-  free connections steal work from the slowest one so no thread sits idle.
-- **Crash-proof resume**: checkpointed to survive kill -9 and power loss.
+- Up to **128 parallel connections** per file (default 8), with **dynamic
+  segmentation** - free connections steal work from the slowest one so no
+  thread sits idle. Pin connections per download from its right-click menu.
+- **HTTP/2** where the server offers it; IPv6 out of the box.
+- **Crash-proof resume**: checkpointed to survive kill -9, power loss, and
+  reboots; downloads keep retrying through internet drops and VPN reconnects.
 - Global **and** per-download speed limits, plus a nightly "full speed" window.
-- Automatic reconnect with exponential backoff; optional HTTP/SOCKS **proxy**.
+- Smart reconnect: exponential backoff (or **retry forever**), error-aware -
+  rate limits back off and retry, dead links (404) don't spin. If a page
+  offered alternate streams, a failed URL **fails over to its mirrors**.
+- Optional HTTP/SOCKS **proxy**.
 
 **A queue you control**
 - Reorder and prioritize, pause/resume/cancel, dashboard tabs

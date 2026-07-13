@@ -131,6 +131,10 @@ class SegmentedDownload:
         self.job_limiter = job_limiter
         self._client = httpx.Client(
             follow_redirects=True,
+            # HTTP/2 when the server offers it (negotiated via TLS ALPN, so
+            # plain-http servers silently stay on 1.1): range requests
+            # multiplex over fewer sockets and CDNs deprioritize h1 traffic.
+            http2=True,
             timeout=httpx.Timeout(30.0, connect=15.0),
             limits=httpx.Limits(max_connections=connections + 2),
             proxy=proxy or None,

@@ -4,10 +4,11 @@ and per-kind engine dispatch (direct → segmenter, smart → yt-dlp, hls → FF
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -60,11 +61,24 @@ _PERMANENT_ERROR_MARKERS = (
     "only http",
 )
 
+#: 4xx codes that are NOT permanent: 408 is a server-side timeout and 429 is
+#: rate limiting - both clear on their own, so backing off and retrying is
+#: exactly right even though the generic "http 4" marker would call them fatal.
+_TRANSIENT_OVERRIDES = (
+    "http 408",
+    "http error 408",
+    "http 429",
+    "http error 429",
+    "too many requests",
+)
+
 
 def _is_transient_error(error: str | None) -> bool:
     if not error:
         return False
     lowered = error.lower()
+    if any(marker in lowered for marker in _TRANSIENT_OVERRIDES):
+        return True
     return not any(marker in lowered for marker in _PERMANENT_ERROR_MARKERS)
 
 
@@ -227,6 +241,21 @@ class DownloadManager:
         job.options = options
         self._job_limiter_for(job)  # create/update/drop the live limiter
 
+    def set_job_connections(self, job_id: int, connections: int) -> None:
+        """Pin one download to exactly ``connections`` parallel connections
+        (0 clears it back to automatic). Takes effect when the download
+        (re)starts - live segments aren't torn down mid-flight."""
+        job = self.db.get_job(job_id)
+        if job is None:
+            return
+        options = dict(job.options)
+        if connections > 0:
+            options["connections"] = max(1, min(128, connections))
+        else:
+            options.pop("connections", None)
+        self.db.update_job_options(job_id, options)
+        job.options = options
+
     # -------------------------------------------------------- queue priorities
 
     def _pending_order(self) -> list[Job]:
@@ -289,11 +318,15 @@ class DownloadManager:
         filename: str | None = None,
         *,
         headers: Mapping[str, str] | None = None,
+        mirrors: Sequence[str] | None = None,
     ) -> Job:
         """Queue a direct (segmented) download. ``headers`` (cookies/referer
-        from the browser) let a login-gated file download too."""
+        from the browser) let a login-gated file download too; ``mirrors`` are
+        alternate URLs tried in order if this one fails for good."""
         name = naming.sanitize_filename(filename) if filename else naming.filename_from_url(url)
         options: dict[str, Any] = {"http_headers": dict(headers)} if headers else {}
+        if mirrors:
+            options["mirrors"] = [m for m in mirrors if m and m != url]
         job = self.db.create_job(url, self._dest_for(name, dest_dir), name, options=options)
         self._kick()
         return job
@@ -521,9 +554,17 @@ class DownloadManager:
         # sockets onto the same line - N established flows starve a late
         # sibling down to a trickle (TCP fairness is per-flow, not per-job).
         # A lone job still gets everything, and dynamic segmentation makes the
-        # most of whatever slice a busy start receives.
-        active = len(self._active)
-        connections = self.connections if active == 0 else max(3, self.connections // (active + 1))
+        # most of whatever slice a busy start receives. A per-download pin
+        # (right-click -> Connections...) is an explicit choice and bypasses
+        # the sharing entirely.
+        pinned = int(job.options.get("connections") or 0)
+        if pinned:
+            connections = max(1, min(128, pinned))
+        else:
+            active = len(self._active)
+            connections = (
+                self.connections if active == 0 else max(3, self.connections // (active + 1))
+            )
         return SegmentedDownload(
             self.db,
             job,
@@ -583,19 +624,47 @@ class DownloadManager:
 
     def _schedule_retry(self, job_id: int) -> bool:
         """Queue an automatic retry for a transiently-failed job. Returns True
-        if one was scheduled."""
+        if one was scheduled. A max of 0 means retry forever (with the backoff
+        capped, so a dead network is re-probed every few minutes until it
+        returns - this is what survives reboots of the router or a VPN)."""
         if not self.settings.auto_retry:
             return False
         job = self.db.get_job(job_id)
         if job is None or not _is_transient_error(job.error):
             return False
-        if job.retry_count >= self.settings.auto_retry_max:
+        max_retries = self.settings.auto_retry_max
+        if max_retries and job.retry_count >= max_retries:
             return False
         count = job.retry_count + 1
         self.db.set_retry_count(job_id, count)
         delay = min(_RETRY_BASE_SECONDS * 2 ** (count - 1), _RETRY_CAP_SECONDS)
         self._retry_at[job_id] = time.monotonic() + delay
         log.info("job %s failed; auto-retry %s scheduled in %.0fs", job_id, count, delay)
+        return True
+
+    def _try_mirror(self, job_id: int) -> bool:
+        """A job that failed for good on its URL switches to its next mirror
+        (the alternate stream URLs the browser sniffed on the page) and starts
+        over. Returns True if a mirror was queued."""
+        job = self.db.get_job(job_id)
+        if job is None:
+            return False
+        mirrors = [m for m in (job.options.get("mirrors") or []) if isinstance(m, str)]
+        if not mirrors:
+            return False
+        next_url = mirrors.pop(0)
+        options = dict(job.options)
+        options["mirrors"] = mirrors
+        self.db.update_job_options(job_id, options)
+        # A different URL is a different file as far as resume is concerned:
+        # drop the partial data and checkpoints so nothing gets stitched wrong.
+        with contextlib.suppress(OSError):
+            job.part_path.unlink(missing_ok=True)
+        self.db.replace_segments(job_id, [])
+        self.db.update_job_url(job_id, next_url)
+        self.db.set_retry_count(job_id, 0)
+        self.db.set_job_status(job_id, JobStatus.QUEUED)
+        log.info("job %s failed on its URL; trying mirror %s", job_id, next_url)
         return True
 
     def _run_job(self, job: Job, task: DownloadTask) -> None:
@@ -614,5 +683,6 @@ class DownloadManager:
                     self._retry_at.pop(job.id, None)
                     self._job_limiters.pop(job.id, None)
                 elif status is JobStatus.FAILED:
-                    self._schedule_retry(job.id)
+                    if not self._schedule_retry(job.id):
+                        self._try_mirror(job.id)
                 self._cond.notify_all()
