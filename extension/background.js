@@ -10,6 +10,7 @@ const HOST_NAME = "dev.grabline.host";
 const MENU_ID = "grabline-download";
 const GALLERY_MENU_ID = "grabline-gallery";
 const LINKS_MENU_ID = "grabline-links";
+const SELECTION_MENU_ID = "grabline-selection";
 const MAX_ITEMS_PER_TAB = 12;
 
 // ---------------------------------------------------------------- native
@@ -184,6 +185,13 @@ api.runtime.onInstalled.addListener(() => {
     title: "Download all links with Grabline",
     contexts: ["page"],
   });
+  // Highlight part of a page, right-click: every link, image, and playing
+  // media inside the selection goes to the app's checkable picker.
+  api.contextMenus.create({
+    id: SELECTION_MENU_ID,
+    title: "Download selected links & media with Grabline",
+    contexts: ["selection"],
+  });
 });
 
 // -------------------------------------------- collect images / links grab
@@ -218,6 +226,10 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
   }
   if (info.menuItemId === LINKS_MENU_ID) {
     await sendCollection(tab, "collectLinks", "links");
+    return;
+  }
+  if (info.menuItemId === SELECTION_MENU_ID) {
+    await sendCollection(tab, "collectSelection", "links");
     return;
   }
   if (info.menuItemId !== MENU_ID) return;

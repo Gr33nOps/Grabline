@@ -77,7 +77,11 @@ def test_classify_browser_maps_families():
     assert classify("MSEdgeHTM") == ("chromium", "Microsoft Edge")
     assert classify("ChromeHTML") == ("chromium", "Chrome")
     assert classify("chromium.desktop") == ("chromium", "Chromium")
+    assert classify("vivaldi-stable.desktop") == ("chromium", "Vivaldi")
+    assert classify("company.thebrowser.Browser") == ("chromium", "Arc")
+    assert classify("OperaStable") == ("chromium", "Opera")
     assert classify("something-else") is None
+    assert classify("websearch-helper") is None  # 'arc' substring must not match
 
 
 def test_default_browser_reads_linux_setting(monkeypatch: pytest.MonkeyPatch):

@@ -37,7 +37,7 @@ IDs allowed to connect.
 ## Pairing (two steps)
 
 1. **Register the native host** - in the Grabline app: **Settings → Pair
-   browsers** (one click, covers Chrome/Chromium/Edge/Brave/Firefox on
+   browsers** (one click, covers Chrome/Chromium/Edge/Brave/Vivaldi/Opera/Arc/Firefox on
    Windows, macOS, and Linux). Terminal alternative:
 
    ```bash

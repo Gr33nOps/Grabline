@@ -22,12 +22,14 @@ from pathlib import Path
 from app.core import paths
 from app.native_host import CHROME_EXTENSION_IDS, FIREFOX_EXTENSION_IDS, HOST_NAME
 
-#: Windows registry roots browsers search for host manifests (HKCU).
+#: Windows registry roots browsers search for host manifests (HKCU). Opera and
+#: Arc on Windows read Chrome's key, so registering Chrome covers them too.
 _WINDOWS_REGISTRY_ROOTS: tuple[tuple[str, str, str], ...] = (
     ("Chrome", "chromium", r"Software\Google\Chrome\NativeMessagingHosts"),
     ("Chromium", "chromium", r"Software\Chromium\NativeMessagingHosts"),
     ("Edge", "chromium", r"Software\Microsoft\Edge\NativeMessagingHosts"),
     ("Brave", "chromium", r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts"),
+    ("Vivaldi", "chromium", r"Software\Vivaldi\NativeMessagingHosts"),
     ("Firefox", "firefox", r"Software\Mozilla\NativeMessagingHosts"),
 )
 
@@ -47,6 +49,7 @@ def _linux_targets(home: Path, *, use_env: bool) -> list[BrowserTarget]:
         config = Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config")))
     else:
         config = home / ".config"
+    # Opera reads Chrome's manifest directory, so it needs no entry of its own.
     return [
         BrowserTarget("Chrome", config / "google-chrome" / "NativeMessagingHosts", "chromium"),
         BrowserTarget("Chromium", config / "chromium" / "NativeMessagingHosts", "chromium"),
@@ -56,12 +59,14 @@ def _linux_targets(home: Path, *, use_env: bool) -> list[BrowserTarget]:
             config / "BraveSoftware" / "Brave-Browser" / "NativeMessagingHosts",
             "chromium",
         ),
+        BrowserTarget("Vivaldi", config / "vivaldi" / "NativeMessagingHosts", "chromium"),
         BrowserTarget("Firefox", home / ".mozilla" / "native-messaging-hosts", "firefox"),
     ]
 
 
 def _darwin_targets(home: Path) -> list[BrowserTarget]:
     support = home / "Library" / "Application Support"
+    # Opera reads Chrome's manifest directory, so it needs no entry of its own.
     return [
         BrowserTarget("Chrome", support / "Google" / "Chrome" / "NativeMessagingHosts", "chromium"),
         BrowserTarget("Chromium", support / "Chromium" / "NativeMessagingHosts", "chromium"),
@@ -71,6 +76,8 @@ def _darwin_targets(home: Path) -> list[BrowserTarget]:
             support / "BraveSoftware" / "Brave-Browser" / "NativeMessagingHosts",
             "chromium",
         ),
+        BrowserTarget("Vivaldi", support / "Vivaldi" / "NativeMessagingHosts", "chromium"),
+        BrowserTarget("Arc", support / "Arc" / "User Data" / "NativeMessagingHosts", "chromium"),
         BrowserTarget("Firefox", support / "Mozilla" / "NativeMessagingHosts", "firefox"),
     ]
 

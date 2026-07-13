@@ -22,7 +22,7 @@ from app.native_host.install import (
 
 def test_linux_targets_cover_the_major_browsers(tmp_path: Path):
     targets = {t.browser: t for t in browser_targets("linux", home=tmp_path)}
-    assert set(targets) == {"Chrome", "Chromium", "Edge", "Brave", "Firefox"}
+    assert set(targets) == {"Chrome", "Chromium", "Edge", "Brave", "Vivaldi", "Firefox"}
     assert targets["Firefox"].kind == "firefox"
     assert targets["Chrome"].manifest_dir == (
         tmp_path / ".config" / "google-chrome" / "NativeMessagingHosts"
@@ -33,6 +33,9 @@ def test_darwin_targets(tmp_path: Path):
     targets = {t.browser: t for t in browser_targets("darwin", home=tmp_path)}
     assert "Chrome" in targets and "Firefox" in targets
     assert "Library" in str(targets["Chrome"].manifest_dir)
+    # Arc is macOS-first and keeps its manifests under its User Data dir.
+    assert "Arc" in targets and "Vivaldi" in targets
+    assert str(targets["Arc"].manifest_dir).endswith("Arc/User Data/NativeMessagingHosts")
 
 
 def test_frozen_host_path_none_from_source():
@@ -59,7 +62,7 @@ def test_frozen_install_points_manifests_at_the_host_exe(
 
     written = install(platform="linux", home=tmp_path, bin_dir=tmp_path / "bin")
 
-    assert len(written) == 5
+    assert len(written) == 6
     manifest = json.loads(written[0].read_text())
     assert manifest["path"] == str(tmp_path / "grabline-host")
     assert not (tmp_path / "bin" / "grabline-host").exists()  # no wrapper written
@@ -68,7 +71,7 @@ def test_frozen_install_points_manifests_at_the_host_exe(
 def test_install_writes_manifests_and_launcher(tmp_path: Path):
     written = install(platform="linux", home=tmp_path, bin_dir=tmp_path / "bin")
 
-    assert len(written) == 5
+    assert len(written) == 6
     launcher = tmp_path / "bin" / "grabline-host"
     assert launcher.exists()
     assert os.access(launcher, os.X_OK)

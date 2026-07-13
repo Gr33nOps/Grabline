@@ -33,6 +33,9 @@ BROWSERS: tuple[tuple[str, str, str], ...] = (
     ("Microsoft Edge", "chromium", "auto"),
     ("Chrome", "chromium", "unpacked"),
     ("Brave", "chromium", "unpacked"),
+    ("Vivaldi", "chromium", "unpacked"),
+    ("Opera", "chromium", "unpacked"),
+    ("Arc", "chromium", "unpacked"),
     ("Chromium", "chromium", "unpacked"),
 )
 
@@ -85,6 +88,12 @@ def _classify_browser(identifier: str) -> tuple[str, str] | None:
         return ("chromium", "Brave")
     if "edge" in ident or "msedge" in ident:
         return ("chromium", "Microsoft Edge")
+    if "vivaldi" in ident:
+        return ("chromium", "Vivaldi")
+    # Arc's bundle/app id is company.thebrowser.Browser; a bare "arc" substring
+    # would false-match ids like "search", so require the company marker.
+    if "thebrowser" in ident:
+        return ("chromium", "Arc")
     if "chromium" in ident:
         return ("chromium", "Chromium")
     if "chrome" in ident:
@@ -171,20 +180,26 @@ def extension_install_url(platform: str | None = None, home: Path | None = None)
 
 
 def _chromium_root(name: str, home: Path, platform: str) -> Path | None:
+    support = home / "Library" / "Application Support"
     roots = {
         "linux": {
             "Chrome": home / ".config" / "google-chrome",
             "Chromium": home / ".config" / "chromium",
             "Microsoft Edge": home / ".config" / "microsoft-edge",
             "Brave": home / ".config" / "BraveSoftware" / "Brave-Browser",
+            "Vivaldi": home / ".config" / "vivaldi",
+            "Opera": home / ".config" / "opera",
             "Firefox": home / ".mozilla",
         },
         "darwin": {
-            "Chrome": home / "Library" / "Application Support" / "Google" / "Chrome",
-            "Chromium": home / "Library" / "Application Support" / "Chromium",
-            "Microsoft Edge": home / "Library" / "Application Support" / "Microsoft Edge",
-            "Brave": home / "Library" / "Application Support" / "BraveSoftware" / "Brave-Browser",
-            "Firefox": home / "Library" / "Application Support" / "Firefox",
+            "Chrome": support / "Google" / "Chrome",
+            "Chromium": support / "Chromium",
+            "Microsoft Edge": support / "Microsoft Edge",
+            "Brave": support / "BraveSoftware" / "Brave-Browser",
+            "Vivaldi": support / "Vivaldi",
+            "Opera": support / "com.operasoftware.Opera",
+            "Arc": support / "Arc",
+            "Firefox": support / "Firefox",
         },
     }
     return roots.get(platform, {}).get(name)

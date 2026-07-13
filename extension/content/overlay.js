@@ -346,11 +346,41 @@
     return [...withExt, ...rest].slice(0, MAX_LINKS);
   }
 
+  // Everything downloadable inside the user's text selection: links, images,
+  // and playing media that the highlighted region touches. The app's picker
+  // then filters by type, so one gesture covers "download the selected
+  // links / images / videos / documents".
+  function collectSelection() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return [];
+    const urls = [];
+    const seen = new Set();
+    const push = (url) => {
+      if (url && /^https?:/.test(url) && !seen.has(url) && urls.length < MAX_LINKS) {
+        seen.add(url);
+        urls.push(url);
+      }
+    };
+    for (const anchor of document.links) {
+      if (selection.containsNode(anchor, true)) push(anchor.href);
+    }
+    for (const img of document.images) {
+      if (selection.containsNode(img, true)) push(img.currentSrc || img.src);
+    }
+    for (const media of document.querySelectorAll("video, audio")) {
+      if (!selection.containsNode(media, true)) continue;
+      push(media.currentSrc || media.src || media.querySelector("source")?.src);
+    }
+    return urls;
+  }
+
   api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.cmd === "collectImages") {
       sendResponse({ urls: collectImages() });
     } else if (message?.cmd === "collectLinks") {
       sendResponse({ urls: collectLinks() });
+    } else if (message?.cmd === "collectSelection") {
+      sendResponse({ urls: collectSelection() });
     } else if (message?.cmd === "progress" && Array.isArray(message.items)) {
       renderProgress(message.items);
     }

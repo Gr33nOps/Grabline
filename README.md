@@ -69,11 +69,12 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - Auto-sort into Video / Music / Images / Documents / Archives.
 - Import/export your download list; back it up or move it to another machine.
 
-**One button in the browser** (Chrome / Edge / Brave / Firefox)
+**One button in the browser** (Chrome / Firefox / Edge / Brave / Vivaldi / Opera / Arc)
 - Hover ⬇ on videos and thumbnails (YouTube, YouTube Music, SoundCloud,
   Vimeo, X), pick the quality right on the page, watch a live progress pill.
-- Right-click → *Download with Grabline* on anything. **Grab all links** or
-  **all images** on a page, or crawl a whole site a few levels deep.
+- Right-click → *Download with Grabline* on anything. **Grab all links**,
+  **all images**, or just the **links & media inside your text selection** -
+  or crawl a whole site a few levels deep.
 - A per-tab sniffer catches the streams a page loads. Native Messaging only -
   no open ports, no localhost server.
 
