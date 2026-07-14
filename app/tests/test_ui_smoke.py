@@ -418,3 +418,28 @@ def test_cloud_account_editor_builds_account(db: Database):
     assert account.service == "sftp" and account.host == "box.example"
     assert account.username == "alice" and account.port == 2222
     assert secret == "s3cret"
+
+
+def test_queue_editor_roundtrip_and_cycle_guard(db: Database, tmp_path: Path):
+    from app.core.models import Queue
+    from app.ui.queue_dialog import _QueueEditor, _would_cycle
+
+    _qapp()
+    a = db.create_queue("A")
+    b = db.create_queue("B")
+    queues = {q.id: q for q in db.list_queues()}
+
+    editor = _QueueEditor(a, list(queues.values()))
+    editor.name_edit.setText("Movies")
+    editor.concurrent_spin.setValue(1)  # sequential mode
+    editor.category_combo.setCurrentIndex(editor.category_combo.findData("Video"))
+    editor.depends_combo.setCurrentIndex(editor.depends_combo.findData(b.id))
+    result = editor.result_queue()
+    assert result.name == "Movies" and result.max_concurrent == 1
+    assert result.category == "Video" and result.depends_on == b.id
+
+    # Cycle detection: A -> B -> A would deadlock.
+    db.update_queue(Queue(id=b.id, name="B", position=b.position, depends_on=a.id))
+    queues = {q.id: q for q in db.list_queues()}
+    assert _would_cycle(queues, a.id, b.id)
+    assert not _would_cycle(queues, a.id, None)

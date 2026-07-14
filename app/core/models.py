@@ -92,6 +92,8 @@ class Job:
     priority: int = 0
     #: How many times auto-retry has re-queued this job after a failure.
     retry_count: int = 0
+    #: The named queue this job belongs to (None = the default queue).
+    queue_id: int | None = None
 
     @property
     def dest_path(self) -> Path:
@@ -100,3 +102,27 @@ class Job:
     @property
     def part_path(self) -> Path:
         return Path(self.dest_dir) / (self.filename + PART_SUFFIX)
+
+
+@dataclass(frozen=True)
+class Queue:
+    """A named download queue / group. Jobs without one use the default rules.
+
+    ``max_concurrent``: 0 = the global setting; 1 = sequential mode (one at a
+    time, in order); N = parallel mode capped at N inside this queue.
+    ``depends_on``: another queue's id - this queue starts only after that one
+    has nothing left to run (queue dependencies).
+    ``category``: new downloads of this category (Video, Music, ...) are
+    auto-assigned here (category queues).
+    """
+
+    id: int
+    name: str
+    position: int = 0  # queue priority: lower runs first
+    max_concurrent: int = 0
+    paused: bool = False
+    schedule_enabled: bool = False
+    start_time: str = "00:00"
+    stop_time: str = "00:00"
+    depends_on: int | None = None
+    category: str = ""

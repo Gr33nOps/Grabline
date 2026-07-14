@@ -15,7 +15,15 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from app.core.models import RESUMABLE_STATUSES, Handoff, Job, JobKind, JobStatus, Segment
+from app.core.models import (
+    RESUMABLE_STATUSES,
+    Handoff,
+    Job,
+    JobKind,
+    JobStatus,
+    Queue,
+    Segment,
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -56,6 +64,21 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+-- Named download queues / groups. Jobs reference them via jobs.queue_id;
+-- a NULL queue_id means the default queue (global rules only).
+CREATE TABLE IF NOT EXISTS queues (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    name             TEXT NOT NULL,
+    position         INTEGER NOT NULL DEFAULT 0,
+    max_concurrent   INTEGER NOT NULL DEFAULT 0,
+    paused           INTEGER NOT NULL DEFAULT 0,
+    schedule_enabled INTEGER NOT NULL DEFAULT 0,
+    start_time       TEXT NOT NULL DEFAULT '00:00',
+    stop_time        TEXT NOT NULL DEFAULT '00:00',
+    depends_on       INTEGER,
+    category         TEXT NOT NULL DEFAULT ''
+);
+
 -- URLs handed over by Grabline Connect (via the Native Messaging host).
 -- The host inserts; the running app claims and runs them through the
 -- resolver. This table IS the extension->app channel: no sockets exist.
@@ -81,6 +104,7 @@ _JOBS_MIGRATIONS = {
     "downloaded": "ALTER TABLE jobs ADD COLUMN downloaded INTEGER NOT NULL DEFAULT 0",
     "priority": "ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
     "retry_count": "ALTER TABLE jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
+    "queue_id": "ALTER TABLE jobs ADD COLUMN queue_id INTEGER",
 }
 
 _HANDOFFS_MIGRATIONS = {
@@ -109,6 +133,22 @@ def _job_from_row(row: sqlite3.Row) -> Job:
         downloaded=row["downloaded"],
         priority=row["priority"],
         retry_count=row["retry_count"],
+        queue_id=row["queue_id"],
+    )
+
+
+def _queue_from_row(row: sqlite3.Row) -> Queue:
+    return Queue(
+        id=row["id"],
+        name=row["name"],
+        position=row["position"],
+        max_concurrent=row["max_concurrent"],
+        paused=bool(row["paused"]),
+        schedule_enabled=bool(row["schedule_enabled"]),
+        start_time=row["start_time"],
+        stop_time=row["stop_time"],
+        depends_on=row["depends_on"],
+        category=row["category"],
     )
 
 
@@ -164,12 +204,21 @@ class Database:
         kind: JobKind = JobKind.DIRECT,
         title: str | None = None,
         options: Mapping[str, Any] | None = None,
+        queue_id: int | None = None,
     ) -> Job:
         with self._lock, self._conn:
             cur = self._conn.execute(
-                "INSERT INTO jobs (url, dest_dir, filename, kind, title, options) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (url, dest_dir, filename, kind.value, title, json.dumps(dict(options or {}))),
+                "INSERT INTO jobs (url, dest_dir, filename, kind, title, options, queue_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    url,
+                    dest_dir,
+                    filename,
+                    kind.value,
+                    title,
+                    json.dumps(dict(options or {})),
+                    queue_id,
+                ),
             )
             job_id = cur.lastrowid
         if job_id is None:  # pragma: no cover - sqlite always sets it
@@ -288,6 +337,69 @@ class Database:
         Never touches files on disk."""
         with self._lock, self._conn:
             self._conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+
+    # ------------------------------------------------------------- queues
+
+    def create_queue(self, name: str) -> Queue:
+        with self._lock, self._conn:
+            position = self._conn.execute(
+                "SELECT COALESCE(MAX(position), 0) + 1 FROM queues"
+            ).fetchone()[0]
+            cur = self._conn.execute(
+                "INSERT INTO queues (name, position) VALUES (?, ?)", (name, position)
+            )
+            queue_id = cur.lastrowid
+        queue = self.get_queue(int(queue_id or 0))
+        if queue is None:  # pragma: no cover - sqlite always sets it
+            raise RuntimeError("queue vanished right after INSERT")
+        return queue
+
+    def get_queue(self, queue_id: int) -> Queue | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM queues WHERE id = ?", (queue_id,)).fetchone()
+        return _queue_from_row(row) if row else None
+
+    def list_queues(self) -> list[Queue]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM queues ORDER BY position, id").fetchall()
+        return [_queue_from_row(row) for row in rows]
+
+    def update_queue(self, queue: Queue) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE queues SET name = ?, position = ?, max_concurrent = ?, paused = ?, "
+                "schedule_enabled = ?, start_time = ?, stop_time = ?, depends_on = ?, "
+                "category = ? WHERE id = ?",
+                (
+                    queue.name,
+                    queue.position,
+                    queue.max_concurrent,
+                    int(queue.paused),
+                    int(queue.schedule_enabled),
+                    queue.start_time,
+                    queue.stop_time,
+                    queue.depends_on,
+                    queue.category,
+                    queue.id,
+                ),
+            )
+
+    def delete_queue(self, queue_id: int) -> None:
+        """Remove a queue; its jobs fall back to the default queue and any
+        queue that depended on it is unblocked."""
+        with self._lock, self._conn:
+            self._conn.execute("UPDATE jobs SET queue_id = NULL WHERE queue_id = ?", (queue_id,))
+            self._conn.execute(
+                "UPDATE queues SET depends_on = NULL WHERE depends_on = ?", (queue_id,)
+            )
+            self._conn.execute("DELETE FROM queues WHERE id = ?", (queue_id,))
+
+    def set_job_queue(self, job_id: int, queue_id: int | None) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE jobs SET queue_id = ?, updated_at = datetime('now') WHERE id = ?",
+                (queue_id, job_id),
+            )
 
     def update_job_downloaded(self, job_id: int, downloaded: int) -> None:
         """Progress mirror for smart/hls jobs (direct jobs checkpoint segments)."""

@@ -20,7 +20,7 @@ from app.core.credentials import CredentialStore
 from app.core.downloader import SegmentedDownload
 from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
-from app.core.models import Job, JobKind, JobStatus
+from app.core.models import Job, JobKind, JobStatus, Queue
 from app.core.ratelimit import RateLimiter
 from app.core.settings import Settings
 from app.db.database import Database
@@ -120,6 +120,7 @@ class JobView:
     retry_count: int = 0
     tags: str = ""
     notes: str = ""
+    queue_id: int | None = None
 
     @property
     def display_name(self) -> str:
@@ -286,6 +287,51 @@ class DownloadManager:
     def set_job_notes(self, job_id: int, notes: str) -> None:
         self._set_job_option(job_id, "notes", notes)
 
+    # --------------------------------------------------------- named queues
+
+    def list_queues(self) -> list[Queue]:
+        return self.db.list_queues()
+
+    def create_queue(self, name: str) -> Queue:
+        return self.db.create_queue(name)
+
+    def update_queue(self, queue: Queue) -> None:
+        self.db.update_queue(queue)
+        self._kick()
+
+    def delete_queue(self, queue_id: int) -> None:
+        self.db.delete_queue(queue_id)
+        self._kick()
+
+    def set_job_queue(self, job_id: int, queue_id: int | None) -> None:
+        """Move a download into a named queue / group (None = default)."""
+        self.db.set_job_queue(job_id, queue_id)
+        self._kick()
+
+    def set_job_after(self, job_id: int, after_job_id: int | None) -> None:
+        """Job dependency: hold this download until ``after_job_id`` has
+        COMPLETED ('download B only after A finishes'). None clears it."""
+        job = self.db.get_job(job_id)
+        if job is None or after_job_id == job_id:
+            return
+        options = dict(job.options)
+        if after_job_id:
+            options["after_job"] = after_job_id
+        else:
+            options.pop("after_job", None)
+        self.db.update_job_options(job_id, options)
+        self._kick()
+
+    def _queue_for(self, filename: str) -> int | None:
+        """The category queue for a new download, if one is configured."""
+        category = categories.category_for(filename)
+        if category is None:
+            return None
+        for queue in self.db.list_queues():
+            if queue.category == category:
+                return queue.id
+        return None
+
     def find_existing(self, url: str) -> Job | None:
         """Duplicate detection at add time: the first job (any status) already
         pointing at this exact URL, or None."""
@@ -384,7 +430,13 @@ class DownloadManager:
         options: dict[str, Any] = {"http_headers": dict(headers)} if headers else {}
         if mirrors:
             options["mirrors"] = [m for m in mirrors if m and m != url]
-        job = self.db.create_job(url, self._dest_for(name, dest_dir), name, options=options)
+        job = self.db.create_job(
+            url,
+            self._dest_for(name, dest_dir),
+            name,
+            options=options,
+            queue_id=self._queue_for(name),
+        )
         self._kick()
         return job
 
@@ -451,6 +503,7 @@ class DownloadManager:
             kind=JobKind.SMART,
             title=title,
             options=options,
+            queue_id=self._queue_for(filename),
         )
         self._kick()
         return job
@@ -482,6 +535,7 @@ class DownloadManager:
             kind=JobKind.HLS,
             title=title,
             options=options,
+            queue_id=self._queue_for(filename),
         )
         self._kick()
         return job
@@ -513,6 +567,7 @@ class DownloadManager:
             kind=JobKind.TORRENT,
             title=name,
             options=dict(options or {}),
+            queue_id=self._queue_for(name),
         )
         self._kick()
         return job
@@ -536,6 +591,7 @@ class DownloadManager:
             name,
             kind=JobKind.CLOUD,
             options={},
+            queue_id=self._queue_for(name),
         )
         self._kick()
         return job
@@ -638,6 +694,7 @@ class DownloadManager:
                     retry_count=job.retry_count,
                     tags=str(job.options.get("tags") or ""),
                     notes=str(job.options.get("notes") or ""),
+                    queue_id=job.queue_id,
                 )
             )
         return views
@@ -733,10 +790,72 @@ class DownloadManager:
                 self._cond.wait(timeout=0.5)
 
     def _next_queued(self) -> Job | None:
-        for job in self.db.list_jobs():
-            if job.status is JobStatus.QUEUED and job.id not in self._active:
+        """The next job allowed to start, honoring named queues: queue order
+        (priority), pause, per-queue schedules, per-queue concurrency
+        (1 = sequential mode), queue dependencies, and job-level
+        'start B after A finishes' links."""
+        jobs = self.db.list_jobs()
+        queues = {queue.id: queue for queue in self.db.list_queues()}
+        by_id = {job.id: job for job in jobs}
+        active_in_queue: dict[int | None, int] = {}
+        unfinished_in_queue: dict[int | None, int] = {}
+        for job in jobs:
+            if job.id in self._active:
+                active_in_queue[job.queue_id] = active_in_queue.get(job.queue_id, 0) + 1
+            if job.status in (
+                JobStatus.QUEUED,
+                JobStatus.DOWNLOADING,
+                JobStatus.PAUSED,
+            ) or (job.status is JobStatus.FAILED and job.id in self._retry_at):
+                unfinished_in_queue[job.queue_id] = unfinished_in_queue.get(job.queue_id, 0) + 1
+
+        def queue_position(job: Job) -> int:
+            queue = queues.get(job.queue_id) if job.queue_id else None
+            return queue.position if queue is not None else 0
+
+        candidates = [
+            job for job in jobs if job.status is JobStatus.QUEUED and job.id not in self._active
+        ]
+        # Stable sort: queue order first, job priority (list_jobs order) within.
+        candidates.sort(key=queue_position)
+        now = datetime.now()
+        for job in candidates:
+            if self._job_allowed(job, queues, by_id, active_in_queue, unfinished_in_queue, now):
                 return job
         return None
+
+    def _job_allowed(
+        self,
+        job: Job,
+        queues: Mapping[int, Queue],
+        by_id: Mapping[int, Job],
+        active_in_queue: Mapping[int | None, int],
+        unfinished_in_queue: Mapping[int | None, int],
+        now: datetime,
+    ) -> bool:
+        after = int(job.options.get("after_job") or 0)
+        if after:
+            dependency = by_id.get(after)
+            # A deleted dependency no longer blocks; a cancelled one counts as
+            # finished, everything else (incl. pending retries) still blocks.
+            if dependency is not None and dependency.status not in (
+                JobStatus.COMPLETED,
+                JobStatus.CANCELLED,
+            ):
+                return False
+        queue = queues.get(job.queue_id) if job.queue_id else None
+        if queue is None:
+            return True
+        if queue.paused:
+            return False
+        if queue.schedule_enabled and not _in_window(now, queue.start_time, queue.stop_time):
+            return False
+        if queue.depends_on and unfinished_in_queue.get(queue.depends_on, 0) > 0:
+            return False
+        at_cap = (
+            queue.max_concurrent > 0 and active_in_queue.get(queue.id, 0) >= queue.max_concurrent
+        )
+        return not at_cap
 
     def _promote_due_retries(self) -> None:
         if not self._retry_at:

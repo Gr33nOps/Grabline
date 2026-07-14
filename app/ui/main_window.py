@@ -72,6 +72,7 @@ from app.ui.gif_dialog import GifDialog
 from app.ui.link_panel import LinkPanel
 from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
+from app.ui.queue_dialog import QueueManagerDialog
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.setup_dialog import SetupDialog
 from app.ui.sparkline import Sparkline
@@ -278,6 +279,9 @@ class MainWindow(QMainWindow):
             action.triggered.connect(handler)
             file_menu.addAction(action)
         file_menu.addSeparator()
+        queue_manager = QAction("Queue Manager…", self)
+        queue_manager.triggered.connect(self._open_queue_manager)
+        file_menu.addAction(queue_manager)
         clear_done = QAction("Clear Completed", self)
         clear_done.triggered.connect(self._clear_completed)
         file_menu.addAction(clear_done)
@@ -739,6 +743,19 @@ class MainWindow(QMainWindow):
         move_actions = {move_menu.addAction(folder): folder for folder in favorites}
         tags_action = menu.addAction("Tags && notes…")
 
+        queue_menu = menu.addMenu("Queue")
+        default_queue_action = queue_menu.addAction("Default")
+        default_queue_action.setCheckable(True)
+        default_queue_action.setChecked(view.queue_id is None)
+        queue_actions: dict[QAction, int] = {}
+        for named_queue in self.manager.list_queues():
+            queue_action = queue_menu.addAction(named_queue.name)
+            queue_action.setCheckable(True)
+            queue_action.setChecked(view.queue_id == named_queue.id)
+            queue_actions[queue_action] = named_queue.id
+        start_after = menu.addAction("Start after…")
+        start_after.setEnabled(view.status in (JobStatus.QUEUED, JobStatus.PAUSED))
+
         pending = view.status in (JobStatus.QUEUED, JobStatus.PAUSED)
         queue_menu = menu.addMenu("Move in queue")
         queue_menu.setEnabled(pending)
@@ -781,6 +798,12 @@ class MainWindow(QMainWindow):
             self._move_to(view, move_actions[chosen])
         elif chosen is tags_action:
             self._edit_tags(view)
+        elif chosen is default_queue_action:
+            self.manager.set_job_queue(view.id, None)
+        elif chosen in queue_actions:
+            self.manager.set_job_queue(view.id, queue_actions[chosen])
+        elif chosen is start_after:
+            self._pick_start_after(view)
         elif chosen is move_top:
             self.manager.move_to_top(view.id)
         elif chosen is move_up:
@@ -982,6 +1005,35 @@ class MainWindow(QMainWindow):
             self.refresh()
 
         self._run_file_op(lambda: dupes.find_duplicates(list(owners)), done)
+
+    # --------------------------------------------------------------- queues
+
+    def _open_queue_manager(self) -> None:
+        QueueManagerDialog(self.manager, self).exec()
+        self.refresh()
+
+    def _pick_start_after(self, view: JobView) -> None:
+        """Job dependency: hold this download until a chosen one finishes."""
+        others = [
+            v
+            for v in self._last_views.values()
+            if v.id != view.id and v.status is not JobStatus.COMPLETED
+        ]
+        if not others:
+            QMessageBox.information(self, "Grabline", "No other unfinished downloads to wait for.")
+            return
+        labels = ["(nothing - start normally)"] + [v.display_name for v in others]
+        choice, accepted = QInputDialog.getItem(
+            self,
+            "Start after",
+            f"Start {view.display_name} only after:",
+            labels,
+            editable=False,
+        )
+        if not accepted:
+            return
+        index = labels.index(choice)
+        self.manager.set_job_after(view.id, None if index == 0 else others[index - 1].id)
 
     # ---------------------------------------------------------------- cloud
 

@@ -62,7 +62,16 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
   offered alternate streams, a failed URL **fails over to its mirrors**.
 - Optional HTTP/SOCKS **proxy**.
 
-**A queue you control**
+**A queue manager, not just a queue**
+- **Unlimited named queues / download groups**, each with its own rules:
+  **sequential mode** (one at a time, in order), **parallel mode** with a
+  per-queue cap, pause, its own **schedule window**, and a place in the
+  running order (queue priorities).
+- **Queue dependencies**: make queue B wait until queue A has finished - and
+  per-download *Start after…* holds one file until another completes
+  ("download B only after A finishes"). Cycles are detected and refused.
+- **Category queues**: tie a queue to Video / Music / Documents / … and new
+  downloads of that type join it automatically.
 - Reorder and prioritize, pause/resume/cancel, dashboard tabs
   (Active / Completed / Failed), search, a live speed graph.
 - **Timed schedule**: only download between the hours you choose (run it
@@ -268,7 +277,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(350 tests, including an 8-connection download killed with SIGKILL and
+(360 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.
