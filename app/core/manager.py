@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 from app.core import categories, connectivity, naming, power
 from app.core.credentials import CredentialStore
@@ -964,6 +965,47 @@ class DownloadManager:
         log.info("job %s failed on its URL; trying mirror %s", job_id, next_url)
         return True
 
+    def torrent_upload_rate(self) -> float:
+        """Live upload throughput to torrent peers (dashboard upload graph)."""
+        return TORRENT_SESSION.upload_rate()
+
+    def stat_totals(self) -> dict[str, int]:
+        """Downloaded-bytes rollups for the dashboard: today / this week /
+        this month / lifetime, plus the lifetime file count."""
+        from datetime import timedelta
+
+        today = datetime.now().date()
+        week_start = today - timedelta(days=today.weekday())
+        month_start = today.replace(day=1)
+        lifetime, files = self.db.lifetime_bytes()
+        return {
+            "today": self.db.bytes_since(today.strftime("%Y-%m-%d")),
+            "week": self.db.bytes_since(week_start.strftime("%Y-%m-%d")),
+            "month": self.db.bytes_since(month_start.strftime("%Y-%m-%d")),
+            "lifetime": lifetime,
+            "files": files,
+        }
+
+    def stats_by_host(self, limit: int = 10) -> list[tuple[str, int, int]]:
+        return self.db.bytes_by_host(limit)
+
+    def stats_by_category(self) -> list[tuple[str, int, int]]:
+        return self.db.bytes_by_category()
+
+    def _record_completion(self, job_id: int) -> None:
+        """Add a finished download's bytes to the dashboard stats, bucketed by
+        its category and server host."""
+        fresh = self.db.get_job(job_id)
+        if fresh is None:
+            return
+        byte_count = fresh.total_size or fresh.downloaded
+        if byte_count <= 0:
+            return
+        category = categories.category_for(fresh.filename) or ""
+        host = urlsplit(fresh.url).hostname or ""
+        with contextlib.suppress(Exception):  # stats must never fail a download
+            self.db.record_download(category, host, byte_count)
+
     def _run_job(self, job: Job, task: DownloadTask) -> None:
         status = JobStatus.FAILED
         try:
@@ -979,6 +1021,7 @@ class DownloadManager:
                     self.db.set_retry_count(job.id, 0)
                     self._retry_at.pop(job.id, None)
                     self._job_limiters.pop(job.id, None)
+                    self._record_completion(job.id)
                 elif status is JobStatus.FAILED:
                     if not self._schedule_retry(job.id):
                         self._try_mirror(job.id)

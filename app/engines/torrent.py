@@ -230,6 +230,18 @@ class TorrentSession:
             else:
                 self._session.remove_torrent(handle)
 
+    def upload_rate(self) -> float:
+        """Total bytes/sec this process is currently uploading to peers (the
+        dashboard's upload graph); 0 when no session or nothing seeding."""
+        with self._lock:
+            session = self._session
+        if session is None:
+            return 0.0
+        try:
+            return float(sum(h.status().upload_rate for h in session.get_torrents()))
+        except Exception:  # pragma: no cover - never break the dashboard
+            return 0.0
+
     def _tick(self) -> None:
         """Seed-ratio enforcement: pause any seeding torrent whose ratio
         passed the limit (0 = seed forever)."""

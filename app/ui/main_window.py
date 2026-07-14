@@ -65,6 +65,7 @@ from app.ui import theme
 from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.cloud_dialog import CloudFolderDialog, prompt_cloud_url
+from app.ui.dashboard import DashboardDialog
 from app.ui.dupes_dialog import DupesDialog
 from app.ui.format import human_bytes
 from app.ui.gallery_panel import GalleryPanel
@@ -280,6 +281,9 @@ class MainWindow(QMainWindow):
             action.triggered.connect(handler)
             file_menu.addAction(action)
         file_menu.addSeparator()
+        dashboard_action = QAction("Dashboard…", self)
+        dashboard_action.triggered.connect(self._open_dashboard)
+        file_menu.addAction(dashboard_action)
         inspect_url_action = QAction("Inspect URL…", self)
         inspect_url_action.triggered.connect(self._inspect_url_prompt)
         file_menu.addAction(inspect_url_action)
@@ -1017,6 +1021,11 @@ class MainWindow(QMainWindow):
             self.refresh()
 
         self._run_file_op(lambda: dupes.find_duplicates(list(owners)), done)
+
+    # ------------------------------------------------------------ dashboard
+
+    def _open_dashboard(self) -> None:
+        DashboardDialog(self.manager, self).exec()
 
     # ------------------------------------------------------------ inspector
 

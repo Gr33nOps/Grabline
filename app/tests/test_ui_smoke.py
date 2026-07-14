@@ -483,3 +483,32 @@ def test_inspector_render_sections(db: Database):
 
     unreachable = InspectionReport(url="x", final_url="x", reachable=False, error="boom")
     assert "boom" in _render(unreachable)
+
+
+def test_dashboard_dialog_populates(db: Database):
+    from app.core.manager import DownloadManager
+    from app.ui.dashboard import DashboardDialog
+
+    _qapp()
+    db.record_download("Video", "cdn.example.com", 1234)
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        dialog = DashboardDialog(manager)  # _tick runs once in __init__
+        assert dialog._tiles["lifetime"].value.text() != "—"
+        assert dialog.server_tree.topLevelItemCount() == 1
+        assert dialog.category_tree.topLevelItemCount() == 1
+        dialog.done(0)  # stops the timer cleanly
+    finally:
+        manager.shutdown()
+
+
+def test_time_graph_pushes_samples(db: Database):
+    from PySide6.QtGui import QColor
+
+    from app.ui.graph import Series, TimeGraph
+
+    _qapp()
+    graph = TimeGraph("Test", [Series("a", QColor(1, 2, 3))], lambda v: f"{v:.0f}")
+    for value in range(5):
+        graph.push([float(value)])
+    assert list(graph.series[0].samples) == [0.0, 1.0, 2.0, 3.0, 4.0]

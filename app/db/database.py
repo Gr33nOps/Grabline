@@ -12,6 +12,7 @@ import json
 import sqlite3
 import threading
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,17 @@ CREATE INDEX IF NOT EXISTS idx_segments_job_id ON segments(job_id);
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+-- Successfully downloaded bytes, bucketed by day + category + host, for the
+-- live dashboard (today/week/month/lifetime, per-server, per-category).
+CREATE TABLE IF NOT EXISTS download_stats (
+    day      TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT '',
+    host     TEXT NOT NULL DEFAULT '',
+    bytes    INTEGER NOT NULL DEFAULT 0,
+    files    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, category, host)
 );
 
 -- Named download queues / groups. Jobs reference them via jobs.queue_id;
@@ -400,6 +412,57 @@ class Database:
                 "UPDATE jobs SET queue_id = ?, updated_at = datetime('now') WHERE id = ?",
                 (queue_id, job_id),
             )
+
+    # ------------------------------------------------------- download stats
+
+    def record_download(self, category: str, host: str, byte_count: int) -> None:
+        """Add a finished download's bytes to today's totals (dashboard)."""
+        if byte_count <= 0:
+            return
+        day = datetime.now().strftime("%Y-%m-%d")
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO download_stats (day, category, host, bytes, files) "
+                "VALUES (?, ?, ?, ?, 1) "
+                "ON CONFLICT(day, category, host) DO UPDATE SET "
+                "bytes = bytes + excluded.bytes, files = files + 1",
+                (day, category, host, byte_count),
+            )
+
+    def bytes_since(self, day: str) -> int:
+        """Total bytes recorded on or after ``day`` (YYYY-MM-DD)."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COALESCE(SUM(bytes), 0) FROM download_stats WHERE day >= ?", (day,)
+            ).fetchone()
+        return int(row[0])
+
+    def lifetime_bytes(self) -> tuple[int, int]:
+        """(total bytes, total files) ever recorded."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COALESCE(SUM(bytes), 0), COALESCE(SUM(files), 0) FROM download_stats"
+            ).fetchone()
+        return int(row[0]), int(row[1])
+
+    def bytes_by_host(self, limit: int = 10) -> list[tuple[str, int, int]]:
+        """(host, bytes, files) for the busiest servers, biggest first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT host, SUM(bytes), SUM(files) FROM download_stats "
+                "WHERE host != '' GROUP BY host ORDER BY SUM(bytes) DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [(row[0], int(row[1]), int(row[2])) for row in rows]
+
+    def bytes_by_category(self) -> list[tuple[str, int, int]]:
+        """(category, bytes, files) per category, biggest first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT category, SUM(bytes), SUM(files) FROM download_stats "
+                "GROUP BY category ORDER BY SUM(bytes) DESC"
+            ).fetchall()
+        return [(row[0] or "Other", int(row[1]), int(row[2])) for row in rows]
 
     def update_job_downloaded(self, job_id: int, downloaded: int) -> None:
         """Progress mirror for smart/hls jobs (direct jobs checkpoint segments)."""

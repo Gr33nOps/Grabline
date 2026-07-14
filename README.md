@@ -167,6 +167,14 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - No telemetry: IP/DNS/CDN come from your own lookup - the address is never
   sent to a geo-location service.
 
+**Live dashboard** (File → *Dashboard…*)
+- **Current / average / peak** download speed, live **ETA**, and how many
+  downloads are active.
+- **Downloaded today / this week / this month / lifetime**, total files, and
+  **per-server** and **per-category** breakdowns.
+- Scrolling **graphs**: download speed, torrent upload, whole-machine network,
+  CPU, and disk throughput.
+
 **Nice touches**
 - URL patterns like `file[1-100].jpg`, drag-and-drop URLs, checksum
   verification, video → GIF, a dark/light theme,
@@ -293,7 +301,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(377 tests, including an 8-connection download killed with SIGKILL and
+(386 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.
