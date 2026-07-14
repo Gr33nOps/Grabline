@@ -24,6 +24,7 @@ from app.core.ffmpeg import find_ffmpeg
 from app.core.models import Job, JobKind, JobStatus, Queue
 from app.core.ratelimit import RateLimiter
 from app.core.settings import Settings
+from app.core.stats import SystemSampler
 from app.db.database import Database
 from app.engines.cloud import CloudDownload
 from app.engines.hls import HlsDownload
@@ -150,6 +151,12 @@ class DownloadManager:
         # One reusable limiter per download that has its own cap; the running
         # task holds the very same instance, so a live change takes effect now.
         self._job_limiters: dict[int, RateLimiter] = {}
+        # One shared limiter per host, so several downloads from the same
+        # server obey a single per-host cap between them.
+        self._host_limiters: dict[str, RateLimiter] = {}
+        # Automatic-throttle ('polite mode') sampling state.
+        self._system_sampler = SystemSampler()
+        self._rate_mark: tuple[float, int] | None = None
         # job id -> monotonic deadline at which an auto-retry becomes due.
         self._retry_at: dict[int, float] = {}
         # Jobs paused because the download window closed; resumed when it opens.
@@ -196,8 +203,35 @@ class DownloadManager:
             and self.settings.speed_schedule_enabled
             and self._in_full_speed_window(datetime.now())
         ):
-            return 0  # full speed during the scheduled window
+            base = 0  # full speed during the scheduled window
+        throttle = self._auto_throttle_rate()
+        if throttle and (base == 0 or throttle < base):
+            return throttle  # polite mode caps below the base (or the unlimited base)
         return base
+
+    def _auto_throttle_rate(self) -> int:
+        """The reduced cap (bytes/sec) when 'polite mode' sees other apps using
+        the network heavily, else 0. Other traffic = system throughput minus
+        our own accounted download rate."""
+        if not self.settings.auto_throttle:
+            return 0
+        system = self._system_sampler.sample()
+        other = max(0.0, system.net_recv_per_sec - self._download_rate())
+        threshold = self.settings.auto_throttle_threshold_kbps * 1024
+        return self.settings.auto_throttle_kbps * 1024 if other > threshold else 0
+
+    def _download_rate(self) -> float:
+        """Grabline's own current download throughput (bytes/sec), from the
+        change in total downloaded bytes between scheduler passes."""
+        total = sum(task.bytes_downloaded for task in self._active.values())
+        now = time.monotonic()
+        rate = 0.0
+        if self._rate_mark is not None:
+            elapsed = now - self._rate_mark[0]
+            if elapsed > 0:
+                rate = max(0.0, total - self._rate_mark[1]) / elapsed
+        self._rate_mark = (now, total)
+        return rate
 
     def _apply_global_rate(self) -> None:
         rate = self._effective_global_rate()
@@ -265,6 +299,22 @@ class DownloadManager:
         if limiter is None:
             limiter = RateLimiter(kbps * 1024)
             self._job_limiters[job.id] = limiter
+        else:
+            limiter.set_rate(kbps * 1024)
+        return limiter
+
+    def _host_limiter_for(self, job: Job) -> RateLimiter | None:
+        """The shared limiter for a job's server host, if a per-host cap is
+        configured. All downloads from that host consume from one bucket."""
+        host = urlsplit(job.url).hostname
+        limits = self.settings.host_limits
+        kbps = limits.get(host.lower()) if host else None
+        if not kbps:
+            return None
+        limiter = self._host_limiters.get(host)  # type: ignore[arg-type]
+        if limiter is None:
+            limiter = RateLimiter(kbps * 1024)
+            self._host_limiters[host] = limiter  # type: ignore[index]
         else:
             limiter.set_rate(kbps * 1024)
         return limiter
@@ -801,6 +851,7 @@ class DownloadManager:
             connections=connections,
             limiter=self.limiter,
             job_limiter=self._job_limiter_for(job),
+            host_limiter=self._host_limiter_for(job),
             proxy=proxy,
             headers=job.options.get("http_headers") or None,
         )

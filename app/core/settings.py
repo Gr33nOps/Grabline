@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from app.core import paths
@@ -133,6 +133,67 @@ class Settings:
     @speed_limit_kbps.setter
     def speed_limit_kbps(self, value: int) -> None:
         self._db.set_setting("speed_limit_kbps", str(max(0, value)))
+
+    @property
+    def host_limits(self) -> dict[str, int]:
+        """Per-host download caps in KB/s, keyed by hostname. Downloads from a
+        listed host share that cap; 0 or absent means no per-host limit."""
+        raw = self._db.get_setting("host_limits")
+        if not raw:
+            return {}
+        try:
+            values = json.loads(raw)
+        except ValueError:
+            return {}
+        if not isinstance(values, dict):
+            return {}
+        limits: dict[str, int] = {}
+        for host, kbps in values.items():
+            try:
+                rate = int(kbps)
+            except (TypeError, ValueError):
+                continue
+            if str(host).strip() and rate > 0:
+                limits[str(host).strip().lower()] = rate
+        return limits
+
+    @host_limits.setter
+    def host_limits(self, value: Mapping[str, int]) -> None:
+        cleaned = {
+            str(host).strip().lower(): int(kbps)
+            for host, kbps in value.items()
+            if str(host).strip() and int(kbps) > 0
+        }
+        self._db.set_setting("host_limits", json.dumps(cleaned))
+
+    @property
+    def auto_throttle(self) -> bool:
+        """'Polite mode': automatically slow downloads when other apps are
+        using the network heavily, and speed back up when they stop."""
+        return self._get_bool("auto_throttle", False)
+
+    @auto_throttle.setter
+    def auto_throttle(self, value: bool) -> None:
+        self._set_bool("auto_throttle", value)
+
+    @property
+    def auto_throttle_kbps(self) -> int:
+        """The reduced download cap (KB/s) applied while other traffic is busy."""
+        return max(1, self._get_int("auto_throttle_kbps", 512))
+
+    @auto_throttle_kbps.setter
+    def auto_throttle_kbps(self, value: int) -> None:
+        self._db.set_setting("auto_throttle_kbps", str(max(1, value)))
+
+    @property
+    def auto_throttle_threshold_kbps(self) -> int:
+        """How much *other* network traffic (KB/s) counts as 'busy' and trips
+        the automatic throttle."""
+        return max(1, self._get_int("auto_throttle_threshold_kbps", 256))
+
+    @auto_throttle_threshold_kbps.setter
+    def auto_throttle_threshold_kbps(self, value: int) -> None:
+        self._db.set_setting("auto_throttle_threshold_kbps", str(max(1, value)))
 
     # --- speed schedule: lift the limit during a nightly full-speed window ---
 

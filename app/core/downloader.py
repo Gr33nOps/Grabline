@@ -25,7 +25,7 @@ from typing import IO
 
 import httpx
 
-from app.core import naming
+from app.core import naming, net
 from app.core.errors import DownloadError
 from app.core.models import Job, JobStatus, Segment
 from app.core.probe import ProbeResult, probe
@@ -116,6 +116,7 @@ class SegmentedDownload:
         checkpoint_interval: float = 0.3,
         limiter: RateLimiter | None = None,
         job_limiter: RateLimiter | None = None,
+        host_limiter: RateLimiter | None = None,
         proxy: str | None = None,
         headers: dict[str, str] | None = None,
     ) -> None:
@@ -126,10 +127,13 @@ class SegmentedDownload:
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
         self.limiter = limiter
-        # A second, per-download cap applied in series with the global one;
-        # the tighter of the two wins, which is exactly what we want.
+        # Extra caps applied in series with the global one; the tightest wins,
+        # which is exactly right. job_limiter = this download's own cap;
+        # host_limiter = shared across every download from the same server.
         self.job_limiter = job_limiter
-        self._client = httpx.Client(
+        self.host_limiter = host_limiter
+        self._client = net.build_client(
+            proxy=proxy,
             follow_redirects=True,
             # HTTP/2 when the server offers it (negotiated via TLS ALPN, so
             # plain-http servers silently stay on 1.1): range requests
@@ -137,7 +141,6 @@ class SegmentedDownload:
             http2=True,
             timeout=httpx.Timeout(30.0, connect=15.0),
             limits=httpx.Limits(max_connections=connections + 2),
-            proxy=proxy or None,
             headers=headers or None,
         )
         self._checkpointer = _Checkpointer(db, checkpoint_interval)
@@ -383,6 +386,8 @@ class SegmentedDownload:
             self.limiter.throttle(amount)
         if self.job_limiter is not None:
             self.job_limiter.throttle(amount)
+        if self.host_limiter is not None:
+            self.host_limiter.throttle(amount)
 
     def _stream_full(self, handle: IO[bytes], segment: Segment) -> None:
         """Single-connection fallback for servers without range support.

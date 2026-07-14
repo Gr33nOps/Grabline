@@ -56,11 +56,20 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - **HTTP/2** where the server offers it; IPv6 out of the box.
 - **Crash-proof resume**: checkpointed to survive kill -9, power loss, and
   reboots; downloads keep retrying through internet drops and VPN reconnects.
-- Global **and** per-download speed limits, plus a nightly "full speed" window.
 - Smart reconnect: exponential backoff (or **retry forever**), error-aware -
   rate limits back off and retry, dead links (404) don't spin. If a page
   offered alternate streams, a failed URL **fails over to its mirrors**.
-- Optional HTTP/SOCKS **proxy**.
+
+**Network & bandwidth**
+- **Proxy** for everything (downloads *and* torrents): **HTTP, HTTPS, SOCKS5,
+  and SOCKS4**, with `user:pass@` auth.
+- **Speed limits**: global, per-download, **per-host** (cap a greedy server
+  and every download from it shares one bucket), and time-based (a nightly
+  full-speed window).
+- **Automatic throttle** ("polite mode"): slow downloads when other apps are
+  using the network, and speed back up when they stop.
+- **VPN detection** - the dashboard shows when a tunnel (WireGuard, OpenVPN,
+  …) is up.
 
 **A queue manager, not just a queue**
 - **Unlimited named queues / download groups**, each with its own rules:
@@ -317,7 +326,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(401 tests, including an 8-connection download killed with SIGKILL and
+(411 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.

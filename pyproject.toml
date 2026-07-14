@@ -4,14 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grabline"
-version = "1.12.0"
+version = "1.13.0"
 description = "Grabline: a fast, free, open-source download manager with a browser button and a full quality picker."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "Zain" }]
 dependencies = [
-    "httpx[http2]>=0.27",
+    "httpx[http2,socks]>=0.27",
+    # SOCKS4/4a proxy transports (httpx does SOCKS5 itself, not SOCKS4).
+    "httpx-socks>=0.9",
     "PySide6>=6.6",
     # curl-cffi: yt-dlp's TLS-impersonation backend — Dailymotion (and a
     # growing list of sites) refuse plain-python TLS fingerprints outright.
@@ -68,7 +70,7 @@ disallow_incomplete_defs = false
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["yt_dlp", "yt_dlp.*", "libtorrent", "paramiko", "paramiko.*", "boto3", "keyring", "pyftpdlib.*", "psutil"]
+module = ["yt_dlp", "yt_dlp.*", "libtorrent", "paramiko", "paramiko.*", "boto3", "keyring", "pyftpdlib.*", "psutil", "httpx_socks"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -17,6 +17,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from app.core import net
+
 _TIMEOUT = httpx.Timeout(15.0, connect=10.0)
 
 #: Response-header fingerprints that identify a CDN / edge provider. The first
@@ -166,7 +168,7 @@ def inspect_url(
     parts = urlsplit(url)
     request_headers = {"Range": "bytes=0-0", **(headers or {})}
     try:
-        with httpx.Client(follow_redirects=True, timeout=_TIMEOUT, proxy=proxy or None) as client:
+        with net.build_client(proxy=proxy, follow_redirects=True, timeout=_TIMEOUT) as client:
             start = time.perf_counter()
             with client.stream("GET", url, headers=request_headers) as response:
                 response_ms = int((time.perf_counter() - start) * 1000)

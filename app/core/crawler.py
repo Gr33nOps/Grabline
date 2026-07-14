@@ -12,6 +12,8 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 
+from app.core import net
+
 log = logging.getLogger(__name__)
 
 _LINK = re.compile(r"""(?:href|src)\s*=\s*["']([^"'<>]+)["']""", re.IGNORECASE)
@@ -48,7 +50,7 @@ def crawl(
     found_set: set[str] = set()
     queue: deque[tuple[str, int]] = deque([(start_url, 0)])
 
-    with httpx.Client(follow_redirects=True, timeout=15, proxy=proxy or None) as client:
+    with net.build_client(proxy=proxy, follow_redirects=True, timeout=15) as client:
         while queue and len(seen_pages) < max_pages and len(found) < max_links:
             page_url, level = queue.popleft()
             if page_url in seen_pages:

@@ -121,6 +121,10 @@ class DashboardDialog(QDialog):
             graphs.addWidget(graph, index // 2, index % 2)
         layout.addLayout(graphs)
 
+        self._vpn_label = QLabel("")
+        self._vpn_label.setStyleSheet("color: gray; font-size: 11px;")
+        layout.addWidget(self._vpn_label)
+
         # -- per-server / per-category ---------------------------------------
         tables = QHBoxLayout()
         self.server_tree = self._make_tree("Server")
@@ -184,6 +188,13 @@ class DashboardDialog(QDialog):
         self.network_graph.push([system.net_recv_per_sec, system.net_sent_per_sec])
         self.cpu_graph.push([system.cpu_percent])
         self.disk_graph.push([system.disk_bytes_per_sec])
+
+        from app.core import net
+
+        vpn = net.active_vpn_interfaces()
+        self._vpn_label.setText(
+            f"🔒 VPN active on {', '.join(vpn)}" if vpn else "VPN: not detected"
+        )
 
         self._fill_tree(self.server_tree, self.manager.stats_by_host())
         self._fill_tree(self.category_tree, self.manager.stats_by_category())

@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from app.core import cloudlinks
+from app.core import cloudlinks, net
 from app.core.errors import DownloadError
 from app.core.models import JobKind
 from app.core.probe import ProbeResult, probe
@@ -90,9 +90,7 @@ def _hls_variants(url: str, proxy: str | None = None) -> tuple[HlsVariant, ...]:
     """Quality choices from a master playlist; empty for media playlists
     or when the manifest cannot be fetched (FFmpeg reports the real error)."""
     try:
-        with httpx.Client(
-            follow_redirects=True, http2=True, timeout=10, proxy=proxy or None
-        ) as client:
+        with net.build_client(proxy=proxy, follow_redirects=True, http2=True, timeout=10) as client:
             response = client.get(url)
             if response.status_code != 200:
                 return ()
@@ -169,11 +167,11 @@ class Resolver:
             return Resolution(url=url, kind=JobKind.HLS, variants=variants)
 
         try:
-            with httpx.Client(
+            with net.build_client(
+                proxy=proxy,
                 follow_redirects=True,
                 http2=True,
                 timeout=httpx.Timeout(20.0, connect=10.0),
-                proxy=proxy or None,
             ) as client:
                 result = probe(client, url, headers)
         except DownloadError as exc:

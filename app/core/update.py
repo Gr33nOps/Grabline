@@ -12,6 +12,7 @@ import re
 import httpx
 
 from app import __version__
+from app.core import net
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ def is_newer(candidate: str, current: str) -> bool:
 def latest_release(proxy: str | None = None) -> tuple[str, str] | None:
     """Return (tag, html_url) of the latest release, or None if unavailable."""
     try:
-        with httpx.Client(follow_redirects=True, timeout=10, proxy=proxy or None) as client:
+        with net.build_client(proxy=proxy, follow_redirects=True, timeout=10) as client:
             response = client.get(_LATEST, headers={"Accept": "application/vnd.github+json"})
         if response.status_code != 200:
             return None

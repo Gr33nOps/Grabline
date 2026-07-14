@@ -50,6 +50,21 @@ def _parse_rename_rules(text: str) -> list[tuple[str, str]]:
     return rules
 
 
+def _parse_host_limits(text: str) -> dict[str, int]:
+    """'host = KB/s' per line -> {host: kbps}; bad lines are dropped."""
+    limits: dict[str, int] = {}
+    for line in text.splitlines():
+        host, _, value = line.partition("=")
+        host = host.strip().lower()
+        try:
+            kbps = int(value.strip())
+        except ValueError:
+            continue
+        if host and kbps > 0:
+            limits[host] = kbps
+    return limits
+
+
 class _FfmpegInstaller(QThread):
     progressed = Signal(int, object)  # received bytes, total or None
     succeeded = Signal(str)
@@ -100,7 +115,11 @@ class SettingsDialog(QDialog):
         general_form.addRow("Theme:", self.theme_combo)
         self.proxy_edit = QLineEdit(settings.proxy or "")
         self.proxy_edit.setPlaceholderText(
-            "http://host:port or socks5://host:port (blank = direct)"
+            "http(s):// · socks5:// · socks4:// host:port  (blank = direct)"
+        )
+        self.proxy_edit.setToolTip(
+            "HTTP, HTTPS, SOCKS5 and SOCKS4 are supported, with user:pass@ auth. "
+            "The proxy applies to every download, including torrents."
         )
         general_form.addRow("Proxy:", self.proxy_edit)
         self.clipboard_check = QCheckBox("Offer to download URLs copied to the clipboard")
@@ -219,6 +238,53 @@ class SettingsDialog(QDialog):
             "starts while offline and retries immediately on reconnect."
         )
         dl_form.addRow("", self.network_check)
+
+        # ---- Network ---------------------------------------------------------
+        net_tab = QWidget()
+        net_layout = QVBoxLayout(net_tab)
+        proxy_note = QLabel(
+            "The proxy (Settings → General) covers HTTP, HTTPS, SOCKS5 and "
+            "SOCKS4, and applies to torrents too."
+        )
+        proxy_note.setWordWrap(True)
+        net_layout.addWidget(proxy_note)
+        vpn_row = QLabel(self._vpn_status_text())
+        vpn_row.setStyleSheet("color: gray;")
+        net_layout.addWidget(vpn_row)
+
+        throttle_group = QGroupBox("Automatic throttle (polite mode)")
+        throttle_layout = QFormLayout(throttle_group)
+        self.auto_throttle_check = QCheckBox("Slow downloads when other apps are using the network")
+        self.auto_throttle_check.setChecked(settings.auto_throttle)
+        throttle_layout.addRow("", self.auto_throttle_check)
+        self.throttle_limit_spin = QSpinBox()
+        self.throttle_limit_spin.setRange(1, 1_000_000)
+        self.throttle_limit_spin.setSuffix(" KB/s")
+        self.throttle_limit_spin.setValue(settings.auto_throttle_kbps)
+        throttle_layout.addRow("Slow down to:", self.throttle_limit_spin)
+        self.throttle_threshold_spin = QSpinBox()
+        self.throttle_threshold_spin.setRange(1, 1_000_000)
+        self.throttle_threshold_spin.setSuffix(" KB/s")
+        self.throttle_threshold_spin.setValue(settings.auto_throttle_threshold_kbps)
+        self.throttle_threshold_spin.setToolTip(
+            "How much other (non-Grabline) network traffic counts as 'busy'."
+        )
+        throttle_layout.addRow("When others use over:", self.throttle_threshold_spin)
+        net_layout.addWidget(throttle_group)
+
+        host_group = QGroupBox("Per-host speed limits")
+        host_layout = QVBoxLayout(host_group)
+        host_layout.addWidget(QLabel("One 'host = KB/s' per line, e.g.  cdn.example.com = 500"))
+        self.host_limits_edit = QPlainTextEdit()
+        self.host_limits_edit.setPlainText(
+            "\n".join(f"{host} = {kbps}" for host, kbps in settings.host_limits.items())
+        )
+        self.host_limits_edit.setPlaceholderText("cdn.example.com = 500")
+        self.host_limits_edit.setFixedHeight(90)
+        host_layout.addWidget(self.host_limits_edit)
+        net_layout.addWidget(host_group)
+        net_layout.addStretch(1)
+        tabs.addTab(net_tab, "Network")
 
         # ---- When finished -------------------------------------------------
         finish_form = self._add_form_tab(tabs, "When finished")
@@ -516,6 +582,15 @@ class SettingsDialog(QDialog):
 
         CloudAccountsDialog(CredentialStore(self.settings.db), self).exec()
 
+    @staticmethod
+    def _vpn_status_text() -> str:
+        from app.core import net
+
+        interfaces = net.active_vpn_interfaces()
+        if interfaces:
+            return f"VPN detected: active on {', '.join(interfaces)}."
+        return "VPN detected: none (no tunnel interface is up)."
+
     def _browse_torrent_folder(self) -> None:
         chosen = QFileDialog.getExistingDirectory(
             self, "Save torrents to", self.torrent_dir_edit.text() or str(Path.home())
@@ -584,6 +659,12 @@ class SettingsDialog(QDialog):
         installer.start()
 
     def _save(self) -> None:
+        from app.core import net
+
+        proxy_error = net.validate_proxy(self.proxy_edit.text())
+        if proxy_error is not None:
+            QMessageBox.warning(self, "Grabline", proxy_error)
+            return
         self.settings.download_dir = self.folder_edit.text().strip() or str(
             self.settings.download_dir
         )
@@ -613,6 +694,10 @@ class SettingsDialog(QDialog):
         self.settings.script_on_complete = self.script_edit.text()
         self.settings.theme = self.theme_combo.currentData()
         self.settings.proxy = self.proxy_edit.text().strip() or None
+        self.settings.auto_throttle = self.auto_throttle_check.isChecked()
+        self.settings.auto_throttle_kbps = self.throttle_limit_spin.value()
+        self.settings.auto_throttle_threshold_kbps = self.throttle_threshold_spin.value()
+        self.settings.host_limits = _parse_host_limits(self.host_limits_edit.toPlainText())
         self.settings.notify_on_complete = self.notify_check.isChecked()
         self.settings.auto_open_folder = self.open_folder_check.isChecked()
         self.settings.auto_extract = self.extract_check.isChecked()

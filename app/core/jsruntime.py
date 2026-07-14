@@ -28,7 +28,7 @@ from pathlib import Path, PurePosixPath
 
 import httpx
 
-from app.core import paths
+from app.core import net, paths
 from app.core.errors import DownloadError
 from app.core.ffmpeg import platform_key
 from app.core.ffmpeg_pins import PinnedArchive
@@ -146,10 +146,10 @@ def ensure_deno(
                 "Deno yourself and Grabline will pick it up from PATH"
             )
         target_dir.mkdir(parents=True, exist_ok=True)
-        with httpx.Client(
+        with net.build_client(
+            proxy=proxy,
             follow_redirects=True,
             timeout=httpx.Timeout(60.0, connect=15.0),
-            proxy=proxy or None,
         ) as client:
             _install_archive(client, archive, target_dir, progress)
     deno_path = managed_deno(target_dir)

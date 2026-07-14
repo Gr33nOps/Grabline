@@ -169,6 +169,36 @@ def create_torrent_file(
     return bytes(lt.bencode(creator.generate()))
 
 
+#: libtorrent proxy_type enum values (from the settings_pack docs).
+_PROXY_TYPES = {"socks4": 1, "socks5": 2, "http": 3}
+
+
+def _proxy_settings(proxy: str | None) -> dict[str, Any]:
+    """Translate Grabline's proxy URL into libtorrent session settings, so
+    torrent peer/tracker traffic goes through the same proxy as everything
+    else. SOCKS5/SOCKS4/HTTP are supported (with auth)."""
+    if not proxy:
+        return {}
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(proxy)
+    scheme = parts.scheme.lower().rstrip("h")  # socks5h -> socks5
+    kind = _PROXY_TYPES.get("socks5" if scheme == "socks4a" else scheme)
+    if kind is None or not parts.hostname:
+        return {}
+    pack: dict[str, Any] = {
+        "proxy_type": kind,
+        "proxy_hostname": parts.hostname,
+        "proxy_port": parts.port or (1080 if scheme.startswith("socks") else 8080),
+        "proxy_peer_connections": True,
+        "proxy_tracker_connections": True,
+    }
+    if parts.username:
+        pack["proxy_username"] = parts.username
+        pack["proxy_password"] = parts.password or ""
+    return pack
+
+
 class TorrentSession:
     """The one libtorrent session shared by every torrent job."""
 
@@ -187,7 +217,7 @@ class TorrentSession:
 
     def _pack(self, settings: Settings) -> dict[str, Any]:
         port = settings.torrent_port
-        return {
+        pack = {
             "listen_interfaces": f"0.0.0.0:{port},[::]:{port}",
             "enable_dht": settings.torrent_dht,
             "enable_lsd": True,  # local peer discovery
@@ -198,6 +228,8 @@ class TorrentSession:
             "dht_bootstrap_nodes": _DHT_ROUTERS,
             "user_agent": "Grabline",
         }
+        pack.update(_proxy_settings(settings.proxy))
+        return pack
 
     def session(self) -> Any:
         with self._lock:

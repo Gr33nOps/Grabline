@@ -22,7 +22,7 @@ from pathlib import Path, PurePosixPath
 
 import httpx
 
-from app.core import paths
+from app.core import net, paths
 from app.core.errors import DownloadError
 from app.core.ffmpeg_pins import PINS, PinnedArchive
 from app.core.settings import Settings
@@ -86,10 +86,10 @@ def ensure_ffmpeg(
             "install FFmpeg manually and set its path in Settings"
         )
     target_dir.mkdir(parents=True, exist_ok=True)
-    with httpx.Client(
+    with net.build_client(
+        proxy=proxy,
         follow_redirects=True,
         timeout=httpx.Timeout(60.0, connect=15.0),
-        proxy=proxy or None,
     ) as client:
         for archive in archives:
             _install_archive(client, archive, target_dir, progress)
