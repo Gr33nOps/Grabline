@@ -270,3 +270,49 @@ def test_quality_panel_selection_and_trim(db: Database):
     panel.trim_start.setText("")
     panel.trim_end.setText("")
     assert panel.trim_range() is None
+
+
+def test_quality_panel_extras_config(db: Database):
+    _qapp()
+    media = MediaInfo(
+        url="https://tube.example/watch?v=1",
+        id="1",
+        title="Extras Video",
+        uploader=None,
+        duration=None,
+        thumbnail_url=None,
+        options=(QualityOption(label="Best", kind="video", format_spec="bv*+ba/b"),),
+    )
+    panel = QualityPanel(media)
+    assert panel.extras_config() == {"chapters": True}  # chapters kept by default
+    panel.save_thumbnail.setChecked(True)
+    panel.save_metadata.setChecked(True)
+    panel.keep_chapters.setChecked(False)
+    panel.sponsorblock.setCurrentIndex(2)  # "Remove sponsor segments"
+    assert panel.extras_config() == {
+        "save_thumbnail": True,
+        "save_metadata": True,
+        "sponsorblock": "remove",
+    }
+
+
+def test_archive_dialog_selection(db: Database):
+    from app.core.archive import ArchiveEntry
+    from app.ui.archive_dialog import ArchiveDialog
+
+    _qapp()
+    entries = (
+        ArchiveEntry("docs", None, True),
+        ArchiveEntry("docs/a.txt", 42),
+        ArchiveEntry("b.txt", 7),
+    )
+    dialog = ArchiveDialog("bundle.zip", entries)
+    assert dialog.tree.topLevelItemCount() == 2  # dirs are not listed as rows
+    assert dialog.selected_members() is None  # everything checked = extract all
+
+    from PySide6.QtCore import Qt
+
+    item = dialog.tree.topLevelItem(1)
+    assert item is not None
+    item.setCheckState(0, Qt.CheckState.Unchecked)
+    assert dialog.selected_members() == ["docs/a.txt"]

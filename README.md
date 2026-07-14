@@ -91,9 +91,17 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - HLS/DASH streams reassembled into a clean .mp4 by FFmpeg, with quality
   picking and automatic retry.
 
+**Archive manager** (ZIP / TAR / GZIP / BZIP2 / XZ built in; RAR / 7Z via 7-Zip)
+- Preview an archive's contents and extract only the files you pick.
+- Extract automatically after download, with saved passwords tried in
+  order - a password you type once is remembered for next time.
+- Optional virus scan before extraction, using a scanner already on the
+  machine (Windows Defender or ClamAV) - Grabline never pretends to scan
+  when none is installed.
+
 **Nice touches**
 - URL patterns like `file[1-100].jpg`, drag-and-drop URLs, checksum
-  verification, auto-extract archives, video → GIF, a dark/light theme,
+  verification, video → GIF, a dark/light theme,
   start-minimized-in-the-tray on login, and an update check.
 
 **Honest by design**: no DRM circumvention, no login bypass, no telemetry.
@@ -217,7 +225,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(277 tests, including an 8-connection download killed with SIGKILL and
+(299 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.

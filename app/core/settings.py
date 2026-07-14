@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Sequence
 from pathlib import Path
 
 from app.core import paths
@@ -279,6 +281,37 @@ class Settings:
     @auto_extract.setter
     def auto_extract(self, value: bool) -> None:
         self._set_bool("auto_extract", value)
+
+    @property
+    def archive_passwords(self) -> tuple[str, ...]:
+        """Passwords tried in order when an archive turns out to be encrypted.
+        Stored locally and unencrypted - the same trust level as the
+        downloaded files themselves."""
+        raw = self._db.get_setting("archive_passwords")
+        if not raw:
+            return ()
+        try:
+            values = json.loads(raw)
+        except ValueError:
+            return ()
+        if not isinstance(values, list):
+            return ()
+        return tuple(str(v) for v in values if str(v).strip())
+
+    @archive_passwords.setter
+    def archive_passwords(self, value: Sequence[str]) -> None:
+        deduped = list(dict.fromkeys(v.strip() for v in value if v.strip()))
+        self._db.set_setting("archive_passwords", json.dumps(deduped))
+
+    @property
+    def scan_before_extract(self) -> bool:
+        """Run an installed virus scanner (ClamAV / Windows Defender) over an
+        archive before extracting it."""
+        return self._get_bool("scan_before_extract", False)
+
+    @scan_before_extract.setter
+    def scan_before_extract(self, value: bool) -> None:
+        self._set_bool("scan_before_extract", value)
 
     @property
     def after_queue_action(self) -> str:

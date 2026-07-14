@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
 )
 
 from app import __version__
-from app.core import archive, crawler, listio, naming, update, verify
+from app.core import archive, crawler, listio, naming, update, verify, virusscan
 from app.core.batch import expand_all, expand_pattern, extract_urls
 from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
@@ -56,6 +56,7 @@ from app.core.resolver import Resolution, Resolver
 from app.core.settings import Settings
 from app.engines.smart import option_for_label
 from app.ui import theme
+from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.format import human_bytes
 from app.ui.gallery_panel import GalleryPanel
@@ -121,7 +122,7 @@ class _ResolveThread(QThread):
 class _FileOpThread(QThread):
     """Runs a slow file operation (hashing, extraction) off the UI thread."""
 
-    done = Signal(object, object)  # result, error str | None
+    done = Signal(object, object)  # result, error Exception | None
 
     def __init__(self, work: Callable[[], object]) -> None:
         super().__init__()
@@ -131,7 +132,9 @@ class _FileOpThread(QThread):
         try:
             self.done.emit(self._work(), None)
         except (OSError, DownloadError, ValueError) as exc:
-            self.done.emit(None, str(exc))
+            # The exception object itself, so handlers can distinguish
+            # PasswordRequired from a plain failure; str(error) still works.
+            self.done.emit(None, exc)
 
 
 class MainWindow(QMainWindow):
@@ -665,6 +668,8 @@ class MainWindow(QMainWindow):
         verify_hash.setEnabled(done)
         extract_here = menu.addAction("Extract here")
         extract_here.setEnabled(done and archive.is_archive(file_path))
+        preview_archive = menu.addAction("Preview archive…")
+        preview_archive.setEnabled(done and archive.is_archive(file_path))
 
         pending = view.status in (JobStatus.QUEUED, JobStatus.PAUSED)
         queue_menu = menu.addMenu("Move in queue")
@@ -700,6 +705,8 @@ class MainWindow(QMainWindow):
             self._verify_hash(file_path)
         elif chosen is extract_here:
             self._extract(file_path)
+        elif chosen is preview_archive:
+            self._preview_archive(file_path)
         elif chosen is move_top:
             self.manager.move_to_top(view.id)
         elif chosen is move_up:
@@ -712,14 +719,22 @@ class MainWindow(QMainWindow):
             self.manager.remove(view.id)
             self.refresh()
 
-    def _run_file_op(self, work: Callable[[], object], on_done: Callable[[object], None]) -> None:
+    def _run_file_op(
+        self,
+        work: Callable[[], object],
+        on_done: Callable[[object], None],
+        on_error: Callable[[object], None] | None = None,
+    ) -> None:
         thread = _FileOpThread(work)
         self._file_ops.add(thread)
 
         def finished(result: object, error: object) -> None:
             self._file_ops.discard(thread)
             if error is not None:
-                QMessageBox.warning(self, "Grabline", str(error))
+                if on_error is not None:
+                    on_error(error)
+                else:
+                    QMessageBox.warning(self, "Grabline", str(error))
             else:
                 on_done(result)
 
@@ -751,13 +766,70 @@ class MainWindow(QMainWindow):
 
         self._run_file_op(lambda: verify.verify_file(path, expected.strip()), done)
 
-    def _extract(self, path: Path) -> None:
+    def _archive_work(
+        self,
+        path: Path,
+        members: list[str] | None = None,
+        passwords: tuple[str, ...] = (),
+    ) -> Callable[[], object]:
+        """Extraction work for a background thread: the optional virus scan
+        first, then the extraction itself."""
+
+        def work() -> object:
+            if self.settings.scan_before_extract:
+                result = virusscan.scan(path)
+                if not result.clean:
+                    detail = f" ({result.detail})" if result.detail else ""
+                    raise DownloadError(
+                        f"{result.scanner} flagged {path.name}{detail} - not extracting."
+                    )
+            return archive.extract(path, passwords=passwords, members=members)
+
+        return work
+
+    def _extract(
+        self, path: Path, members: list[str] | None = None, new_password: str | None = None
+    ) -> None:
+        passwords = self.settings.archive_passwords
+        if new_password:
+            passwords = (new_password, *passwords)
         self.statusBar().showMessage(f"Extracting {path.name} …")
 
         def done(result: object) -> None:
+            if new_password:
+                # Remember what worked - next time it's tried automatically.
+                self.settings.archive_passwords = (
+                    new_password,
+                    *self.settings.archive_passwords,
+                )
             self.statusBar().showMessage(f"Extracted to {Path(str(result)).name}", 6000)
 
-        self._run_file_op(lambda: archive.extract(path), done)
+        def failed(error: object) -> None:
+            if isinstance(error, archive.PasswordRequired):
+                password, accepted = QInputDialog.getText(
+                    self,
+                    "Archive password",
+                    f"{path.name} is password-protected. Password:",
+                    QLineEdit.EchoMode.Password,
+                )
+                if accepted and password:
+                    self._extract(path, members, new_password=password)
+                return
+            QMessageBox.warning(self, "Grabline", str(error))
+
+        self._run_file_op(self._archive_work(path, members, passwords), done, failed)
+
+    def _preview_archive(self, path: Path) -> None:
+        self.statusBar().showMessage(f"Reading {path.name} …")
+
+        def opened(result: object) -> None:
+            self.statusBar().clearMessage()
+            entries = cast("tuple[archive.ArchiveEntry, ...]", result)
+            dialog = ArchiveDialog(path.name, entries, self)
+            if dialog.exec() == ArchiveDialog.DialogCode.Accepted:
+                self._extract(path, members=dialog.selected_members())
+
+        self._run_file_op(lambda: archive.list_entries(path), opened)
 
     def _set_connections(self, view: JobView) -> None:
         connections, accepted = QInputDialog.getInt(
@@ -856,11 +928,18 @@ class MainWindow(QMainWindow):
                 ):
                     self._auto_extracted.add(view.id)
                     self.statusBar().showMessage(f"Extracting {file_path.name} …")
+
+                    # Failures stay in the status bar - a modal mid-queue would
+                    # interrupt; the row menu's Preview archive… can prompt.
+                    def extract_failed(error: object, name: str = file_path.name) -> None:
+                        self.statusBar().showMessage(f"Did not extract {name}: {error}", 10000)
+
                     self._run_file_op(
-                        partial(archive.extract, file_path),
+                        self._archive_work(file_path, passwords=self.settings.archive_passwords),
                         lambda r: self.statusBar().showMessage(
                             f"Extracted {Path(str(r)).name}", 6000
                         ),
+                        extract_failed,
                     )
         if self._was_active and not active_now:
             self.queue_drained.emit()

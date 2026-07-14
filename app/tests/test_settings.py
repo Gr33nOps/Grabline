@@ -113,3 +113,19 @@ def test_bad_time_and_theme_fall_back(db: Database):
     assert settings.theme == "system"
     with pytest.raises(ValueError):
         settings.theme = "hologram"
+
+
+def test_archive_passwords_roundtrip_dedup_and_bad_json(db: Database):
+    settings = Settings(db)
+    assert settings.archive_passwords == ()
+    assert settings.scan_before_extract is False
+
+    settings.archive_passwords = ["hunter2", "  spaced  ", "", "hunter2"]
+    settings.scan_before_extract = True
+
+    fresh = Settings(db)
+    assert fresh.archive_passwords == ("hunter2", "spaced")  # trimmed, deduped
+    assert fresh.scan_before_extract is True
+
+    db.set_setting("archive_passwords", "{not json")
+    assert Settings(db).archive_passwords == ()

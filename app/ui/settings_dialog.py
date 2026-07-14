@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QProgressDialog,
     QPushButton,
     QSpinBox,
@@ -167,9 +168,29 @@ class SettingsDialog(QDialog):
         self.open_folder_check = QCheckBox("Open the folder when a download completes")
         self.open_folder_check.setChecked(settings.auto_open_folder)
         finish_form.addRow("", self.open_folder_check)
-        self.extract_check = QCheckBox("Extract .zip/.tar archives automatically")
+        self.extract_check = QCheckBox(
+            "Extract archives automatically (zip/tar/gz/bz2/xz; rar/7z with 7z installed)"
+        )
         self.extract_check.setChecked(settings.auto_extract)
         finish_form.addRow("", self.extract_check)
+        self.scan_check = QCheckBox("Virus-scan archives before extracting")
+        self.scan_check.setChecked(settings.scan_before_extract)
+        self.scan_check.setToolTip(
+            "Uses a scanner already on this machine - Windows Defender or "
+            "ClamAV. If none is installed, extraction stops with a message "
+            "instead of pretending to scan."
+        )
+        finish_form.addRow("", self.scan_check)
+        self.passwords_edit = QPlainTextEdit()
+        self.passwords_edit.setPlainText("\n".join(settings.archive_passwords))
+        self.passwords_edit.setPlaceholderText("one password per line")
+        self.passwords_edit.setFixedHeight(72)
+        self.passwords_edit.setToolTip(
+            "Tried in order when an archive is encrypted. Passwords you type "
+            "into the extract prompt are remembered here too. Stored locally, "
+            "unencrypted - same trust level as the downloaded files."
+        )
+        finish_form.addRow("Archive passwords:", self.passwords_edit)
         self.after_combo = QComboBox()
         for label, value in (
             ("Do nothing", "nothing"),
@@ -346,6 +367,8 @@ class SettingsDialog(QDialog):
         self.settings.notify_on_complete = self.notify_check.isChecked()
         self.settings.auto_open_folder = self.open_folder_check.isChecked()
         self.settings.auto_extract = self.extract_check.isChecked()
+        self.settings.scan_before_extract = self.scan_check.isChecked()
+        self.settings.archive_passwords = self.passwords_edit.toPlainText().splitlines()
         self.settings.after_queue_action = self.after_combo.currentData()
         try:
             # The autostart file/registry entry IS the setting - no DB copy
