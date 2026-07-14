@@ -350,6 +350,129 @@ class Settings:
     def scan_before_extract(self, value: bool) -> None:
         self._set_bool("scan_before_extract", value)
 
+    # ------------------------------------------------------------ torrents
+
+    @property
+    def torrent_port(self) -> int:
+        """The BitTorrent listen port (both TCP and uTP)."""
+        return max(1024, min(65535, self._get_int("torrent_port", 6881)))
+
+    @torrent_port.setter
+    def torrent_port(self, value: int) -> None:
+        self._db.set_setting("torrent_port", str(value))
+
+    @property
+    def torrent_dht(self) -> bool:
+        """DHT: find peers without trackers (also enables magnet-only swarms)."""
+        return self._get_bool("torrent_dht", True)
+
+    @torrent_dht.setter
+    def torrent_dht(self, value: bool) -> None:
+        self._set_bool("torrent_dht", value)
+
+    @property
+    def torrent_upnp(self) -> bool:
+        return self._get_bool("torrent_upnp", True)
+
+    @torrent_upnp.setter
+    def torrent_upnp(self, value: bool) -> None:
+        self._set_bool("torrent_upnp", value)
+
+    @property
+    def torrent_natpmp(self) -> bool:
+        return self._get_bool("torrent_natpmp", True)
+
+    @torrent_natpmp.setter
+    def torrent_natpmp(self, value: bool) -> None:
+        self._set_bool("torrent_natpmp", value)
+
+    @property
+    def torrent_seed(self) -> bool:
+        """Keep seeding after a torrent finishes downloading."""
+        return self._get_bool("torrent_seed", True)
+
+    @torrent_seed.setter
+    def torrent_seed(self, value: bool) -> None:
+        self._set_bool("torrent_seed", value)
+
+    @property
+    def torrent_ratio_limit(self) -> float:
+        """Stop seeding at this upload/download ratio (0 = seed forever)."""
+        raw = self._db.get_setting("torrent_ratio_limit")
+        try:
+            return max(0.0, float(raw)) if raw is not None else 2.0
+        except ValueError:
+            return 2.0
+
+    @torrent_ratio_limit.setter
+    def torrent_ratio_limit(self, value: float) -> None:
+        self._db.set_setting("torrent_ratio_limit", str(value))
+
+    @property
+    def torrent_upload_kbps(self) -> int:
+        """Upload speed cap for the whole torrent session (0 = unlimited)."""
+        return max(0, self._get_int("torrent_upload_kbps", 0))
+
+    @torrent_upload_kbps.setter
+    def torrent_upload_kbps(self, value: int) -> None:
+        self._db.set_setting("torrent_upload_kbps", str(value))
+
+    @property
+    def torrent_sequential(self) -> bool:
+        """Default new torrents to in-order pieces (streaming-friendly)."""
+        return self._get_bool("torrent_sequential", False)
+
+    @torrent_sequential.setter
+    def torrent_sequential(self, value: bool) -> None:
+        self._set_bool("torrent_sequential", value)
+
+    @property
+    def torrent_dir(self) -> Path | None:
+        """Where torrent content saves by default (None = the download dir)."""
+        raw = self._db.get_setting("torrent_dir")
+        return Path(raw) if raw else None
+
+    @torrent_dir.setter
+    def torrent_dir(self, value: Path | str | None) -> None:
+        self._db.set_setting("torrent_dir", str(value) if value else "")
+
+    @property
+    def torrent_search_url(self) -> str:
+        """Search template opened in the browser; %s is the query. Empty =
+        the search action asks you to configure one first."""
+        return self._db.get_setting("torrent_search_url") or ""
+
+    @torrent_search_url.setter
+    def torrent_search_url(self, value: str) -> None:
+        self._db.set_setting("torrent_search_url", value.strip())
+
+    @property
+    def rss_feeds(self) -> tuple[str, ...]:
+        """RSS/Atom feed lines: 'url' or 'url | must-contain filter'."""
+        return self._get_str_list("rss_feeds")
+
+    @rss_feeds.setter
+    def rss_feeds(self, value: Sequence[str]) -> None:
+        deduped = list(dict.fromkeys(v.strip() for v in value if v.strip()))
+        self._db.set_setting("rss_feeds", json.dumps(deduped))
+
+    @property
+    def rss_interval_minutes(self) -> int:
+        return max(5, min(24 * 60, self._get_int("rss_interval_minutes", 30)))
+
+    @rss_interval_minutes.setter
+    def rss_interval_minutes(self, value: int) -> None:
+        self._db.set_setting("rss_interval_minutes", str(value))
+
+    @property
+    def rss_seen(self) -> tuple[str, ...]:
+        """GUIDs/links already added from feeds (capped to the newest 500)."""
+        return self._get_str_list("rss_seen")
+
+    @rss_seen.setter
+    def rss_seen(self, value: Sequence[str]) -> None:
+        self._db.set_setting("rss_seen", json.dumps(list(value)[-500:]))
+
     @property
     def after_queue_action(self) -> str:
         """What to do once every download finishes: nothing / quit / sleep /

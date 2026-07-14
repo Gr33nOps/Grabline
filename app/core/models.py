@@ -25,6 +25,7 @@ class JobKind(StrEnum):
     DIRECT = "direct"  # segmented downloader (app.core.downloader)
     SMART = "smart"  # yt-dlp in-process (app.engines.smart)
     HLS = "hls"  # FFmpeg stream reassembly (app.engines.hls)
+    TORRENT = "torrent"  # libtorrent session (app.engines.torrent)
 
 
 #: Statuses a job can be picked up from again (used by "find unfinished").

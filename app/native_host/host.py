@@ -44,6 +44,8 @@ def _valid_url(value: object) -> str | None:
         return None
     value = value.strip()
     parts = urlsplit(value)
+    if parts.scheme == "magnet" and "xt=" in parts.query:
+        return value  # magnet links route to the torrent engine
     if parts.scheme not in ("http", "https") or not parts.netloc:
         return None
     return value

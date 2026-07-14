@@ -26,6 +26,8 @@ from app.db.database import Database
 from app.engines.hls import HlsDownload
 from app.engines.manifest import HlsVariant
 from app.engines.smart import MediaInfo, QualityOption, SmartDownload
+from app.engines.torrent import SESSION as TORRENT_SESSION
+from app.engines.torrent import TorrentDownload
 
 log = logging.getLogger(__name__)
 
@@ -168,6 +170,9 @@ class DownloadManager:
     def reload_settings(self) -> None:
         """Apply settings changes to live state (speed cap now, slots next pass)."""
         self._apply_global_rate()
+        # The torrent session (ports, DHT, rate caps) follows live too.
+        with contextlib.suppress(DownloadError):
+            TORRENT_SESSION.configure(self.settings)
         self._kick()
 
     # -------------------------------------------------- speed limit + schedule
@@ -478,6 +483,37 @@ class DownloadManager:
         self._kick()
         return job
 
+    def add_torrent(
+        self,
+        source: str,
+        *,
+        dest_dir: str | Path | None = None,
+        name: str | None = None,
+        options: Mapping[str, Any] | None = None,
+    ) -> Job:
+        """Queue a torrent: a magnet link, a local .torrent path, or an
+        http(s) .torrent URL. ``name`` is the display name until metadata
+        arrives (magnets learn their real name from the swarm)."""
+        from app.engines.torrent import magnet_display_name
+
+        if dest_dir is None:
+            dest_dir = self.settings.torrent_dir or self.settings.download_dir
+        if not name:
+            if source.lower().startswith("magnet:"):
+                name = magnet_display_name(source) or "magnet"
+            else:
+                name = Path(source.split("?")[0]).stem or "torrent"
+        job = self.db.create_job(
+            source,
+            str(dest_dir),
+            naming.sanitize_filename(name),
+            kind=JobKind.TORRENT,
+            title=name,
+            options=dict(options or {}),
+        )
+        self._kick()
+        return job
+
     # ------------------------------------------------------------ control
 
     def pause(self, job_id: int) -> None:
@@ -605,6 +641,8 @@ class DownloadManager:
         if job.kind is JobKind.HLS:
             # FFmpeg-driven jobs are not rate-limited (Phase 3 polish).
             return HlsDownload(self.db, job, ffmpeg_path=find_ffmpeg(self.settings), proxy=proxy)
+        if job.kind is JobKind.TORRENT:
+            return TorrentDownload(self.db, job, settings=self.settings)
         # Share the link: a job starting while others run takes a proportional
         # slice of the connection budget instead of piling another full set of
         # sockets onto the same line - N established flows starve a late

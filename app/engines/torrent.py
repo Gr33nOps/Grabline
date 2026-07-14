@@ -1,0 +1,410 @@
+"""The torrent engine, built on libtorrent (the library behind qBittorrent).
+
+One shared session carries DHT, Peer Exchange, UPnP/NAT-PMP port mapping and
+the rate limits; each Grabline job is one torrent handle in it. A job is
+COMPLETED when the data is on disk - seeding then continues in the background
+until the seed-ratio limit (or immediately stops when seeding is off), so the
+queue behaves like a download manager while the session behaves like a
+torrent client.
+
+Sources accepted: a magnet link, a local .torrent file, or an http(s) URL to
+a .torrent (fetched with httpx first - clicking a .torrent link on a website
+opens it here instead of saving a file).
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from app.core.errors import DownloadError
+from app.core.models import Job, JobStatus
+from app.core.settings import Settings
+from app.db.database import Database
+
+_POLL_SECONDS = 0.5
+_PERSIST_SECONDS = 0.3
+_RATIO_TICK_SECONDS = 5.0
+_DHT_ROUTERS = "router.bittorrent.com:6881,router.utorrent.com:6881,dht.transmissionbt.com:6881"
+
+
+def _lt() -> Any:
+    """Import libtorrent lazily so the app starts even if the wheel is
+    missing; the first torrent action then raises a friendly error."""
+    try:
+        import libtorrent
+    except ImportError as exc:  # pragma: no cover - packaging problem
+        raise DownloadError(
+            "torrent support needs the libtorrent package (pip install libtorrent)"
+        ) from exc
+    return libtorrent
+
+
+@dataclass(frozen=True)
+class TorrentFileEntry:
+    index: int  # the libtorrent file index - priorities align to this
+    path: str
+    size: int
+
+
+@dataclass(frozen=True)
+class TorrentMeta:
+    name: str
+    total_size: int
+    files: tuple[TorrentFileEntry, ...]
+    comment: str = ""
+    trackers: tuple[str, ...] = ()
+    num_raw_files: int = 0  # including hidden pad files - priority list length
+
+    def priorities_for(self, skipped: set[int]) -> list[int]:
+        """A full libtorrent priority list: normal (4) everywhere, 0 for the
+        real-file indices in ``skipped``."""
+        priorities = [4] * max(self.num_raw_files, len(self.files))
+        for index in skipped:
+            if 0 <= index < len(priorities):
+                priorities[index] = 0
+        return priorities
+
+
+def is_torrent_source(text: str) -> bool:
+    """Does this string belong to the torrent engine? (magnet URI, .torrent
+    path or URL)."""
+    stripped = text.strip()
+    if stripped.lower().startswith("magnet:"):
+        return "xt=" in stripped
+    return stripped.lower().split("?")[0].endswith(".torrent")
+
+
+def magnet_display_name(magnet: str) -> str | None:
+    """The dn= parameter of a magnet link, if present."""
+    from urllib.parse import parse_qs, unquote, urlsplit
+
+    query = parse_qs(urlsplit(magnet).query)
+    names = query.get("dn")
+    return unquote(names[0]) if names else None
+
+
+def fetch_torrent_bytes(source: str, proxy: str | None = None) -> bytes:
+    """The raw .torrent contents for a local path or http(s) URL."""
+    if source.lower().startswith(("http://", "https://")):
+        try:
+            response = httpx.get(source, follow_redirects=True, timeout=30, proxy=proxy or None)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise DownloadError(f"could not fetch the .torrent file ({exc})") from exc
+        return response.content
+    path = Path(source)
+    if not path.is_file():
+        raise DownloadError(f"torrent file not found: {source}")
+    return path.read_bytes()
+
+
+def parse_torrent(data: bytes) -> TorrentMeta:
+    """Name, files and sizes from raw .torrent bytes (the add dialog's
+    preview and the file-priority list)."""
+    lt = _lt()
+    try:
+        info = lt.torrent_info(lt.bdecode(data))
+    except (RuntimeError, ValueError) as exc:
+        raise DownloadError(f"not a valid torrent file ({exc})") from exc
+    storage = info.files()
+    # Hybrid v1/v2 torrents carry hidden .pad alignment files - skip them but
+    # keep the real libtorrent index so priorities still line up.
+    files = tuple(
+        TorrentFileEntry(i, storage.file_path(i), storage.file_size(i))
+        for i in range(storage.num_files())
+        if not storage.file_flags(i) & lt.file_storage.flag_pad_file
+    )
+    return TorrentMeta(
+        name=str(info.name()),
+        total_size=sum(entry.size for entry in files),
+        files=files,
+        comment=str(info.comment() or ""),
+        trackers=tuple(t.url for t in info.trackers()),
+        num_raw_files=int(storage.num_files()),
+    )
+
+
+def magnet_from_torrent(data: bytes) -> str:
+    """The magnet link equivalent of a .torrent (Copy magnet link)."""
+    lt = _lt()
+    try:
+        info = lt.torrent_info(lt.bdecode(data))
+    except (RuntimeError, ValueError) as exc:
+        raise DownloadError(f"not a valid torrent file ({exc})") from exc
+    return str(lt.make_magnet_uri(info))
+
+
+def create_torrent_file(
+    source: Path,
+    *,
+    trackers: tuple[str, ...] = (),
+    web_seeds: tuple[str, ...] = (),
+    comment: str = "",
+    private: bool = False,
+) -> bytes:
+    """Build a .torrent for a file or folder (torrent creation)."""
+    lt = _lt()
+    if not source.exists():
+        raise DownloadError(f"nothing to share at {source}")
+    storage = lt.file_storage()
+    lt.add_files(storage, str(source))
+    if storage.num_files() == 0:
+        raise DownloadError("the folder is empty - nothing to share")
+    creator = lt.create_torrent(storage)
+    creator.set_creator("Grabline")
+    if comment:
+        creator.set_comment(comment)
+    creator.set_priv(private)
+    for tier, tracker in enumerate(trackers):
+        creator.add_tracker(tracker, tier)
+    for seed in web_seeds:
+        creator.add_url_seed(seed)
+    lt.set_piece_hashes(creator, str(source.parent))
+    return bytes(lt.bencode(creator.generate()))
+
+
+class TorrentSession:
+    """The one libtorrent session shared by every torrent job."""
+
+    def __init__(self) -> None:
+        self._session: Any = None
+        self._lock = threading.Lock()
+        self._settings: Settings | None = None
+        self._ticker: threading.Thread | None = None
+
+    def configure(self, settings: Settings) -> None:
+        """Apply (or re-apply, live) the Grabline settings to the session."""
+        with self._lock:
+            self._settings = settings
+            if self._session is not None:
+                self._session.apply_settings(self._pack(settings))
+
+    def _pack(self, settings: Settings) -> dict[str, Any]:
+        port = settings.torrent_port
+        return {
+            "listen_interfaces": f"0.0.0.0:{port},[::]:{port}",
+            "enable_dht": settings.torrent_dht,
+            "enable_lsd": True,  # local peer discovery
+            "enable_upnp": settings.torrent_upnp,
+            "enable_natpmp": settings.torrent_natpmp,
+            "download_rate_limit": settings.speed_limit_kbps * 1024,
+            "upload_rate_limit": settings.torrent_upload_kbps * 1024,
+            "dht_bootstrap_nodes": _DHT_ROUTERS,
+            "user_agent": "Grabline",
+        }
+
+    def session(self) -> Any:
+        with self._lock:
+            if self._session is None:
+                lt = _lt()
+                settings = self._settings
+                if settings is None:
+                    raise DownloadError("torrent session used before configure()")
+                self._session = lt.session(self._pack(settings))
+                self._ticker = threading.Thread(
+                    target=self._tick, name="gl-torrent-ratio", daemon=True
+                )
+                self._ticker.start()
+            return self._session
+
+    def add(self, params: Any) -> Any:
+        lt = _lt()
+        # Re-adding the same torrent (a resume) must return the live handle,
+        # not raise - clear the duplicate-is-error flag.
+        params.flags &= ~lt.torrent_flags.duplicate_is_error
+        return self.session().add_torrent(params)
+
+    def remove(self, handle: Any, *, delete_files: bool = False) -> None:
+        lt = _lt()
+        with self._lock:
+            if self._session is None:
+                return
+            if delete_files:
+                self._session.remove_torrent(handle, lt.session.delete_files)
+            else:
+                self._session.remove_torrent(handle)
+
+    def _tick(self) -> None:
+        """Seed-ratio enforcement: pause any seeding torrent whose ratio
+        passed the limit (0 = seed forever)."""
+        while True:
+            time.sleep(_RATIO_TICK_SECONDS)
+            settings = self._settings
+            session = self._session
+            if session is None or settings is None:
+                continue
+            limit = settings.torrent_ratio_limit
+            if not settings.torrent_seed or limit <= 0:
+                continue
+            try:
+                for handle in session.get_torrents():
+                    status = handle.status()
+                    if not status.is_seeding or status.paused:
+                        continue
+                    done = max(int(status.total_done), 1)
+                    if int(status.all_time_upload) / done >= limit:
+                        handle.pause()
+            except Exception:  # pragma: no cover - never kill the ticker
+                pass
+
+
+#: Module-level singleton - DHT, port mappings and peers live process-wide.
+SESSION = TorrentSession()
+
+
+@dataclass
+class _State:
+    downloaded: int = 0
+    total: int | None = None
+
+
+class TorrentDownload:
+    """Runs one torrent job. One-shot object, like the other engine tasks.
+
+    Job options (job.options):
+        sequential: bool           stream-friendly in-order pieces
+        first_last: bool           fetch first+last pieces of each file early
+        file_priorities: [int]     0=skip, 1..7 per file index
+        peers: ["ip:port"]         extra peers to try (also the test hook)
+    """
+
+    def __init__(self, db: Database, job: Job, *, settings: Settings) -> None:
+        self.db = db
+        self.job = job
+        self.settings = settings
+        self._pause_event = threading.Event()
+        self._cancel_event = threading.Event()
+        self._state = _State()
+        self._named = False
+
+    # ------------------------------------------------------------- control
+
+    def pause(self) -> None:
+        self._pause_event.set()
+
+    def cancel(self) -> None:
+        self._cancel_event.set()
+
+    @property
+    def bytes_downloaded(self) -> int:
+        return self._state.downloaded
+
+    # ----------------------------------------------------------------- run
+
+    def run(self) -> JobStatus:
+        lt = _lt()
+        self.db.set_job_status(self.job.id, JobStatus.DOWNLOADING)
+        SESSION.configure(self.settings)
+        try:
+            params = self._build_params(lt)
+        except DownloadError as exc:
+            self.db.set_job_status(self.job.id, JobStatus.FAILED, error=str(exc))
+            return JobStatus.FAILED
+        handle = SESSION.add(params)
+        handle.resume()  # a re-added (resumed) torrent may still be paused
+        self._apply_options(lt, handle)
+        for peer in self.job.options.get("peers") or ():
+            host, _, port = str(peer).rpartition(":")
+            if host and port.isdigit():
+                handle.connect_peer((host, int(port)))
+        return self._poll(handle)
+
+    def _build_params(self, lt: Any) -> Any:
+        source = self.job.url
+        if source.lower().startswith("magnet:"):
+            try:
+                params = lt.parse_magnet_uri(source)
+            except RuntimeError as exc:
+                raise DownloadError(f"not a valid magnet link ({exc})") from exc
+        else:
+            params = lt.add_torrent_params()
+            params.ti = lt.torrent_info(lt.bdecode(fetch_torrent_bytes(source)))
+        params.save_path = self.job.dest_dir
+        return params
+
+    def _apply_options(self, lt: Any, handle: Any) -> None:
+        options = self.job.options
+        if options.get("sequential"):
+            handle.set_flags(lt.torrent_flags.sequential_download)
+        priorities = options.get("file_priorities")
+        if priorities and handle.status().has_metadata:
+            handle.prioritize_files([int(p) for p in priorities])
+
+    def _first_last_pieces(self, handle: Any) -> None:
+        """Bump the first and last pieces so previews/streaming start fast."""
+        info = handle.torrent_file()
+        if info is None:
+            return
+        last = info.num_pieces() - 1
+        for piece in {0, last} | {min(1, last), max(last - 1, 0)}:
+            handle.piece_priority(piece, 7)
+
+    def _poll(self, handle: Any) -> JobStatus:
+        lt = _lt()
+        last_persist = 0.0
+        metadata_seen = False
+        while True:
+            if self._cancel_event.is_set():
+                SESSION.remove(handle, delete_files=True)
+                self.db.update_job_downloaded(self.job.id, 0)
+                self.db.set_job_status(self.job.id, JobStatus.CANCELLED)
+                return JobStatus.CANCELLED
+            if self._pause_event.is_set():
+                handle.pause()
+                self.db.update_job_downloaded(self.job.id, self._state.downloaded)
+                self.db.set_job_status(self.job.id, JobStatus.PAUSED)
+                return JobStatus.PAUSED
+
+            status = handle.status()
+            if status.errc.value() != 0:
+                message = str(status.errc.message())
+                self.db.set_job_status(self.job.id, JobStatus.FAILED, error=message)
+                return JobStatus.FAILED
+
+            if status.has_metadata and not metadata_seen:
+                metadata_seen = True
+                self._on_metadata(lt, handle)
+
+            self._state.downloaded = int(status.total_done)
+            total = int(status.total_wanted)
+            if total > 0:
+                self._state.total = total
+            now = time.monotonic()
+            if now - last_persist >= _PERSIST_SECONDS:
+                last_persist = now
+                self.db.update_job_downloaded(self.job.id, self._state.downloaded)
+                if self._state.total:
+                    self.db.update_job_total(self.job.id, self._state.total)
+
+            if status.has_metadata and status.is_finished:
+                return self._finish(handle)
+            time.sleep(_POLL_SECONDS)
+
+    def _on_metadata(self, lt: Any, handle: Any) -> None:
+        """Metadata arrived (instant for .torrent, later for magnets): name
+        the job properly and apply the file/piece options that need it."""
+        info = handle.torrent_file()
+        if info is not None and not self._named:
+            self._named = True
+            self.db.update_job_filename(self.job.id, str(info.name()))
+            self.db.update_job_total(self.job.id, int(info.total_size()))
+        priorities = self.job.options.get("file_priorities")
+        if priorities:
+            handle.prioritize_files([int(p) for p in priorities])
+        if self.job.options.get("first_last"):
+            self._first_last_pieces(handle)
+
+    def _finish(self, handle: Any) -> JobStatus:
+        self.db.update_job_downloaded(self.job.id, self._state.downloaded)
+        if self._state.total:
+            self.db.update_job_total(self.job.id, self._state.total)
+        if not self.settings.torrent_seed:
+            handle.pause()  # data done, no seeding wanted
+        self.db.set_job_status(self.job.id, JobStatus.COMPLETED)
+        return JobStatus.COMPLETED

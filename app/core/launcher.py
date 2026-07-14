@@ -77,13 +77,16 @@ def _autostart_path() -> Path:
 
 
 def _desktop_entry(command: list[str], *, icon: Path | None, autostart: bool = False) -> str:
+    # The menu entry takes a %u so double-clicked .torrent files and magnet
+    # links land in Grabline; the autostart entry must not (it opens nothing).
+    exec_line = _exec_line(command) + ("" if autostart else " %u")
     lines = [
         "[Desktop Entry]",
         "Type=Application",
         f"Name={APP_NAME}",
         "GenericName=Download Manager",
         "Comment=The open-source IDM: a download button on any media, anywhere",
-        f"Exec={_exec_line(command)}",
+        f"Exec={exec_line}",
         f"Icon={icon if icon is not None else _ENTRY_ID}",
         "Terminal=false",
         "Categories=Network;FileTransfer;Qt;",
@@ -91,6 +94,8 @@ def _desktop_entry(command: list[str], *, icon: Path | None, autostart: bool = F
     ]
     if autostart:
         lines.append("X-GNOME-Autostart-enabled=true")
+    else:
+        lines.append("MimeType=application/x-bittorrent;x-scheme-handler/magnet;")
     return "\n".join(lines) + "\n"
 
 

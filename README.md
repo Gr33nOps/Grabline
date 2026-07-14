@@ -35,13 +35,13 @@ Accelerated multi-connection downloads · a real browser button · a full qualit
 ---
 
 Grabline downloads everything: a plain file, a 4K video, a whole folder of
-links, a streaming lecture. Point it at a URL - paste it, drop it on the
-window, or click the ⬇ button in your browser - and it downloads fast with up
-to 16 accelerated connections, crash-proof resume, and a queue you actually
+links, a streaming lecture, a torrent. Point it at a URL - paste it, drop it
+on the window, or click the ⬇ button in your browser - and it downloads fast
+with accelerated connections, crash-proof resume, and a queue you actually
 control. On the 1000+ sites it knows (YouTube, SoundCloud and friends) you
-also get a quality panel: 4K → 144p, MP3/M4A with tags and cover art,
-subtitles, and clip trimming. Windows, macOS, and Linux. No ads, no
-telemetry, no paid tier. AGPL-3.0.
+also get a quality panel: 4K → 144p, MP3/M4A/FLAC with tags and cover art,
+subtitles, and clip trimming. Magnets and .torrent files open right in the
+app. Windows, macOS, and Linux. No ads, no telemetry, no paid tier. AGPL-3.0.
 
 ## ✨ Why Grabline
 
@@ -67,7 +67,7 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - **Timed schedule**: only download between the hours you choose (run it
   overnight), and *notify / quit / sleep / shut down* when the queue finishes.
 - Auto-sort into Video / Music / Images / Documents / Archives / Programs /
-  Games / Torrents (the torrent engine itself is on the roadmap).
+  Games / Torrents.
 - Import/export your download list; back it up or move it to another machine.
 
 **One button in the browser** (Chrome / Firefox / Edge / Brave / Vivaldi / Opera / Arc)
@@ -99,6 +99,21 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - Optional virus scan before extraction, using a scanner already on the
   machine (Windows Defender or ClamAV) - Grabline never pretends to scan
   when none is installed.
+
+**Torrent client** (powered by libtorrent - the engine behind qBittorrent)
+- Magnet links and .torrent files: paste them, click them on websites,
+  double-click a downloaded .torrent, or drag one onto the window - all of
+  it opens in Grabline (no need for a separate torrent app).
+- DHT, Peer Exchange, and UPnP/NAT-PMP port mapping out of the box; web
+  seeds honored automatically.
+- Pick the save location and the files you want before it starts;
+  sequential (stream-friendly) mode with first/last-piece priority lets a
+  video play while it downloads.
+- Seeding with a ratio limit (or forever, or off), a session upload cap,
+  and the same bandwidth scheduler as every other download.
+- Create your own torrents (trackers, web seeds, private flag), subscribe
+  to RSS feeds that auto-queue matching releases, and search from the app
+  via your preferred search site.
 
 **File management**
 - Smart filenames (junk like `videoplayback.mp4` becomes the page title),
@@ -237,7 +252,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(316 tests, including an 8-connection download killed with SIGKILL and
+(331 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.

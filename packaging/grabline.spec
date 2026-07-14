@@ -35,6 +35,9 @@ curl_datas, curl_bins, curl_hidden = collect_all("curl_cffi")
 hidden = ytdlp_hidden + curl_hidden + collect_submodules("app")
 for h2_pkg in ("h2", "hpack", "hyperframe"):
     hidden += collect_submodules(h2_pkg)
+# libtorrent is imported lazily by the torrent engine; collect its binary
+# extension explicitly or frozen builds lose the torrent client.
+hidden += ["libtorrent"]
 # Ship the browser extension inside the app so the Browser Setup wizard can
 # stage it (Load unpacked / temporary add-on) - an installed build has no repo
 # checkout to copy it from. browser_setup._source_extension_dir() reads it back

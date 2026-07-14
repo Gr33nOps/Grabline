@@ -337,3 +337,49 @@ def test_dupes_dialog_keeps_one_copy(db: Database, tmp_path: Path):
     assert top is not None
     top.child(0).setCheckState(0, Qt.CheckState.Checked)
     assert dialog.selected_paths() == [b, c]
+
+
+def test_add_torrent_dialog_files_and_options(db: Database, tmp_path: Path):
+    from PySide6.QtCore import Qt
+
+    from app.engines.torrent import TorrentFileEntry, TorrentMeta
+    from app.ui.torrent_dialog import AddTorrentDialog
+
+    _qapp()
+    meta = TorrentMeta(
+        name="bundle",
+        total_size=80_000,
+        files=(
+            TorrentFileEntry(0, "bundle/a.bin", 50_000),
+            TorrentFileEntry(2, "bundle/b.bin", 30_000),  # pad file sits at index 1
+        ),
+        num_raw_files=3,
+    )
+    dialog = AddTorrentDialog("bundle", meta, tmp_path, sequential_default=True)
+    assert dialog.dest_dir() == str(tmp_path)
+    options = dialog.options()
+    assert options["sequential"] is True and options["first_last"] is True
+    assert "file_priorities" not in options  # everything checked
+
+    assert dialog.tree is not None
+    item = dialog.tree.topLevelItem(1)
+    assert item is not None
+    item.setCheckState(0, Qt.CheckState.Unchecked)
+    priorities = dialog.options()["file_priorities"]
+    assert priorities[2] == 0  # the real libtorrent index, not the row
+    assert priorities[0] == 4 and priorities[1] == 4
+
+
+def test_create_torrent_dialog_fields(db: Database):
+    from app.ui.torrent_dialog import CreateTorrentDialog
+
+    _qapp()
+    dialog = CreateTorrentDialog()
+    dialog.source_edit.setText("/data/share")
+    dialog.trackers_edit.setPlainText("http://tr1/announce\n\nhttp://tr2/announce")
+    dialog.webseeds_edit.setPlainText("https://mirror.example/share/")
+    dialog.private_check.setChecked(True)
+    assert str(dialog.source()) == "/data/share"
+    assert dialog.trackers() == ("http://tr1/announce", "http://tr2/announce")
+    assert dialog.web_seeds() == ("https://mirror.example/share/",)
+    assert dialog.private() is True

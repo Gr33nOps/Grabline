@@ -5,12 +5,15 @@ and FFmpeg install/status (S5).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QThread, QTime, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -241,6 +244,73 @@ class SettingsDialog(QDialog):
         )
         finish_form.addRow("When the queue empties:", self.after_combo)
 
+        # ---- Torrents --------------------------------------------------------
+        torrent_form = self._add_form_tab(tabs, "Torrents")
+        self.torrent_port_spin = QSpinBox()
+        self.torrent_port_spin.setRange(1024, 65535)
+        self.torrent_port_spin.setValue(settings.torrent_port)
+        torrent_form.addRow("Listen port:", self.torrent_port_spin)
+        self.dht_check = QCheckBox("DHT (find peers without trackers; needed for magnets)")
+        self.dht_check.setChecked(settings.torrent_dht)
+        torrent_form.addRow("", self.dht_check)
+        self.upnp_check = QCheckBox("UPnP port mapping")
+        self.upnp_check.setChecked(settings.torrent_upnp)
+        torrent_form.addRow("", self.upnp_check)
+        self.natpmp_check = QCheckBox("NAT-PMP port mapping")
+        self.natpmp_check.setChecked(settings.torrent_natpmp)
+        torrent_form.addRow("", self.natpmp_check)
+        seed_row = QHBoxLayout()
+        self.seed_check = QCheckBox("Seed after downloading, up to ratio")
+        self.seed_check.setChecked(settings.torrent_seed)
+        self.ratio_spin = QDoubleSpinBox()
+        self.ratio_spin.setRange(0.0, 100.0)
+        self.ratio_spin.setSingleStep(0.5)
+        self.ratio_spin.setSpecialValueText("Forever")
+        self.ratio_spin.setValue(settings.torrent_ratio_limit)
+        seed_row.addWidget(self.seed_check)
+        seed_row.addWidget(self.ratio_spin)
+        seed_row.addStretch(1)
+        torrent_form.addRow("Seeding:", seed_row)
+        self.upload_spin = QSpinBox()
+        self.upload_spin.setRange(0, 1_000_000)
+        self.upload_spin.setSingleStep(64)
+        self.upload_spin.setSuffix(" KB/s")
+        self.upload_spin.setSpecialValueText("Unlimited")
+        self.upload_spin.setValue(settings.torrent_upload_kbps)
+        torrent_form.addRow("Upload limit:", self.upload_spin)
+        self.sequential_check = QCheckBox("Sequential download by default (stream-friendly)")
+        self.sequential_check.setChecked(settings.torrent_sequential)
+        torrent_form.addRow("", self.sequential_check)
+        torrent_dir_row = QHBoxLayout()
+        self.torrent_dir_edit = QLineEdit(str(settings.torrent_dir) if settings.torrent_dir else "")
+        self.torrent_dir_edit.setPlaceholderText("blank = the download folder")
+        torrent_browse = QPushButton("Browse…")
+        torrent_browse.clicked.connect(self._browse_torrent_folder)
+        torrent_dir_row.addWidget(self.torrent_dir_edit, 1)
+        torrent_dir_row.addWidget(torrent_browse)
+        torrent_form.addRow("Save torrents to:", torrent_dir_row)
+        self.search_url_edit = QLineEdit(settings.torrent_search_url)
+        self.search_url_edit.setPlaceholderText("https://example.com/search?q=%s")
+        self.search_url_edit.setToolTip(
+            "File → Search Torrents… opens this in your browser with %s replaced by the query."
+        )
+        torrent_form.addRow("Search URL:", self.search_url_edit)
+        self.rss_edit = QPlainTextEdit()
+        self.rss_edit.setPlainText("\n".join(settings.rss_feeds))
+        self.rss_edit.setPlaceholderText("feed URL, or:  feed URL | filter text\none per line")
+        self.rss_edit.setFixedHeight(72)
+        self.rss_edit.setToolTip(
+            "Checked periodically; new items whose link is a torrent/magnet "
+            "(and whose title contains the filter, if given) are queued "
+            "automatically."
+        )
+        torrent_form.addRow("RSS feeds:", self.rss_edit)
+        self.rss_interval_spin = QSpinBox()
+        self.rss_interval_spin.setRange(5, 1440)
+        self.rss_interval_spin.setSuffix(" min")
+        self.rss_interval_spin.setValue(settings.rss_interval_minutes)
+        torrent_form.addRow("Check feeds every:", self.rss_interval_spin)
+
         # ---- Browser & YouTube ---------------------------------------------
         browser_tab = QWidget()
         browser_layout = QVBoxLayout(browser_tab)
@@ -318,6 +388,13 @@ class SettingsDialog(QDialog):
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         tabs.addTab(page, title)
         return form
+
+    def _browse_torrent_folder(self) -> None:
+        chosen = QFileDialog.getExistingDirectory(
+            self, "Save torrents to", self.torrent_dir_edit.text() or str(Path.home())
+        )
+        if chosen:
+            self.torrent_dir_edit.setText(chosen)
 
     def _browse_folder(self) -> None:
         chosen = QFileDialog.getExistingDirectory(
@@ -408,6 +485,18 @@ class SettingsDialog(QDialog):
         self.settings.archive_passwords = self.passwords_edit.toPlainText().splitlines()
         self.settings.favorite_folders = self.favorites_edit.toPlainText().splitlines()
         self.settings.rename_rules = _parse_rename_rules(self.rename_edit.toPlainText())
+        self.settings.torrent_port = self.torrent_port_spin.value()
+        self.settings.torrent_dht = self.dht_check.isChecked()
+        self.settings.torrent_upnp = self.upnp_check.isChecked()
+        self.settings.torrent_natpmp = self.natpmp_check.isChecked()
+        self.settings.torrent_seed = self.seed_check.isChecked()
+        self.settings.torrent_ratio_limit = self.ratio_spin.value()
+        self.settings.torrent_upload_kbps = self.upload_spin.value()
+        self.settings.torrent_sequential = self.sequential_check.isChecked()
+        self.settings.torrent_dir = self.torrent_dir_edit.text().strip() or None
+        self.settings.torrent_search_url = self.search_url_edit.text()
+        self.settings.rss_feeds = self.rss_edit.toPlainText().splitlines()
+        self.settings.rss_interval_minutes = self.rss_interval_spin.value()
         self.settings.after_queue_action = self.after_combo.currentData()
         try:
             # The autostart file/registry entry IS the setting - no DB copy

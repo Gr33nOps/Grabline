@@ -114,12 +114,17 @@ class Resolver:
     ) -> Resolution:
         url = url.strip()
         scheme = urlsplit(url).scheme.lower()
+        if scheme == "magnet":
+            return Resolution(url=url, kind=JobKind.TORRENT)
         if scheme not in ("http", "https"):
             return Resolution(
                 url=url,
                 kind=None,
-                message="Only http:// and https:// addresses can be downloaded.",
+                message="Only http://, https:// and magnet: addresses can be downloaded.",
             )
+        if urlsplit(url).path.lower().endswith(".torrent"):
+            # A .torrent link opens as a torrent, not as a small saved file.
+            return Resolution(url=url, kind=JobKind.TORRENT)
 
         refusal = _drm_refusal(url)
         if refusal is not None:
@@ -161,6 +166,8 @@ class Resolver:
                 message=f"No downloadable media was found at this address ({exc}).",
             )
         content_type = (result.content_type or "").split(";")[0].strip().lower()
+        if content_type == "application/x-bittorrent":
+            return Resolution(url=url, kind=JobKind.TORRENT)
         if content_type in _MANIFEST_CONTENT_TYPES:
             variants = _hls_variants(url, proxy) if content_type in _HLS_CONTENT_TYPES else ()
             return Resolution(url=url, kind=JobKind.HLS, probe=result, variants=variants)

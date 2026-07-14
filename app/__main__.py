@@ -50,11 +50,35 @@ def _register_native_host_once(settings: Settings) -> None:
         log.warning("first-run native-host registration failed", exc_info=True)
 
 
+def _torrent_arg(args: list[str]) -> str | None:
+    """A magnet link or .torrent path passed on the command line ('open
+    with Grabline' / double-clicked file), or None."""
+    for arg in args:
+        if arg.startswith("-"):
+            continue
+        if arg.lower().startswith("magnet:"):
+            return arg
+        if arg.lower().endswith(".torrent"):
+            from pathlib import Path
+
+            path = Path(arg)
+            return str(path.resolve()) if path.exists() else arg
+    return None
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     minimized = "--minimized" in sys.argv
+    torrent_source = _torrent_arg(sys.argv[1:])
+    if torrent_source and instance.app_is_running():
+        # 'Open with Grabline' while it's already open: hand the torrent to
+        # the running instance (it polls the handoffs table) and bow out.
+        handoff_db = Database(paths.data_dir() / "grabline.db")
+        handoff_db.add_handoff(torrent_source, source="torrent")
+        handoff_db.close()
+        return 0
     app = QApplication([arg for arg in sys.argv if arg != "--minimized"])
     app.setApplicationName("Grabline")
     app.setOrganizationName("Grabline")
@@ -169,6 +193,8 @@ def main() -> int:
         log.info("started minimized to the tray (autostart)")
     else:
         window.show()
+    if torrent_source:
+        QTimer.singleShot(400, lambda: window.add_torrent_source(torrent_source))
     instance.write_pid()  # lets the Native Messaging host report "app running"
 
     def shutdown() -> None:

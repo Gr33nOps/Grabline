@@ -50,7 +50,7 @@ from PySide6.QtWidgets import (
 )
 
 from app import __version__
-from app.core import archive, crawler, dupes, listio, naming, update, verify, virusscan
+from app.core import archive, crawler, dupes, listio, naming, rss, update, verify, virusscan
 from app.core.batch import expand_all, expand_pattern, extract_urls
 from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
@@ -58,6 +58,7 @@ from app.core.manager import DownloadManager, JobView
 from app.core.models import JobKind, JobStatus
 from app.core.resolver import Resolution, Resolver
 from app.core.settings import Settings
+from app.engines import torrent as torrent_engine
 from app.engines.smart import option_for_label
 from app.ui import theme
 from app.ui.archive_dialog import ArchiveDialog
@@ -72,6 +73,7 @@ from app.ui.quality_panel import QualityPanel
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.setup_dialog import SetupDialog
 from app.ui.sparkline import Sparkline
+from app.ui.torrent_dialog import AddTorrentDialog, CreateTorrentDialog
 
 _COLUMNS = ("Name", "Size", "Progress", "Speed", "Status")
 _VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
@@ -236,6 +238,12 @@ class MainWindow(QMainWindow):
         self._handoff_timer = QTimer(self)
         self._handoff_timer.timeout.connect(self._poll_handoffs)
         self._handoff_timer.start(1000)
+        # RSS torrent feeds: poll on the configured interval (plus once soon
+        # after launch so a restart doesn't wait half an hour).
+        self._rss_timer = QTimer(self)
+        self._rss_timer.timeout.connect(self._poll_rss)
+        self._rss_timer.start(self.settings.rss_interval_minutes * 60_000)
+        QTimer.singleShot(15_000, self._poll_rss)
         self.refresh()
 
     def _build_menu(self) -> None:
@@ -243,8 +251,17 @@ class MainWindow(QMainWindow):
         file_menu = bar.addMenu("&File")
         for label, handler in (
             ("Add URL…", self._add_url),
+            ("Add Torrent File…", self._add_torrent_file),
             ("Import Links…", self._import_links),
             ("Grab Site…", self._grab_site),
+        ):
+            action = QAction(label, self)
+            action.triggered.connect(handler)
+            file_menu.addAction(action)
+        file_menu.addSeparator()
+        for label, handler in (
+            ("Create Torrent…", self._create_torrent),
+            ("Search Torrents…", self._search_torrents),
         ):
             action = QAction(label, self)
             action.triggered.connect(handler)
@@ -290,6 +307,9 @@ class MainWindow(QMainWindow):
                 self._open_gallery(list(handoff.payload), handoff.page_title)
             elif handoff.source == "links" and handoff.payload:
                 self._open_links(list(handoff.payload), handoff.page_title)
+            elif handoff.source == "torrent" or torrent_engine.is_torrent_source(handoff.url):
+                # 'Open with Grabline' on a .torrent / magnet, from any source.
+                self.add_torrent_source(handoff.url)
             else:
                 self.begin_add_url(
                     handoff.url,
@@ -505,6 +525,9 @@ class MainWindow(QMainWindow):
                 return
             QMessageBox.information(self, "Grabline", resolution.message or "No media found.")
             return
+        if resolution.kind is JobKind.TORRENT:
+            self.add_torrent_source(resolution.url)
+            return
         if (
             quality
             and resolution.kind is JobKind.SMART
@@ -674,6 +697,8 @@ class MainWindow(QMainWindow):
         open_file.setEnabled(view.status is JobStatus.COMPLETED and file_path.exists())
         open_folder = menu.addAction("Open folder")
         copy_url = menu.addAction("Copy URL")
+        copy_magnet = menu.addAction("Copy magnet link")
+        copy_magnet.setVisible(view.kind is JobKind.TORRENT)
         redownload = menu.addAction("Download again")
         to_gif = menu.addAction("Convert to GIF…")
         ffmpeg_path = find_ffmpeg(self.settings)
@@ -726,6 +751,8 @@ class MainWindow(QMainWindow):
             if self.clipboard_suppressor is not None:
                 self.clipboard_suppressor(view.url)  # don't offer our own copy back
             QGuiApplication.clipboard().setText(view.url)
+        elif chosen is copy_magnet:
+            self._copy_magnet(view)
         elif chosen is redownload:
             self.begin_add_url(view.url, allow_duplicate=True)
         elif chosen is to_gif and ffmpeg_path is not None:
@@ -948,6 +975,155 @@ class MainWindow(QMainWindow):
 
         self._run_file_op(lambda: dupes.find_duplicates(list(owners)), done)
 
+    # ------------------------------------------------------------- torrents
+
+    def _copy_magnet(self, view: JobView) -> None:
+        if view.url.lower().startswith("magnet:"):
+            magnet = view.url
+            if self.clipboard_suppressor is not None:
+                self.clipboard_suppressor(magnet)
+            QGuiApplication.clipboard().setText(magnet)
+            self.statusBar().showMessage("Magnet link copied", 4000)
+            return
+
+        def done(result: object) -> None:
+            magnet = str(result)
+            if self.clipboard_suppressor is not None:
+                self.clipboard_suppressor(magnet)
+            QGuiApplication.clipboard().setText(magnet)
+            self.statusBar().showMessage("Magnet link copied", 4000)
+
+        self._run_file_op(
+            lambda: torrent_engine.magnet_from_torrent(
+                torrent_engine.fetch_torrent_bytes(view.url, proxy=self.settings.proxy)
+            ),
+            done,
+        )
+
+    def _add_torrent_file(self) -> None:
+        chosen, _ = QFileDialog.getOpenFileName(
+            self, "Add torrent", "", "Torrents (*.torrent);;All files (*)"
+        )
+        if chosen:
+            self.add_torrent_source(chosen)
+
+    def add_torrent_source(self, source: str) -> None:
+        """Open the add-torrent dialog for a magnet link, a local .torrent
+        path, or an http(s) .torrent URL - the one entry point used by the
+        menu, the resolver, drag-and-drop, and 'open with Grabline'."""
+        default_dir = self.settings.torrent_dir or self.settings.download_dir
+        if source.lower().startswith("magnet:"):
+            name = torrent_engine.magnet_display_name(source) or "Magnet link"
+            self._open_add_torrent(source, name, None, default_dir)
+            return
+        self.statusBar().showMessage("Reading torrent …")
+
+        def loaded(result: object) -> None:
+            self.statusBar().clearMessage()
+            meta = cast("torrent_engine.TorrentMeta", result)
+            self._open_add_torrent(source, meta.name, meta, default_dir)
+
+        self._run_file_op(
+            lambda: torrent_engine.parse_torrent(
+                torrent_engine.fetch_torrent_bytes(source, proxy=self.settings.proxy)
+            ),
+            loaded,
+        )
+
+    def _open_add_torrent(self, source: str, name: str, meta: object, default_dir: Path) -> None:
+        dialog = AddTorrentDialog(
+            name,
+            cast("torrent_engine.TorrentMeta | None", meta),
+            default_dir,
+            sequential_default=self.settings.torrent_sequential,
+            parent=self,
+        )
+        if dialog.exec() != AddTorrentDialog.DialogCode.Accepted:
+            return
+        self.manager.add_torrent(
+            source, dest_dir=dialog.dest_dir() or default_dir, name=name, options=dialog.options()
+        )
+        self.statusBar().showMessage(f"Queued torrent {name}", 5000)
+        self.refresh()
+
+    def _create_torrent(self) -> None:
+        dialog = CreateTorrentDialog(self)
+        if dialog.exec() != CreateTorrentDialog.DialogCode.Accepted:
+            return
+        source = dialog.source()
+        target, _ = QFileDialog.getSaveFileName(
+            self, "Save torrent as", f"{source.name}.torrent", "Torrents (*.torrent)"
+        )
+        if not target:
+            return
+        self.statusBar().showMessage("Hashing pieces …")
+
+        def work() -> object:
+            data = torrent_engine.create_torrent_file(
+                source,
+                trackers=dialog.trackers(),
+                web_seeds=dialog.web_seeds(),
+                comment=dialog.comment(),
+                private=dialog.private(),
+            )
+            Path(target).write_bytes(data)
+            return target
+
+        def done(result: object) -> None:
+            self.statusBar().showMessage(f"Torrent created: {result}", 8000)
+
+        self._run_file_op(work, done)
+
+    def _search_torrents(self) -> None:
+        template = self.settings.torrent_search_url
+        if "%s" not in template:
+            QMessageBox.information(
+                self,
+                "Grabline",
+                "Set a search URL first (Settings → Torrents), e.g.\n"
+                "https://example.com/search?q=%s",
+            )
+            return
+        query, accepted = QInputDialog.getText(self, "Search torrents", "Search for:")
+        if accepted and query.strip():
+            from urllib.parse import quote
+
+            QDesktopServices.openUrl(QUrl(template.replace("%s", quote(query.strip()))))
+
+    def _poll_rss(self) -> None:
+        """Check the RSS feeds and queue new matching torrent items."""
+        feeds = self.settings.rss_feeds
+        if not feeds:
+            return
+        seen = set(self.settings.rss_seen)
+        proxy = self.settings.proxy
+
+        def work() -> object:
+            found: list[tuple[str, str]] = []  # (guid, link)
+            for line in feeds:
+                url, needle = rss.parse_feed_line(line)
+                try:
+                    items = rss.fetch_feed(url, proxy=proxy)
+                except DownloadError:
+                    continue  # a dead feed shouldn't spam errors every poll
+                for item in rss.matching_items(items, needle):
+                    if item.guid not in seen and torrent_engine.is_torrent_source(item.link):
+                        found.append((item.guid, item.link))
+            return found
+
+        def done(result: object) -> None:
+            found = cast("list[tuple[str, str]]", result)
+            if not found:
+                return
+            for guid, link in found:
+                self.manager.add_torrent(link)
+                seen.add(guid)
+            self.settings.rss_seen = list(seen)
+            self.statusBar().showMessage(f"RSS: queued {len(found)} torrent(s)", 6000)
+            self.refresh()
+
+        self._run_file_op(work, done, lambda _e: None)  # quiet - it's a background poll
+
     def _set_connections(self, view: JobView) -> None:
         connections, accepted = QInputDialog.getInt(
             self,
@@ -1152,9 +1328,21 @@ class MainWindow(QMainWindow):
 
     def dropEvent(self, event: QDropEvent) -> None:
         data = event.mimeData()
+        # A .torrent file dropped from the file manager opens as a torrent.
+        for dropped in data.urls():
+            local = dropped.toLocalFile()
+            if local and local.lower().endswith(".torrent"):
+                event.acceptProposedAction()
+                self.add_torrent_source(local)
+                return
         text_parts = [url.toString() for url in data.urls()]
         if data.hasText():
             text_parts.append(data.text())
+        magnets = [p for p in text_parts[-1:] if p.strip().lower().startswith("magnet:")]
+        if magnets:
+            event.acceptProposedAction()
+            self.add_torrent_source(magnets[0].strip())
+            return
         urls = expand_all(extract_urls("\n".join(text_parts)))
         if not urls:
             return
