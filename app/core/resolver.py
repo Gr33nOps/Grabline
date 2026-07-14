@@ -14,9 +14,11 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from app.core import cloudlinks
 from app.core.errors import DownloadError
 from app.core.models import JobKind
 from app.core.probe import ProbeResult, probe
+from app.engines import cloud
 from app.engines.manifest import HlsVariant, parse_master_playlist
 from app.engines.smart import MediaInfo, PlaylistInfo, SmartEngine
 
@@ -116,12 +118,27 @@ class Resolver:
         scheme = urlsplit(url).scheme.lower()
         if scheme == "magnet":
             return Resolution(url=url, kind=JobKind.TORRENT)
+        if scheme in cloud.CLOUD_SCHEMES:
+            # ftp/ftps/sftp/scp/s3/webdav go to the cloud protocol engine.
+            return Resolution(url=url, kind=JobKind.CLOUD)
         if scheme not in ("http", "https"):
             return Resolution(
                 url=url,
                 kind=None,
-                message="Only http://, https:// and magnet: addresses can be downloaded.",
+                message=(
+                    "Grabline can download http://, https://, magnet: and cloud "
+                    "(ftp/ftps/sftp/scp/s3/webdav) addresses."
+                ),
             )
+        unsupported = cloudlinks.unsupported_cloud_reason(url)
+        if unsupported is not None:
+            return Resolution(url=url, kind=None, message=unsupported)
+        # A cloud *share* link (Drive/Dropbox/OneDrive/Nextcloud) becomes a
+        # plain direct URL and downloads through the normal segmented engine.
+        direct = cloudlinks.direct_download_url(url)
+        if direct is not None:
+            url = direct
+            scheme = urlsplit(url).scheme.lower()
         if urlsplit(url).path.lower().endswith(".torrent"):
             # A .torrent link opens as a torrent, not as a small saved file.
             return Resolution(url=url, kind=JobKind.TORRENT)

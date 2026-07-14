@@ -17,6 +17,12 @@ class Settings:
     def __init__(self, db: Database) -> None:
         self._db = db
 
+    @property
+    def db(self) -> Database:
+        """The backing database, for components that need their own store
+        (e.g. the cloud CredentialStore) without re-opening the file."""
+        return self._db
+
     # ------------------------------------------------------------ helpers
 
     def _get_bool(self, key: str, default: bool) -> bool:

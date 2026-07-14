@@ -311,6 +311,40 @@ class SettingsDialog(QDialog):
         self.rss_interval_spin.setValue(settings.rss_interval_minutes)
         torrent_form.addRow("Check feeds every:", self.rss_interval_spin)
 
+        # ---- Cloud -----------------------------------------------------------
+        cloud_tab = QWidget()
+        cloud_layout = QVBoxLayout(cloud_tab)
+        intro = QLabel(
+            "Download from cloud storage and file servers. Paste an sftp://, "
+            "ftp://, ftps://, scp://, s3:// or webdav:// address (File → Add "
+            "Cloud Download), or a public Google Drive / Dropbox / OneDrive / "
+            "Nextcloud share link into Add URL - share links download at full "
+            "speed with no account needed."
+        )
+        intro.setWordWrap(True)
+        cloud_layout.addWidget(intro)
+        accounts_row = QHBoxLayout()
+        manage_accounts = QPushButton("Manage saved logins…")
+        manage_accounts.clicked.connect(self._manage_cloud_accounts)
+        accounts_row.addWidget(manage_accounts)
+        accounts_row.addStretch(1)
+        cloud_layout.addLayout(accounts_row)
+        keychain_note = QLabel(
+            "Passwords and key passphrases are stored in your system keychain. "
+            "Several accounts per host are supported; the right one is chosen "
+            "automatically by the address you download."
+        )
+        keychain_note.setWordWrap(True)
+        cloud_layout.addWidget(keychain_note)
+        unsupported_note = QLabel(
+            "Not supported: Mega and Proton Drive (end-to-end encrypted) and "
+            "iCloud (no public API)."
+        )
+        unsupported_note.setWordWrap(True)
+        cloud_layout.addWidget(unsupported_note)
+        cloud_layout.addStretch(1)
+        tabs.addTab(cloud_tab, "Cloud")
+
         # ---- Browser & YouTube ---------------------------------------------
         browser_tab = QWidget()
         browser_layout = QVBoxLayout(browser_tab)
@@ -388,6 +422,12 @@ class SettingsDialog(QDialog):
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         tabs.addTab(page, title)
         return form
+
+    def _manage_cloud_accounts(self) -> None:
+        from app.core.credentials import CredentialStore
+        from app.ui.cloud_dialog import CloudAccountsDialog
+
+        CloudAccountsDialog(CredentialStore(self.settings.db), self).exec()
 
     def _browse_torrent_folder(self) -> None:
         chosen = QFileDialog.getExistingDirectory(

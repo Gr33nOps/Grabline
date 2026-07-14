@@ -26,6 +26,7 @@ class JobKind(StrEnum):
     SMART = "smart"  # yt-dlp in-process (app.engines.smart)
     HLS = "hls"  # FFmpeg stream reassembly (app.engines.hls)
     TORRENT = "torrent"  # libtorrent session (app.engines.torrent)
+    CLOUD = "cloud"  # FTP/SFTP/S3/WebDAV protocols (app.engines.cloud)
 
 
 #: Statuses a job can be picked up from again (used by "find unfinished").

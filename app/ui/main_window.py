@@ -58,11 +58,13 @@ from app.core.manager import DownloadManager, JobView
 from app.core.models import JobKind, JobStatus
 from app.core.resolver import Resolution, Resolver
 from app.core.settings import Settings
+from app.engines import cloud as cloud_engine
 from app.engines import torrent as torrent_engine
 from app.engines.smart import option_for_label
 from app.ui import theme
 from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
+from app.ui.cloud_dialog import CloudFolderDialog, prompt_cloud_url
 from app.ui.dupes_dialog import DupesDialog
 from app.ui.format import human_bytes
 from app.ui.gallery_panel import GalleryPanel
@@ -252,6 +254,7 @@ class MainWindow(QMainWindow):
         for label, handler in (
             ("Add URL…", self._add_url),
             ("Add Torrent File…", self._add_torrent_file),
+            ("Add Cloud Download…", self._add_cloud),
             ("Import Links…", self._import_links),
             ("Grab Site…", self._grab_site),
         ):
@@ -310,6 +313,8 @@ class MainWindow(QMainWindow):
             elif handoff.source == "torrent" or torrent_engine.is_torrent_source(handoff.url):
                 # 'Open with Grabline' on a .torrent / magnet, from any source.
                 self.add_torrent_source(handoff.url)
+            elif handoff.source == "cloud" or cloud_engine.is_cloud_scheme(handoff.url):
+                self.add_cloud_source(handoff.url)
             else:
                 self.begin_add_url(
                     handoff.url,
@@ -527,6 +532,9 @@ class MainWindow(QMainWindow):
             return
         if resolution.kind is JobKind.TORRENT:
             self.add_torrent_source(resolution.url)
+            return
+        if resolution.kind is JobKind.CLOUD:
+            self.add_cloud_source(resolution.url)
             return
         if (
             quality
@@ -975,6 +983,39 @@ class MainWindow(QMainWindow):
 
         self._run_file_op(lambda: dupes.find_duplicates(list(owners)), done)
 
+    # ---------------------------------------------------------------- cloud
+
+    def _add_cloud(self) -> None:
+        url = prompt_cloud_url(self)
+        if url:
+            self.add_cloud_source(url)
+
+    def add_cloud_source(self, url: str) -> None:
+        """Queue a cloud protocol download. A URL ending in '/' is treated as a
+        folder: its files are listed and offered in a picker."""
+        if url.rstrip().endswith("/"):
+            self.statusBar().showMessage("Listing remote folder …")
+
+            def listed(result: object) -> None:
+                self.statusBar().clearMessage()
+                files = cast("list[cloud_engine.RemoteFile]", result)
+                if not files:
+                    QMessageBox.information(self, "Grabline", "That folder is empty.")
+                    return
+                dialog = CloudFolderDialog(url, files, self)
+                if dialog.exec() != CloudFolderDialog.DialogCode.Accepted:
+                    return
+                for file_url in dialog.selected_urls():
+                    self.manager.add_cloud(file_url)
+                self.statusBar().showMessage(f"Queued {len(dialog.selected_urls())} file(s)", 5000)
+                self.refresh()
+
+            self._run_file_op(lambda: self.manager.list_cloud_folder(url), listed)
+            return
+        self.manager.add_cloud(url)
+        self.statusBar().showMessage("Queued cloud download", 5000)
+        self.refresh()
+
     # ------------------------------------------------------------- torrents
 
     def _copy_magnet(self, view: JobView) -> None:
@@ -1342,6 +1383,11 @@ class MainWindow(QMainWindow):
         if magnets:
             event.acceptProposedAction()
             self.add_torrent_source(magnets[0].strip())
+            return
+        clouds = [p for p in text_parts[-1:] if cloud_engine.is_cloud_scheme(p.strip())]
+        if clouds:
+            event.acceptProposedAction()
+            self.add_cloud_source(clouds[0].strip())
             return
         urls = expand_all(extract_urls("\n".join(text_parts)))
         if not urls:

@@ -95,7 +95,7 @@ def test_resolver_routes_magnets_and_torrent_urls():
     resolver = Resolver(FakeSmart(match=False))
     assert resolver.resolve("magnet:?xt=urn:btih:abc").kind is JobKind.TORRENT
     assert resolver.resolve("https://x.example/linux.torrent").kind is JobKind.TORRENT
-    refused = resolver.resolve("ftp://host/file")
+    refused = resolver.resolve("gopher://host/file")
     assert refused.kind is None and "magnet" in (refused.message or "")
 
 

@@ -35,12 +35,13 @@ Accelerated multi-connection downloads · a real browser button · a full qualit
 ---
 
 Grabline downloads everything: a plain file, a 4K video, a whole folder of
-links, a streaming lecture, a torrent. Point it at a URL - paste it, drop it
-on the window, or click the ⬇ button in your browser - and it downloads fast
-with accelerated connections, crash-proof resume, and a queue you actually
-control. On the 1000+ sites it knows (YouTube, SoundCloud and friends) you
-also get a quality panel: 4K → 144p, MP3/M4A/FLAC with tags and cover art,
-subtitles, and clip trimming. Magnets and .torrent files open right in the
+links, a streaming lecture, a torrent, a file off your SFTP box. Point it at a
+URL - paste it, drop it on the window, or click the ⬇ button in your browser -
+and it downloads fast with accelerated connections, crash-proof resume, and a
+queue you actually control. On the 1000+ sites it knows (YouTube, SoundCloud
+and friends) you also get a quality panel: 4K → 144p, MP3/M4A/FLAC with tags
+and cover art, subtitles, and clip trimming. Magnets, .torrent files, and
+cloud (SFTP/FTP/S3/WebDAV + Drive/Dropbox share links) all open right in the
 app. Windows, macOS, and Linux. No ads, no telemetry, no paid tier. AGPL-3.0.
 
 ## ✨ Why Grabline
@@ -114,6 +115,21 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - Create your own torrents (trackers, web seeds, private flag), subscribe
   to RSS feeds that auto-queue matching releases, and search from the app
   via your preferred search site.
+
+**Cloud & file servers**
+- Paste an **sftp://, ftp://, ftps://, scp://, s3:// or webdav://** address
+  (File → Add Cloud Download) and it downloads with resume - FTP `REST`,
+  an SFTP seek, or an HTTP `Range`, whichever the protocol offers.
+- Public **Google Drive / Dropbox / OneDrive / Nextcloud** share links,
+  pasted into Add URL, are turned into direct downloads - full speed, no
+  account needed.
+- **Saved logins** for the credentialed protocols, kept in your OS keychain
+  (Windows Credential Manager / macOS Keychain / Linux Secret Service);
+  several accounts per host, the right one chosen automatically.
+- **Download a whole remote folder** (FTP/SFTP/S3): list it, tick the files
+  you want, queue them together.
+- Honest about the rest: Mega and Proton Drive are end-to-end encrypted and
+  iCloud has no public API, so Grabline says so instead of failing cryptically.
 
 **File management**
 - Smart filenames (junk like `videoplayback.mp4` becomes the page title),
@@ -252,7 +268,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(331 tests, including an 8-connection download killed with SIGKILL and
+(350 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.

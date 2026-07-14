@@ -50,19 +50,24 @@ def _register_native_host_once(settings: Settings) -> None:
         log.warning("first-run native-host registration failed", exc_info=True)
 
 
-def _torrent_arg(args: list[str]) -> str | None:
-    """A magnet link or .torrent path passed on the command line ('open
-    with Grabline' / double-clicked file), or None."""
+def _open_arg(args: list[str]) -> tuple[str, str] | None:
+    """A magnet link, .torrent path, or cloud address (sftp/ftp/s3/…) passed
+    on the command line ('open with Grabline' / double-clicked file), or None.
+    Returns (kind, source) where kind is "torrent" or "cloud"."""
+    from app.engines.cloud import is_cloud_scheme
+
     for arg in args:
         if arg.startswith("-"):
             continue
         if arg.lower().startswith("magnet:"):
-            return arg
+            return "torrent", arg
         if arg.lower().endswith(".torrent"):
             from pathlib import Path
 
             path = Path(arg)
-            return str(path.resolve()) if path.exists() else arg
+            return "torrent", str(path.resolve()) if path.exists() else arg
+        if is_cloud_scheme(arg):
+            return "cloud", arg
     return None
 
 
@@ -71,12 +76,13 @@ def main() -> int:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     minimized = "--minimized" in sys.argv
-    torrent_source = _torrent_arg(sys.argv[1:])
-    if torrent_source and instance.app_is_running():
-        # 'Open with Grabline' while it's already open: hand the torrent to
-        # the running instance (it polls the handoffs table) and bow out.
+    open_with = _open_arg(sys.argv[1:])
+    if open_with is not None and instance.app_is_running():
+        # 'Open with Grabline' while it's already open: hand the source to the
+        # running instance (it polls the handoffs table) and bow out.
+        kind, source = open_with
         handoff_db = Database(paths.data_dir() / "grabline.db")
-        handoff_db.add_handoff(torrent_source, source="torrent")
+        handoff_db.add_handoff(source, source=kind)
         handoff_db.close()
         return 0
     app = QApplication([arg for arg in sys.argv if arg != "--minimized"])
@@ -193,8 +199,10 @@ def main() -> int:
         log.info("started minimized to the tray (autostart)")
     else:
         window.show()
-    if torrent_source:
-        QTimer.singleShot(400, lambda: window.add_torrent_source(torrent_source))
+    if open_with is not None:
+        kind, source = open_with
+        opener = window.add_torrent_source if kind == "torrent" else window.add_cloud_source
+        QTimer.singleShot(400, lambda: opener(source))
     instance.write_pid()  # lets the Native Messaging host report "app running"
 
     def shutdown() -> None:

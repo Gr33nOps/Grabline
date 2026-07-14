@@ -168,7 +168,8 @@ def test_soundcloud_is_not_drm_blocked():
 
 
 def test_non_http_scheme_refused():
-    resolution = Resolver(FakeSmart(match=False)).resolve("ftp://host/file")
+    # ftp/sftp/s3 are cloud schemes now; gopher is a genuinely unsupported one.
+    resolution = Resolver(FakeSmart(match=False)).resolve("gopher://host/file")
     assert resolution.kind is None
     assert resolution.message is not None and "http" in resolution.message
 

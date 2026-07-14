@@ -383,3 +383,38 @@ def test_create_torrent_dialog_fields(db: Database):
     assert dialog.trackers() == ("http://tr1/announce", "http://tr2/announce")
     assert dialog.web_seeds() == ("https://mirror.example/share/",)
     assert dialog.private() is True
+
+
+def test_cloud_folder_dialog_selection(db: Database):
+    from PySide6.QtCore import Qt
+
+    from app.engines.cloud import RemoteFile
+    from app.ui.cloud_dialog import CloudFolderDialog
+
+    _qapp()
+    files = [
+        RemoteFile("sftp://host/dir/a.bin", "a.bin", 100),
+        RemoteFile("sftp://host/dir/b.bin", "b.bin", 200),
+    ]
+    dialog = CloudFolderDialog("sftp://host/dir/", files)
+    assert dialog.selected_urls() == ["sftp://host/dir/a.bin", "sftp://host/dir/b.bin"]
+    item = dialog.tree.topLevelItem(0)
+    assert item is not None
+    item.setCheckState(0, Qt.CheckState.Unchecked)
+    assert dialog.selected_urls() == ["sftp://host/dir/b.bin"]
+
+
+def test_cloud_account_editor_builds_account(db: Database):
+    from app.ui.cloud_dialog import _AccountEditor
+
+    _qapp()
+    editor = _AccountEditor()
+    editor.service.setCurrentText("sftp")
+    editor.host.setText("box.example")
+    editor.username.setText("alice")
+    editor.port.setText("2222")
+    editor.secret.setText("s3cret")
+    account, secret = editor.result_account()
+    assert account.service == "sftp" and account.host == "box.example"
+    assert account.username == "alice" and account.port == 2222
+    assert secret == "s3cret"

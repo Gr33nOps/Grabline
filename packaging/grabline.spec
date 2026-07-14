@@ -38,12 +38,18 @@ for h2_pkg in ("h2", "hpack", "hyperframe"):
 # libtorrent is imported lazily by the torrent engine; collect its binary
 # extension explicitly or frozen builds lose the torrent client.
 hidden += ["libtorrent"]
+# The cloud engine imports paramiko/boto3/keyring lazily; collect them (and
+# boto3's bundled service data) so SFTP/S3/credential storage work when frozen.
+for cloud_pkg in ("paramiko", "boto3", "botocore", "keyring", "keyring.backends"):
+    hidden += collect_submodules(cloud_pkg)
+boto_datas, boto_bins, boto_hidden = collect_all("botocore")
+hidden += boto_hidden
 # Ship the browser extension inside the app so the Browser Setup wizard can
 # stage it (Load unpacked / temporary add-on) - an installed build has no repo
 # checkout to copy it from. browser_setup._source_extension_dir() reads it back
 # from sys._MEIPASS/extension.
-datas = ytdlp_datas + curl_datas + [(str(ROOT / "extension"), "extension")]
-binaries = ytdlp_bins + curl_bins
+datas = ytdlp_datas + curl_datas + boto_datas + [(str(ROOT / "extension"), "extension")]
+binaries = ytdlp_bins + curl_bins + boto_bins
 
 # Trim Qt modules the app never touches - keeps the bundle from ballooning.
 qt_excludes = [

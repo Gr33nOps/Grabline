@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from app.core import categories, naming
+from app.core.credentials import CredentialStore
 from app.core.downloader import SegmentedDownload
 from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
@@ -23,6 +24,7 @@ from app.core.models import Job, JobKind, JobStatus
 from app.core.ratelimit import RateLimiter
 from app.core.settings import Settings
 from app.db.database import Database
+from app.engines.cloud import CloudDownload
 from app.engines.hls import HlsDownload
 from app.engines.manifest import HlsVariant
 from app.engines.smart import MediaInfo, QualityOption, SmartDownload
@@ -135,6 +137,7 @@ class DownloadManager:
     ) -> None:
         self.db = db
         self.settings = settings or Settings(db)
+        self.credentials = CredentialStore(db)
         # Explicit constructor values pin the knob; otherwise settings apply
         # live (reload_settings / next scheduler pass), no restart needed.
         self._max_concurrent_override = max_concurrent
@@ -514,6 +517,36 @@ class DownloadManager:
         self._kick()
         return job
 
+    def add_cloud(
+        self,
+        url: str,
+        *,
+        dest_dir: str | Path | None = None,
+        filename: str | None = None,
+    ) -> Job:
+        """Queue a cloud protocol download (ftp/ftps/sftp/scp/s3/webdav).
+        Credentials are looked up from the store by host at run time."""
+        from app.engines.cloud import suggested_filename
+
+        name = naming.sanitize_filename(filename or suggested_filename(url))
+        name = naming.apply_rename_rules(name, self.settings.rename_rules)
+        job = self.db.create_job(
+            url,
+            self._dest_for(name, dest_dir),
+            name,
+            kind=JobKind.CLOUD,
+            options={},
+        )
+        self._kick()
+        return job
+
+    def list_cloud_folder(self, url: str) -> list[Any]:
+        """Files inside a remote folder (for the 'download whole folder'
+        flow). Returns cloud.RemoteFile entries."""
+        from app.engines.cloud import list_folder
+
+        return list_folder(url, self.credentials)
+
     # ------------------------------------------------------------ control
 
     def pause(self, job_id: int) -> None:
@@ -643,6 +676,8 @@ class DownloadManager:
             return HlsDownload(self.db, job, ffmpeg_path=find_ffmpeg(self.settings), proxy=proxy)
         if job.kind is JobKind.TORRENT:
             return TorrentDownload(self.db, job, settings=self.settings)
+        if job.kind is JobKind.CLOUD:
+            return CloudDownload(self.db, job, credentials=self.credentials)
         # Share the link: a job starting while others run takes a proportional
         # slice of the connection budget instead of piling another full set of
         # sockets onto the same line - N established flows starve a late
