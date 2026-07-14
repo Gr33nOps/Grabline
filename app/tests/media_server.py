@@ -47,6 +47,8 @@ class Resource:
     # Refuse (403) unless the request carries every one of these headers with
     # the exact value - lets a test model a login-gated file.
     required_headers: dict[str, str] | None = None
+    # Extra response headers (e.g. Server, Set-Cookie) for the inspector tests.
+    extra_headers: tuple[tuple[str, str], ...] = ()
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -111,6 +113,8 @@ class _Handler(BaseHTTPRequestHandler):
         )
 
         self.send_response(status)
+        for name, value in resource.extra_headers:
+            self.send_header(name, value)
         if resource.supports_ranges:
             self.send_header("Accept-Ranges", "bytes")
         if resource.etag:

@@ -69,6 +69,7 @@ from app.ui.dupes_dialog import DupesDialog
 from app.ui.format import human_bytes
 from app.ui.gallery_panel import GalleryPanel
 from app.ui.gif_dialog import GifDialog
+from app.ui.inspector_dialog import InspectorDialog
 from app.ui.link_panel import LinkPanel
 from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
@@ -279,6 +280,9 @@ class MainWindow(QMainWindow):
             action.triggered.connect(handler)
             file_menu.addAction(action)
         file_menu.addSeparator()
+        inspect_url_action = QAction("Inspect URL…", self)
+        inspect_url_action.triggered.connect(self._inspect_url_prompt)
+        file_menu.addAction(inspect_url_action)
         queue_manager = QAction("Queue Manager…", self)
         queue_manager.triggered.connect(self._open_queue_manager)
         file_menu.addAction(queue_manager)
@@ -730,6 +734,8 @@ class MainWindow(QMainWindow):
         copy_hash.setEnabled(done)
         verify_hash = menu.addAction("Verify checksum…")
         verify_hash.setEnabled(done)
+        inspect_action = menu.addAction("Inspect…")
+        inspect_action.setEnabled(view.kind in (JobKind.DIRECT, JobKind.SMART, JobKind.HLS))
         extract_here = menu.addAction("Extract here")
         extract_here.setEnabled(done and archive.is_archive(file_path))
         preview_archive = menu.addAction("Preview archive…")
@@ -792,6 +798,8 @@ class MainWindow(QMainWindow):
             self._copy_hash(file_path)
         elif chosen is verify_hash:
             self._verify_hash(file_path)
+        elif chosen is inspect_action:
+            self._inspect_job(view, file_path)
         elif chosen is extract_here:
             self._extract(file_path)
         elif chosen is preview_archive:
@@ -1009,6 +1017,29 @@ class MainWindow(QMainWindow):
             self.refresh()
 
         self._run_file_op(lambda: dupes.find_duplicates(list(owners)), done)
+
+    # ------------------------------------------------------------ inspector
+
+    def _inspect_url_prompt(self) -> None:
+        url, accepted = QInputDialog.getText(self, "Inspect URL", "URL to inspect:")
+        if accepted and url.strip():
+            InspectorDialog(url.strip(), proxy=self.settings.proxy, parent=self).exec()
+
+    def _inspect_job(self, view: JobView, file_path: Path) -> None:
+        mirrors = ()
+        job = self.manager.db.get_job(view.id)
+        if job is not None:
+            mirrors = tuple(job.options.get("mirrors") or ())
+        checksum_work = None
+        if view.status is JobStatus.COMPLETED and file_path.exists():
+            checksum_work = lambda: verify.hash_file(file_path)  # noqa: E731
+        InspectorDialog(
+            view.url,
+            mirrors=mirrors,
+            checksum_work=checksum_work,
+            proxy=self.settings.proxy,
+            parent=self,
+        ).exec()
 
     # --------------------------------------------------------------- queues
 

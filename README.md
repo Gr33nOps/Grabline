@@ -157,6 +157,16 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - Favorite folders in the right-click *Move to* menu, plus per-download
   tags/labels and notes - both searchable from the search box.
 
+**Download Inspector** (right-click → *Inspect…*, or File → *Inspect URL…*)
+- Everything about a link from one live probe: the resolved **IP** and
+  reverse DNS, the **CDN** (Cloudflare, CloudFront, Fastly, Akamai, …), the
+  **server**, **MIME type**, **response time**, the full **HTTP headers** and
+  **Set-Cookie**s, the **redirect chain**, the **TLS certificate** (issuer,
+  validity, protocol, cipher), the job's **mirrors**, and the finished file's
+  **SHA-256**.
+- No telemetry: IP/DNS/CDN come from your own lookup - the address is never
+  sent to a geo-location service.
+
 **Nice touches**
 - URL patterns like `file[1-100].jpg`, drag-and-drop URLs, checksum
   verification, video → GIF, a dark/light theme,
@@ -283,7 +293,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(369 tests, including an 8-connection download killed with SIGKILL and
+(377 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.

@@ -443,3 +443,43 @@ def test_queue_editor_roundtrip_and_cycle_guard(db: Database, tmp_path: Path):
     queues = {q.id: q for q in db.list_queues()}
     assert _would_cycle(queues, a.id, b.id)
     assert not _would_cycle(queues, a.id, None)
+
+
+def test_inspector_render_sections(db: Database):
+    from app.core.inspector import InspectionReport, TlsInfo
+    from app.ui.inspector_dialog import _render
+
+    report = InspectionReport(
+        url="https://example.com/f.bin",
+        final_url="https://cdn.example.com/f.bin",
+        status=200,
+        ip_addresses=("93.184.216.34",),
+        reverse_dns="edge.example.com",
+        cdn="Cloudflare",
+        server="nginx",
+        mime_type="application/zip",
+        content_length=1024,
+        response_ms=42,
+        headers=(("content-type", "application/zip"),),
+        cookies=("sid=1",),
+        redirect_chain=((301, "https://example.com/f.bin"),),
+        tls=TlsInfo("TLSv1.3", "TLS_AES_256_GCM_SHA384", "example.com", "R3", "a", "b"),
+        mirrors=("https://mirror.example/f.bin",),
+        checksum="deadbeef",
+    )
+    text = _render(report)
+    for needle in (
+        "Cloudflare",
+        "93.184.216.34",
+        "TLSv1.3",
+        "application/zip",
+        "sid=1",
+        "301",
+        "mirror.example",
+        "deadbeef",
+        "42 ms",
+    ):
+        assert needle in text
+
+    unreachable = InspectionReport(url="x", final_url="x", reachable=False, error="boom")
+    assert "boom" in _render(unreachable)
