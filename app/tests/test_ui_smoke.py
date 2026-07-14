@@ -316,3 +316,24 @@ def test_archive_dialog_selection(db: Database):
     assert item is not None
     item.setCheckState(0, Qt.CheckState.Unchecked)
     assert dialog.selected_members() == ["docs/a.txt"]
+
+
+def test_dupes_dialog_keeps_one_copy(db: Database, tmp_path: Path):
+    from PySide6.QtCore import Qt
+
+    from app.ui.dupes_dialog import DupesDialog
+
+    _qapp()
+    a = tmp_path / "a.bin"
+    b = tmp_path / "b.bin"
+    c = tmp_path / "c.bin"
+    for f in (a, b, c):
+        f.write_bytes(b"same")
+    dialog = DupesDialog([[a, b, c]])
+    # Extras pre-checked, the first copy kept.
+    assert dialog.selected_paths() == [b, c]
+    # Even if every row gets checked, one copy always survives.
+    top = dialog.tree.topLevelItem(0)
+    assert top is not None
+    top.child(0).setCheckState(0, Qt.CheckState.Checked)
+    assert dialog.selected_paths() == [b, c]

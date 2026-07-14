@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.core import naming
 from app.core.naming import (
     filename_from_url,
     improved_filename,
@@ -78,3 +79,25 @@ def test_unique_path_never_overwrites(tmp_path: Path):
     assert unique_path(target) == tmp_path / "file (1).bin"
     (tmp_path / "file (1).bin").write_bytes(b"y")
     assert unique_path(target) == tmp_path / "file (2).bin"
+
+
+# ------------------------------------------------------------- rename rules
+
+
+def test_rename_rules_replace_in_order_and_keep_extension():
+    rules = [("[SPONSORED] ", ""), ("Draft", "Final")]
+    assert naming.apply_rename_rules("[SPONSORED] Draft Report.pdf", rules) == "Final Report.pdf"
+
+
+def test_rename_rules_never_touch_the_extension():
+    assert naming.apply_rename_rules("notes.txt", [("txt", "md")]) == "notes.txt"
+
+
+def test_rename_rules_result_is_sanitized():
+    # A rule can't inject path separators or empty the name out.
+    assert "/" not in naming.apply_rename_rules("report.pdf", [("report", "a/b")])
+    assert naming.apply_rename_rules("junk.bin", [("junk", "")]) == "download.bin"
+
+
+def test_no_rules_is_a_no_op():
+    assert naming.apply_rename_rules("as-is.zip", []) == "as-is.zip"

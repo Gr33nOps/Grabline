@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import shutil
 import threading
 import time
 from collections.abc import Mapping, Sequence
@@ -16,6 +17,7 @@ from typing import Any, Protocol
 
 from app.core import categories, naming
 from app.core.downloader import SegmentedDownload
+from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
 from app.core.models import Job, JobKind, JobStatus
 from app.core.ratelimit import RateLimiter
@@ -112,6 +114,8 @@ class JobView:
     title: str | None = None
     speed_limit_kbps: int = 0
     retry_count: int = 0
+    tags: str = ""
+    notes: str = ""
 
     @property
     def display_name(self) -> str:
@@ -256,6 +260,50 @@ class DownloadManager:
         self.db.update_job_options(job_id, options)
         job.options = options
 
+    def _set_job_option(self, job_id: int, key: str, value: str) -> None:
+        job = self.db.get_job(job_id)
+        if job is None:
+            return
+        options = dict(job.options)
+        if value.strip():
+            options[key] = value.strip()
+        else:
+            options.pop(key, None)
+        self.db.update_job_options(job_id, options)
+
+    def set_job_tags(self, job_id: int, tags: str) -> None:
+        """Free-form tags/labels ('work, iso, later'); searchable in the UI."""
+        self._set_job_option(job_id, "tags", tags)
+
+    def set_job_notes(self, job_id: int, notes: str) -> None:
+        self._set_job_option(job_id, "notes", notes)
+
+    def find_existing(self, url: str) -> Job | None:
+        """Duplicate detection at add time: the first job (any status) already
+        pointing at this exact URL, or None."""
+        for job in self.db.list_jobs():
+            if job.url == url:
+                return job
+        return None
+
+    def move_job_file(self, job_id: int, dest_dir: str | Path) -> Path:
+        """Move a completed download into ``dest_dir`` (a favorite folder) and
+        re-point the row. Never overwrites - the name gets ' (1)' if taken."""
+        job = self.db.get_job(job_id)
+        if job is None:
+            raise DownloadError("this download no longer exists")
+        source = Path(job.dest_dir) / job.filename
+        if job.status is not JobStatus.COMPLETED or not source.is_file():
+            raise DownloadError("only a finished download can be moved")
+        dest = Path(dest_dir)
+        dest.mkdir(parents=True, exist_ok=True)
+        target = naming.unique_path(dest / job.filename)
+        shutil.move(str(source), str(target))
+        self.db.update_job_dest(job_id, str(dest))
+        if target.name != job.filename:
+            self.db.update_job_filename(job_id, target.name)
+        return target
+
     # -------------------------------------------------------- queue priorities
 
     def _pending_order(self) -> list[Job]:
@@ -324,6 +372,7 @@ class DownloadManager:
         from the browser) let a login-gated file download too; ``mirrors`` are
         alternate URLs tried in order if this one fails for good."""
         name = naming.sanitize_filename(filename) if filename else naming.filename_from_url(url)
+        name = naming.apply_rename_rules(name, self.settings.rename_rules)
         options: dict[str, Any] = {"http_headers": dict(headers)} if headers else {}
         if mirrors:
             options["mirrors"] = [m for m in mirrors if m and m != url]
@@ -375,7 +424,7 @@ class DownloadManager:
         download time."""
         extension = option.audio_format if option.kind == "audio" else "mp4"
         base = naming.sanitize_filename(title)
-        filename = f"{base}.{extension}"
+        filename = naming.apply_rename_rules(f"{base}.{extension}", self.settings.rename_rules)
         options: dict[str, Any] = {
             "format_spec": option.format_spec,
             "quality_label": option.label,
@@ -410,7 +459,7 @@ class DownloadManager:
         quality picked from the master playlist (F2.1)."""
         stem = Path(naming.filename_from_url(url)).stem or "stream"
         base = naming.sanitize_filename(title) if title else stem
-        filename = f"{base}.mp4"
+        filename = naming.apply_rename_rules(f"{base}.mp4", self.settings.rename_rules)
         options: dict[str, Any] = {}
         if variant is not None:
             options = {
@@ -518,6 +567,8 @@ class DownloadManager:
                     title=job.title,
                     speed_limit_kbps=int(job.options.get("speed_limit_kbps") or 0),
                     retry_count=job.retry_count,
+                    tags=str(job.options.get("tags") or ""),
+                    notes=str(job.options.get("notes") or ""),
                 )
             )
         return views

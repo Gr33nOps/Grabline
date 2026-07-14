@@ -302,3 +302,75 @@ def test_pinned_connections_bypass_the_share_split(db: Database, dest: Path):
     finally:
         manager._active.clear()
         manager.shutdown()
+
+
+def test_rename_rules_apply_to_new_downloads(db: Database, dest: Path):
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        manager.settings.rename_rules = [("badword", "nice")]
+        job = manager.add_url("http://x.test/badword-file.bin", dest_dir=dest)
+        assert job.filename == "nice-file.bin"
+    finally:
+        manager.shutdown()
+
+
+def test_tags_and_notes_roundtrip_into_views(db: Database, dest: Path):
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        job = manager.add_url("http://x.test/file.bin", dest_dir=dest)
+        manager.set_job_tags(job.id, "work, iso")
+        manager.set_job_notes(job.id, "for the demo box")
+        view = next(v for v in manager.snapshot() if v.id == job.id)
+        assert view.tags == "work, iso"
+        assert view.notes == "for the demo box"
+        manager.set_job_tags(job.id, "  ")  # blank clears the tag
+        view = next(v for v in manager.snapshot() if v.id == job.id)
+        assert view.tags == ""
+    finally:
+        manager.shutdown()
+
+
+def test_find_existing_matches_exact_url(db: Database, dest: Path):
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        job = manager.add_url("http://x.test/file.bin", dest_dir=dest)
+        found = manager.find_existing("http://x.test/file.bin")
+        assert found is not None and found.id == job.id
+        assert manager.find_existing("http://x.test/other.bin") is None
+    finally:
+        manager.shutdown()
+
+
+def test_move_job_file_to_favorite_folder(db: Database, dest: Path, tmp_path: Path):
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        job = manager.add_url("http://x.test/keep.bin", dest_dir=dest)
+        (dest / "keep.bin").write_bytes(b"data")
+        db.set_job_status(job.id, JobStatus.COMPLETED)
+        favorite = tmp_path / "Movies"
+        (favorite / "keep.bin").parent.mkdir(parents=True, exist_ok=True)
+        (favorite / "keep.bin").write_bytes(b"already here")  # collision
+
+        target = manager.move_job_file(job.id, favorite)
+
+        assert target == favorite / "keep (1).bin"  # never overwrites
+        assert target.read_bytes() == b"data"
+        assert not (dest / "keep.bin").exists()
+        fresh = db.get_job(job.id)
+        assert fresh is not None
+        assert fresh.dest_dir == str(favorite)
+        assert fresh.filename == "keep (1).bin"
+    finally:
+        manager.shutdown()
+
+
+def test_move_job_file_refuses_unfinished_downloads(db: Database, dest: Path, tmp_path: Path):
+    from app.core.errors import DownloadError
+
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        job = manager.add_url("http://x.test/partial.bin", dest_dir=dest)
+        with pytest.raises(DownloadError, match="finished"):
+            manager.move_job_file(job.id, tmp_path / "Movies")
+    finally:
+        manager.shutdown()

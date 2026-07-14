@@ -15,6 +15,18 @@ def test_category_mapping():
     assert category_for("no_extension") is None
 
 
+def test_programs_games_torrents_categories():
+    assert category_for("setup.exe") == "Programs"
+    assert category_for("app.deb") == "Programs"
+    assert category_for("tool.AppImage") == "Programs"
+    assert category_for("installer.dmg") == "Programs"  # moved out of Archives
+    assert category_for("zelda.gba") == "Games"
+    assert category_for("mario.nsp") == "Games"
+    assert category_for("ubuntu.torrent") == "Torrents"
+    # .iso stays an archive - it's ambiguous (OS image, backup, game dump).
+    assert category_for("backup.iso") == "Archives"
+
+
 def test_dest_dir_for_enabled():
     base = Path("/downloads")
     assert dest_dir_for(base, "movie.mp4", enabled=True) == base / "Video"

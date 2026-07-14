@@ -129,3 +129,19 @@ def test_archive_passwords_roundtrip_dedup_and_bad_json(db: Database):
 
     db.set_setting("archive_passwords", "{not json")
     assert Settings(db).archive_passwords == ()
+
+
+def test_favorite_folders_and_rename_rules_roundtrip(db: Database):
+    settings = Settings(db)
+    assert settings.favorite_folders == ()
+    assert settings.rename_rules == ()
+
+    settings.favorite_folders = ["/data/movies", "  ", "/data/movies", "/isos"]
+    settings.rename_rules = [("[AD] ", ""), ("", "ignored"), ("old", "new")]
+
+    fresh = Settings(db)
+    assert fresh.favorite_folders == ("/data/movies", "/isos")
+    assert fresh.rename_rules == (("[AD] ", ""), ("old", "new"))
+
+    db.set_setting("rename_rules", "not json")
+    assert Settings(db).rename_rules == ()

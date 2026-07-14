@@ -287,7 +287,15 @@ class Settings:
         """Passwords tried in order when an archive turns out to be encrypted.
         Stored locally and unencrypted - the same trust level as the
         downloaded files themselves."""
-        raw = self._db.get_setting("archive_passwords")
+        return self._get_str_list("archive_passwords")
+
+    @archive_passwords.setter
+    def archive_passwords(self, value: Sequence[str]) -> None:
+        deduped = list(dict.fromkeys(v.strip() for v in value if v.strip()))
+        self._db.set_setting("archive_passwords", json.dumps(deduped))
+
+    def _get_str_list(self, key: str) -> tuple[str, ...]:
+        raw = self._db.get_setting(key)
         if not raw:
             return ()
         try:
@@ -298,10 +306,39 @@ class Settings:
             return ()
         return tuple(str(v) for v in values if str(v).strip())
 
-    @archive_passwords.setter
-    def archive_passwords(self, value: Sequence[str]) -> None:
+    @property
+    def favorite_folders(self) -> tuple[str, ...]:
+        """Quick move-to destinations offered in the download's context menu."""
+        return self._get_str_list("favorite_folders")
+
+    @favorite_folders.setter
+    def favorite_folders(self, value: Sequence[str]) -> None:
         deduped = list(dict.fromkeys(v.strip() for v in value if v.strip()))
-        self._db.set_setting("archive_passwords", json.dumps(deduped))
+        self._db.set_setting("favorite_folders", json.dumps(deduped))
+
+    @property
+    def rename_rules(self) -> tuple[tuple[str, str], ...]:
+        """Literal find -> replace pairs applied (in order) to every new
+        download's filename stem."""
+        raw = self._db.get_setting("rename_rules")
+        if not raw:
+            return ()
+        try:
+            values = json.loads(raw)
+        except ValueError:
+            return ()
+        if not isinstance(values, list):
+            return ()
+        rules: list[tuple[str, str]] = []
+        for pair in values:
+            if isinstance(pair, list) and len(pair) == 2 and str(pair[0]):
+                rules.append((str(pair[0]), str(pair[1])))
+        return tuple(rules)
+
+    @rename_rules.setter
+    def rename_rules(self, value: Sequence[tuple[str, str]]) -> None:
+        cleaned = [[find, replace] for find, replace in value if find]
+        self._db.set_setting("rename_rules", json.dumps(cleaned))
 
     @property
     def scan_before_extract(self) -> bool:

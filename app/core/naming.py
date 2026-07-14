@@ -6,6 +6,7 @@ import mimetypes
 import os.path
 import posixpath
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -78,6 +79,19 @@ def improved_filename(url: str, page_title: str | None, content_type: str | None
     if not extension and content_type:
         extension = mimetypes.guess_extension(content_type.split(";")[0].strip()) or ""
     return sanitize_filename(page_title.strip() + extension)
+
+
+def apply_rename_rules(name: str, rules: Sequence[tuple[str, str]]) -> str:
+    """User rename rules: literal find -> replace, applied in order to the
+    stem only (the extension never changes). The result is re-sanitized, so a
+    rule can't smuggle in path separators or an empty name."""
+    if not rules:
+        return name
+    root, ext = os.path.splitext(name)
+    for find, replace in rules:
+        if find:
+            root = root.replace(find, replace)
+    return sanitize_filename((root or FALLBACK_NAME) + ext)
 
 
 def unique_path(path: Path) -> Path:

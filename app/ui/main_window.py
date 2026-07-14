@@ -30,12 +30,16 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
+    QFormLayout,
     QInputDialog,
     QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPlainTextEdit,
     QProgressBar,
     QTabBar,
     QTableWidget,
@@ -46,7 +50,7 @@ from PySide6.QtWidgets import (
 )
 
 from app import __version__
-from app.core import archive, crawler, listio, naming, update, verify, virusscan
+from app.core import archive, crawler, dupes, listio, naming, update, verify, virusscan
 from app.core.batch import expand_all, expand_pattern, extract_urls
 from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
@@ -58,6 +62,7 @@ from app.engines.smart import option_for_label
 from app.ui import theme
 from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
+from app.ui.dupes_dialog import DupesDialog
 from app.ui.format import human_bytes
 from app.ui.gallery_panel import GalleryPanel
 from app.ui.gif_dialog import GifDialog
@@ -256,6 +261,9 @@ class MainWindow(QMainWindow):
         clear_done = QAction("Clear Completed", self)
         clear_done.triggered.connect(self._clear_completed)
         file_menu.addAction(clear_done)
+        find_dupes = QAction("Find Duplicate Files…", self)
+        find_dupes.triggered.connect(self._find_duplicates)
+        file_menu.addAction(find_dupes)
         file_menu.addSeparator()
         setup = QAction("Browser Setup…", self)
         setup.triggered.connect(self.open_setup)
@@ -440,12 +448,31 @@ class MainWindow(QMainWindow):
         quality: str | None = None,
         fallbacks: tuple[str, ...] = (),
         headers: dict[str, str] | None = None,
+        allow_duplicate: bool = False,
     ) -> None:
         """Entry point shared by the toolbar, tray, clipboard, and extension.
         A ``quality`` label (F1.3 in-page panel) skips the quality dialog;
         ``fallbacks`` are sniffed stream URLs tried in order if ``url``
         resolves to nothing (blob players on streaming sites); ``headers``
         are browser cookies/referer passed through for login-gated files."""
+        if not allow_duplicate:
+            existing = self.manager.find_existing(url)
+            if existing is not None:
+                what = (
+                    "was already downloaded"
+                    if existing.status is JobStatus.COMPLETED
+                    else "is already in the list"
+                )
+                answer = QMessageBox.question(
+                    self,
+                    "Grabline",
+                    f"{existing.filename} {what}.\nDownload it again?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if answer is not QMessageBox.StandardButton.Yes:
+                    self.statusBar().showMessage("Ready")
+                    return
         self.statusBar().showMessage(f"Analyzing {url} …")
         thread = _ResolveThread(
             self.resolver, url, self.settings, page_title, quality, fallbacks, headers
@@ -671,6 +698,14 @@ class MainWindow(QMainWindow):
         preview_archive = menu.addAction("Preview archive…")
         preview_archive.setEnabled(done and archive.is_archive(file_path))
 
+        move_menu = menu.addMenu("Move to")
+        favorites = self.settings.favorite_folders
+        move_menu.setEnabled(done and bool(favorites))
+        if not favorites:
+            move_menu.setToolTip("Add favorite folders in Settings")
+        move_actions = {move_menu.addAction(folder): folder for folder in favorites}
+        tags_action = menu.addAction("Tags && notes…")
+
         pending = view.status in (JobStatus.QUEUED, JobStatus.PAUSED)
         queue_menu = menu.addMenu("Move in queue")
         queue_menu.setEnabled(pending)
@@ -692,7 +727,7 @@ class MainWindow(QMainWindow):
                 self.clipboard_suppressor(view.url)  # don't offer our own copy back
             QGuiApplication.clipboard().setText(view.url)
         elif chosen is redownload:
-            self.begin_add_url(view.url)
+            self.begin_add_url(view.url, allow_duplicate=True)
         elif chosen is to_gif and ffmpeg_path is not None:
             GifDialog(ffmpeg_path, file_path, self).exec()
         elif chosen is limit_speed:
@@ -707,6 +742,10 @@ class MainWindow(QMainWindow):
             self._extract(file_path)
         elif chosen is preview_archive:
             self._preview_archive(file_path)
+        elif chosen in move_actions:
+            self._move_to(view, move_actions[chosen])
+        elif chosen is tags_action:
+            self._edit_tags(view)
         elif chosen is move_top:
             self.manager.move_to_top(view.id)
         elif chosen is move_up:
@@ -831,6 +870,84 @@ class MainWindow(QMainWindow):
 
         self._run_file_op(lambda: archive.list_entries(path), opened)
 
+    def _move_to(self, view: JobView, folder: str) -> None:
+        self.statusBar().showMessage(f"Moving {view.filename} …")
+
+        def done(result: object) -> None:
+            self.statusBar().showMessage(f"Moved to {result}", 6000)
+            self.refresh()
+
+        self._run_file_op(lambda: self.manager.move_job_file(view.id, folder), done)
+
+    def _edit_tags(self, view: JobView) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Tags & notes - {view.display_name}")
+        dialog.setMinimumWidth(420)
+        form = QFormLayout(dialog)
+        tags_edit = QLineEdit(view.tags)
+        tags_edit.setPlaceholderText("comma, separated, labels")
+        form.addRow("Tags:", tags_edit)
+        notes_edit = QPlainTextEdit(view.notes)
+        notes_edit.setPlaceholderText("Anything worth remembering about this download.")
+        form.addRow("Notes:", notes_edit)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.manager.set_job_tags(view.id, tags_edit.text())
+            self.manager.set_job_notes(view.id, notes_edit.toPlainText())
+            self.refresh()
+
+    def _find_duplicates(self) -> None:
+        """Hash-compare every completed download and offer to delete the
+        extra byte-identical copies (keeping one of each)."""
+        owners: dict[Path, int] = {}
+        for view in self._last_views.values():
+            if view.status is JobStatus.COMPLETED:
+                owners[Path(view.dest_dir) / view.filename] = view.id
+        if not owners:
+            QMessageBox.information(self, "Grabline", "No completed downloads to compare.")
+            return
+        self.statusBar().showMessage("Comparing files …")
+
+        def done(result: object) -> None:
+            self.statusBar().showMessage("Ready")
+            groups = cast("list[list[Path]]", result)
+            if not groups:
+                QMessageBox.information(self, "Grabline", "No duplicate files found.")
+                return
+            dialog = DupesDialog(groups, self)
+            if dialog.exec() != DupesDialog.DialogCode.Accepted:
+                return
+            doomed = dialog.selected_paths()
+            if not doomed:
+                return
+            answer = QMessageBox.warning(
+                self,
+                "Grabline",
+                f"Permanently delete {len(doomed)} duplicate file(s)? One copy of each is kept.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer is not QMessageBox.StandardButton.Yes:
+                return
+            for path in doomed:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError as exc:
+                    QMessageBox.warning(self, "Grabline", f"Could not delete {path.name}: {exc}")
+                    continue
+                job_id = owners.get(path)
+                if job_id is not None:
+                    self.manager.remove(job_id)
+            self.statusBar().showMessage(f"Removed {len(doomed)} duplicate file(s)", 6000)
+            self.refresh()
+
+        self._run_file_op(lambda: dupes.find_duplicates(list(owners)), done)
+
     def _set_connections(self, view: JobView) -> None:
         connections, accepted = QInputDialog.getInt(
             self,
@@ -953,7 +1070,12 @@ class MainWindow(QMainWindow):
             view = self._view_for_row(row)
             matches_search = not needle or (
                 view is not None
-                and (needle in view.display_name.lower() or needle in view.url.lower())
+                and (
+                    needle in view.display_name.lower()
+                    or needle in view.url.lower()
+                    or needle in view.tags.lower()
+                    or needle in view.notes.lower()
+                )
             )
             matches_tab = not tab_statuses or (view is not None and view.status in tab_statuses)
             self.table.setRowHidden(row, not (matches_search and matches_tab))

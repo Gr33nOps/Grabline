@@ -274,6 +274,15 @@ class Database:
                 (filename, job_id),
             )
 
+    def update_job_dest(self, job_id: int, dest_dir: str) -> None:
+        """Re-point a job at a new folder (the move-to-favorite action moves
+        the file first; this keeps the row honest about where it lives)."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE jobs SET dest_dir = ?, updated_at = datetime('now') WHERE id = ?",
+                (dest_dir, job_id),
+            )
+
     def delete_job(self, job_id: int) -> None:
         """Remove a job from the list/history; its segments cascade away.
         Never touches files on disk."""

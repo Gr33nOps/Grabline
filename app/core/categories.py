@@ -35,7 +35,42 @@ _CATEGORY_EXTENSIONS = {
         "csv",
         "md",
     },
-    "Archives": {"zip", "rar", "7z", "tar", "gz", "xz", "bz2", "zst", "iso", "dmg"},
+    "Archives": {"zip", "rar", "7z", "tar", "gz", "xz", "bz2", "zst", "iso"},
+    # .dmg is an installer image, not an archive to unpack - it sorts here.
+    "Programs": {
+        "exe",
+        "msi",
+        "msix",
+        "apk",
+        "xapk",
+        "deb",
+        "rpm",
+        "appimage",
+        "pkg",
+        "dmg",
+        "jar",
+    },
+    "Games": {
+        "rom",
+        "gb",
+        "gbc",
+        "gba",
+        "nds",
+        "3ds",
+        "cia",
+        "nes",
+        "sfc",
+        "smc",
+        "n64",
+        "z64",
+        "gcm",
+        "wbfs",
+        "xci",
+        "nsp",
+        "wad",
+    },
+    # The torrent engine comes later; the category folder is ready now.
+    "Torrents": {"torrent"},
 }
 
 _EXTENSION_TO_CATEGORY = {

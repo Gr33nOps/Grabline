@@ -66,7 +66,8 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
   (Active / Completed / Failed), search, a live speed graph.
 - **Timed schedule**: only download between the hours you choose (run it
   overnight), and *notify / quit / sleep / shut down* when the queue finishes.
-- Auto-sort into Video / Music / Images / Documents / Archives.
+- Auto-sort into Video / Music / Images / Documents / Archives / Programs /
+  Games / Torrents (the torrent engine itself is on the roadmap).
 - Import/export your download list; back it up or move it to another machine.
 
 **One button in the browser** (Chrome / Firefox / Edge / Brave / Vivaldi / Opera / Arc)
@@ -98,6 +99,17 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - Optional virus scan before extraction, using a scanner already on the
   machine (Windows Defender or ClamAV) - Grabline never pretends to scan
   when none is installed.
+
+**File management**
+- Smart filenames (junk like `videoplayback.mp4` becomes the page title),
+  illegal characters stripped, and `file (1).bin` version numbering instead
+  of silent overwrites.
+- Your own rename rules (`find -> replace`) applied to every new download.
+- Duplicate detection - adding a URL twice asks first, and *Find Duplicate
+  Files* hash-compares finished downloads and deletes the extra copies
+  (always keeping one).
+- Favorite folders in the right-click *Move to* menu, plus per-download
+  tags/labels and notes - both searchable from the search box.
 
 **Nice touches**
 - URL patterns like `file[1-100].jpg`, drag-and-drop URLs, checksum
@@ -225,7 +237,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(299 tests, including an 8-connection download killed with SIGKILL and
+(316 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.

@@ -35,6 +35,18 @@ from app.core.settings import SESSION_BROWSERS, Settings
 from app.ui.format import human_bytes
 
 
+def _parse_rename_rules(text: str) -> list[tuple[str, str]]:
+    """'find -> replace' per line; a line without '->' deletes the text."""
+    rules: list[tuple[str, str]] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        find, _, replace = line.partition("->")
+        if find.strip():
+            rules.append((find.strip(), replace.strip()))
+    return rules
+
+
 class _FfmpegInstaller(QThread):
     progressed = Signal(int, object)  # received bytes, total or None
     succeeded = Signal(str)
@@ -73,7 +85,9 @@ class SettingsDialog(QDialog):
         folder_row.addWidget(self.folder_edit, 1)
         folder_row.addWidget(browse)
         general_form.addRow("Download folder:", folder_row)
-        self.categories_check = QCheckBox("Sort into Video / Music / Images / Documents / Archives")
+        self.categories_check = QCheckBox(
+            "Sort into Video / Music / Images / Documents / Archives / Programs / Games / Torrents"
+        )
         self.categories_check.setChecked(settings.categories_enabled)
         general_form.addRow("", self.categories_check)
         self.theme_combo = QComboBox()
@@ -95,6 +109,29 @@ class SettingsDialog(QDialog):
         self.updates_check = QCheckBox("Check for Grabline updates on startup")
         self.updates_check.setChecked(settings.check_updates)
         general_form.addRow("", self.updates_check)
+
+        # ---- Files ---------------------------------------------------------
+        files_form = self._add_form_tab(tabs, "Files")
+        self.favorites_edit = QPlainTextEdit()
+        self.favorites_edit.setPlainText("\n".join(settings.favorite_folders))
+        self.favorites_edit.setPlaceholderText("one folder per line, e.g. /home/me/Movies")
+        self.favorites_edit.setFixedHeight(72)
+        self.favorites_edit.setToolTip(
+            "Quick destinations shown under 'Move to' when you right-click a finished download."
+        )
+        files_form.addRow("Favorite folders:", self.favorites_edit)
+        self.rename_edit = QPlainTextEdit()
+        self.rename_edit.setPlainText(
+            "\n".join(f"{find} -> {replace}" for find, replace in settings.rename_rules)
+        )
+        self.rename_edit.setPlaceholderText("find -> replace   (one rule per line)")
+        self.rename_edit.setFixedHeight(72)
+        self.rename_edit.setToolTip(
+            "Applied in order to every new download's name (never the "
+            "extension). Example:  [SPONSORED] ->\nleaves the rest of the "
+            "name intact."
+        )
+        files_form.addRow("Rename rules:", self.rename_edit)
 
         # ---- Downloads -----------------------------------------------------
         dl_form = self._add_form_tab(tabs, "Downloads")
@@ -369,6 +406,8 @@ class SettingsDialog(QDialog):
         self.settings.auto_extract = self.extract_check.isChecked()
         self.settings.scan_before_extract = self.scan_check.isChecked()
         self.settings.archive_passwords = self.passwords_edit.toPlainText().splitlines()
+        self.settings.favorite_folders = self.favorites_edit.toPlainText().splitlines()
+        self.settings.rename_rules = _parse_rename_rules(self.rename_edit.toPlainText())
         self.settings.after_queue_action = self.after_combo.currentData()
         try:
             # The autostart file/registry entry IS the setting - no DB copy
