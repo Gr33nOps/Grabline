@@ -219,6 +219,9 @@ def generic_quality_options() -> tuple[QualityOption, ...]:
     options.append(
         QualityOption(label="M4A", kind="audio", format_spec="ba[ext=m4a]/ba/b", audio_format="m4a")
     )
+    options.append(
+        QualityOption(label="FLAC", kind="audio", format_spec="ba/b", audio_format="flac")
+    )
     return tuple(options)
 
 
@@ -360,6 +363,14 @@ def curate_formats(info: dict[str, Any]) -> tuple[QualityOption, ...]:
                 audio_format="m4a",
             )
         )
+        options.append(
+            QualityOption(
+                label="FLAC",
+                kind="audio",
+                format_spec="ba/b",
+                audio_format="flac",  # lossless re-encode; no size estimate
+            )
+        )
     return tuple(options)
 
 
@@ -389,12 +400,17 @@ class SmartEngine:
         use_session: bool = False,
         session_browser: str = "chrome",
         proxy: str | None = None,
+        force_generic: bool = False,
     ) -> MediaInfo | PlaylistInfo:
         """Metadata for a single video, or a fast flat listing for a playlist.
 
         ``noplaylist`` keeps watch-URLs-with-a-list-param as single videos;
         pure playlist URLs still come back as playlists. ``extract_flat``
         makes the playlist case one cheap request instead of hundreds.
+
+        ``force_generic`` runs yt-dlp's page-scraping generic extractor even
+        when no site extractor claims the URL - the last-resort path for media
+        embedded in pages yt-dlp has no dedicated support for.
         """
         import yt_dlp
 
@@ -405,6 +421,9 @@ class SmartEngine:
             "extract_flat": "in_playlist",
             "skip_download": True,
         }
+        if force_generic:
+            # Scrape the page itself for <video>/og:video/JSON-LD/m3u8 links.
+            opts["force_generic_extractor"] = True
         from app.core import jsruntime
 
         runtime = jsruntime.detect_js_runtime()
@@ -605,8 +624,43 @@ class SmartDownload:
             start, end = float(trim[0] or 0), float(trim[1])
             ydl_opts["download_ranges"] = download_range_func(None, [(start, end)])
             ydl_opts["force_keyframes_at_cuts"] = True
-        if with_cookies and (browser := self._cookie_browser()):
+        # SponsorBlock: skip or just mark sponsor/intro/outro segments. Needs
+        # FFmpeg to actually cut; marking as chapters works without a re-encode.
+        sponsorblock = options.get("sponsorblock")
+        if sponsorblock and has_ffmpeg:
+            postprocessors.append(
+                {"key": "SponsorBlock", "categories": ["sponsor", "selfpromo", "interaction"]}
+            )
+            postprocessors.append(
+                {
+                    "key": "ModifyChapters",
+                    "remove_sponsor_segments": ["sponsor", "selfpromo", "interaction"]
+                    if sponsorblock == "remove"
+                    else [],
+                }
+            )
+        # Keep the video's own chapter marks (yt-dlp writes them into the file).
+        if options.get("chapters") and has_ffmpeg and audio_format is None:
+            postprocessors.append({"key": "FFmpegMetadata", "add_chapters": True})
+        # Save the poster/cover as a sidecar image, and the full metadata as
+        # .info.json (title, uploader, description, tags - "metadata download").
+        if options.get("save_thumbnail"):
+            ydl_opts["writethumbnail"] = True
+        if options.get("save_metadata"):
+            ydl_opts["writeinfojson"] = True
+        # A cookies.txt (Netscape format) the user exported - the manual/OAuth
+        # cookie path, and what works headless where reading a live browser
+        # profile can't. Takes precedence over cookiesfrombrowser.
+        cookie_file = options.get("cookie_file")
+        if cookie_file and Path(cookie_file).is_file():
+            ydl_opts["cookiefile"] = cookie_file
+        elif with_cookies and (browser := self._cookie_browser()):
             ydl_opts["cookiesfrombrowser"] = (browser,)
+        # Power-user escape hatch: extra ffmpeg args (e.g. -metadata, a codec
+        # tweak) applied to the merge/convert steps.
+        extra_ffmpeg = options.get("ffmpeg_args")
+        if extra_ffmpeg:
+            ydl_opts["postprocessor_args"] = {"default": list(extra_ffmpeg)}
         if self.proxy:
             ydl_opts["proxy"] = self.proxy
         ydl_opts["postprocessors"] = postprocessors

@@ -117,6 +117,26 @@ def test_add_smart_entry_for_playlist_items(db: Database, dest: Path):
         manager.shutdown()
 
 
+def test_add_smart_threads_post_processing_extras(db: Database, dest: Path):
+    from app.engines.smart import generic_quality_options
+
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        option = generic_quality_options()[0]
+        job = manager.add_smart_entry(
+            "https://tube.example/watch?v=xyz",
+            "Talk",
+            option,
+            dest_dir=dest,
+            extras={"sponsorblock": "remove", "chapters": True, "save_thumbnail": True},
+        )
+        assert job.options["sponsorblock"] == "remove"
+        assert job.options["chapters"] is True
+        assert job.options["save_thumbnail"] is True
+    finally:
+        manager.shutdown()
+
+
 def test_remove_deletes_row_but_keeps_completed_file(db: Database, dest: Path):
     manager = DownloadManager(db, max_concurrent=0)
     try:

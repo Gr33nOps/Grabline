@@ -71,7 +71,7 @@ def _youtube_like_info() -> dict[str, Any]:
 
 def test_curated_labels_and_order():
     options = curate_formats(_youtube_like_info())
-    assert [o.label for o in options] == ["Best", "1080p", "720p", "360p", "MP3", "M4A"]
+    assert [o.label for o in options] == ["Best", "1080p", "720p", "360p", "MP3", "M4A", "FLAC"]
 
 
 def test_video_size_estimates_add_audio_when_needed():
@@ -103,7 +103,7 @@ def test_audio_only_source_still_offers_audio():
         ]
     }
     options = curate_formats(info)
-    assert [o.label for o in options] == ["MP3", "M4A"]
+    assert [o.label for o in options] == ["MP3", "M4A", "FLAC"]
 
 
 def test_empty_formats_yield_no_options():
@@ -144,8 +144,9 @@ def test_parse_playlist_returns_none_for_videos():
 def test_generic_quality_options_shape():
     options = generic_quality_options()
     labels = [option.label for option in options]
-    assert labels == ["Best", "1080p", "720p", "480p", "MP3", "M4A"]
-    assert options[-2].audio_format == "mp3"
+    assert labels == ["Best", "1080p", "720p", "480p", "MP3", "M4A", "FLAC"]
+    assert options[-1].audio_format == "flac"
+    assert options[-2].audio_format == "m4a"
     assert all(option.format_spec for option in options)
 
 

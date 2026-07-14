@@ -115,6 +115,32 @@ class QualityPanel(QDialog):
         subtitle_row.addWidget(self.embed_subtitles)
         layout.addLayout(subtitle_row)
 
+        # Extras (all need FFmpeg, which the app fetches on demand).
+        extras_row = QHBoxLayout()
+        self.save_thumbnail = QCheckBox("Save thumbnail")
+        self.save_metadata = QCheckBox("Save metadata")
+        self.keep_chapters = QCheckBox("Chapters")
+        self.keep_chapters.setChecked(True)
+        self.keep_chapters.setToolTip("Keep the video's chapter marks in the file")
+        extras_row.addWidget(self.save_thumbnail)
+        extras_row.addWidget(self.save_metadata)
+        extras_row.addWidget(self.keep_chapters)
+        extras_row.addStretch(1)
+        layout.addLayout(extras_row)
+
+        sponsor_row = QHBoxLayout()
+        sponsor_row.addWidget(QLabel("SponsorBlock:"))
+        self.sponsorblock = QComboBox()
+        self.sponsorblock.addItem("Off", None)
+        self.sponsorblock.addItem("Mark segments", "mark")
+        self.sponsorblock.addItem("Remove sponsor segments", "remove")
+        self.sponsorblock.setToolTip(
+            "Uses the community SponsorBlock database to mark or cut "
+            "sponsor / self-promo / interaction reminders"
+        )
+        sponsor_row.addWidget(self.sponsorblock, 1)
+        layout.addLayout(sponsor_row)
+
         trim_row = QHBoxLayout()
         trim_row.addWidget(QLabel("Clip (optional):"))
         self.trim_start = QLineEdit()
@@ -156,6 +182,21 @@ class QualityPanel(QDialog):
         if config is None:
             return None
         return {**config, "embed": self.embed_subtitles.isChecked()}
+
+    def extras_config(self) -> dict[str, Any]:
+        """The post-processing extras chosen: thumbnail/metadata sidecars,
+        chapter marks, and SponsorBlock. Empty when nothing is selected."""
+        extras: dict[str, Any] = {}
+        if self.save_thumbnail.isChecked():
+            extras["save_thumbnail"] = True
+        if self.save_metadata.isChecked():
+            extras["save_metadata"] = True
+        if self.keep_chapters.isChecked():
+            extras["chapters"] = True
+        sponsor = self.sponsorblock.currentData()
+        if sponsor:
+            extras["sponsorblock"] = sponsor
+        return extras
 
     def trim_range(self) -> tuple[float, float] | None:
         start = parse_timestamp(self.trim_start.text())

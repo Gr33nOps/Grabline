@@ -248,6 +248,45 @@ def test_build_options_includes_cookies_only_when_asked(db: Database, dest: Path
     assert task._build_options(with_cookies=True)["cookiesfrombrowser"] == ("firefox",)
 
 
+def test_build_options_wires_the_post_processing_extras(db: Database, dest: Path):
+    """SponsorBlock, chapters, sidecars, a cookies file and custom ffmpeg args
+    all reach the yt-dlp option dict (the ones that need FFmpeg are gated on it)."""
+    cookies = dest / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n")
+    job = _smart_job(
+        db,
+        "https://youtu.be/x",
+        dest,
+        "v.mp4",
+        sponsorblock="remove",
+        chapters=True,
+        save_thumbnail=True,
+        save_metadata=True,
+        cookie_file=str(cookies),
+        ffmpeg_args=["-metadata", "comment=grabline"],
+    )
+    task = SmartDownload(db, job, ffmpeg_path="/usr/bin/ffmpeg")
+    opts = task._build_options()
+    keys = {pp["key"] for pp in opts["postprocessors"]}
+    assert "SponsorBlock" in keys and "ModifyChapters" in keys
+    assert opts["writethumbnail"] is True
+    assert opts["writeinfojson"] is True
+    assert opts["cookiefile"] == str(cookies)  # a cookies file wins over the browser
+    assert opts["postprocessor_args"] == {"default": ["-metadata", "comment=grabline"]}
+
+
+def test_build_options_skips_ffmpeg_extras_without_ffmpeg(db: Database, dest: Path):
+    """No FFmpeg means no SponsorBlock/chapters passes - but the sidecar writes,
+    which yt-dlp does itself, still happen."""
+    job = _smart_job(
+        db, "https://youtu.be/x", dest, "v.mp4", sponsorblock="mark", save_thumbnail=True
+    )
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    opts = task._build_options()
+    assert not any(pp["key"] == "SponsorBlock" for pp in opts["postprocessors"])
+    assert opts["writethumbnail"] is True
+
+
 def test_build_options_passes_runtime_only_on_escalation(db: Database, dest: Path):
     task = SmartDownload(db, _smart_job(db, "https://youtu.be/x", dest, "v.mp4"), ffmpeg_path=None)
     task._js_runtime = ("node", "/usr/bin/node")  # an existing Node, not Deno

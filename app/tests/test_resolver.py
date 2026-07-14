@@ -42,16 +42,23 @@ class FakeSmart(SmartEngine):
         match: bool,
         error: str | None = None,
         playlist: PlaylistInfo | None = None,
+        generic: MediaInfo | PlaylistInfo | None = None,
     ) -> None:
         super().__init__()
         self._match = match
         self._error = error
         self._playlist = playlist
+        self._generic = generic
 
     def matches(self, url: str) -> bool:
         return self._match
 
     def inspect(self, url: str, **kwargs) -> MediaInfo | PlaylistInfo:
+        if kwargs.get("force_generic"):
+            # Model the generic scraper: nothing found unless a fake was given.
+            if self._generic is None:
+                raise DownloadError("Unsupported URL")
+            return self._generic
         if self._error:
             raise DownloadError(self._error)
         return self._playlist if self._playlist is not None else FAKE_MEDIA
@@ -106,6 +113,29 @@ def test_html_page_is_refused_with_guidance(server: MediaServer):
     '123movies downloads HTML' bug); the message points at the sniffer."""
     url = server.add("/movie/watch", b"<!doctype html><video src=blob:x>", content_type="text/html")
     resolution = Resolver(FakeSmart(match=False)).resolve(url)
+    assert resolution.kind is None
+    assert resolution.message is not None and "web page" in resolution.message
+
+
+def test_generic_scrape_rescues_an_unsupported_page(server: MediaServer):
+    """A page no site extractor claims still downloads when the generic
+    extractor finds real media in it (the 'other media' path)."""
+    url = server.add(
+        "/embed/clip", b"<!doctype html><video src=https://x/v.mp4>", content_type="text/html"
+    )
+    resolution = Resolver(FakeSmart(match=False, generic=FAKE_MEDIA)).resolve(url)
+    assert resolution.kind is JobKind.SMART
+    assert resolution.media is FAKE_MEDIA
+
+
+def test_generic_scrape_with_nothing_usable_falls_back_to_refusal(server: MediaServer):
+    """When the generic extractor comes up empty, the user sees the plain
+    'this is a web page' guidance, not a generic-extractor error."""
+    url = server.add("/blog/post", b"<!doctype html><p>no media</p>", content_type="text/html")
+    empty = MediaInfo(
+        url=url, id="", title="post", uploader=None, duration=None, thumbnail_url=None, options=()
+    )
+    resolution = Resolver(FakeSmart(match=False, generic=empty)).resolve(url)
     assert resolution.kind is None
     assert resolution.message is not None and "web page" in resolution.message
 

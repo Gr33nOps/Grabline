@@ -165,6 +165,42 @@ class Resolver:
             variants = _hls_variants(url, proxy) if content_type in _HLS_CONTENT_TYPES else ()
             return Resolution(url=url, kind=JobKind.HLS, probe=result, variants=variants)
         if content_type in _HTML_CONTENT_TYPES:
+            # No site extractor claimed it and it's a web page, not a file. Before
+            # giving up, let yt-dlp's generic extractor scrape the page for media
+            # (og:video, <video>/<source>, JSON-LD, embedded m3u8) - this is how a
+            # video on a site yt-dlp doesn't specifically support still downloads.
+            scraped = self._try_generic(
+                url, use_session=use_session, session_browser=session_browser, proxy=proxy
+            )
+            if scraped is not None:
+                return scraped
             # Saving a streaming site's page as lecture.html helps nobody.
             return Resolution(url=url, kind=None, message=_HTML_MESSAGE)
         return Resolution(url=url, kind=JobKind.DIRECT, probe=result)
+
+    def _try_generic(
+        self,
+        url: str,
+        *,
+        use_session: bool,
+        session_browser: str,
+        proxy: str | None,
+    ) -> Resolution | None:
+        """Best-effort scrape of an unsupported page. None when nothing usable
+        turns up, so the caller falls back to its plain 'this is a web page'
+        message rather than surfacing a scary generic-extractor traceback."""
+        try:
+            inspected = self.smart.inspect(
+                url,
+                use_session=use_session,
+                session_browser=session_browser,
+                proxy=proxy,
+                force_generic=True,
+            )
+        except DownloadError:
+            return None
+        if isinstance(inspected, PlaylistInfo):
+            return Resolution(url=url, kind=JobKind.SMART, playlist=inspected)
+        if inspected.options:
+            return Resolution(url=url, kind=JobKind.SMART, media=inspected)
+        return None

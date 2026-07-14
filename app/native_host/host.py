@@ -28,7 +28,7 @@ _MAX_HEADER_LENGTH = 8192  # cookies can be long; cap so a bad value can't flood
 #: Labels the in-page quality panel (F1.3) may pin; anything else is dropped
 #: and the app shows its own panel instead.
 _QUALITY_LABELS = frozenset(
-    {"best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "mp3", "m4a"}
+    {"best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "mp3", "m4a", "flac"}
 )
 
 

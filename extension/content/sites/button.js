@@ -16,7 +16,7 @@
   const BUTTON_SIZE = 30;
   // The in-page quality panel (F1.3). Labels the app resolves at download
   // time (same trick as playlist batches) - instant, no metadata fetch.
-  const QUALITY_LABELS = ["Best", "1080p", "720p", "480p", "MP3", "M4A"];
+  const QUALITY_LABELS = ["Best", "1080p", "720p", "480p", "MP3", "M4A", "FLAC"];
 
   // Which corner of the hovered element the ⬇ sits in - user-settable in
   // the popup (some sites put their own controls exactly where we default).

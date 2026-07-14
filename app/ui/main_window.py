@@ -522,6 +522,7 @@ class MainWindow(QMainWindow):
                 option,
                 subtitles=quality_panel.subtitles_config(),
                 trim=quality_panel.trim_range(),
+                extras=quality_panel.extras_config(),
                 use_session=self.settings.use_browser_session,
                 session_browser=self.settings.session_browser,
             )

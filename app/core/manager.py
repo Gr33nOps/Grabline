@@ -340,6 +340,7 @@ class DownloadManager:
         dest_dir: str | Path | None = None,
         subtitles: Mapping[str, Any] | None = None,
         trim: tuple[float, float] | None = None,
+        extras: Mapping[str, Any] | None = None,
         use_session: bool = False,
         session_browser: str = "chrome",
     ) -> Job:
@@ -351,6 +352,7 @@ class DownloadManager:
             dest_dir=dest_dir,
             subtitles=subtitles,
             trim=trim,
+            extras=extras,
             use_session=use_session,
             session_browser=session_browser,
         )
@@ -364,6 +366,7 @@ class DownloadManager:
         dest_dir: str | Path | None = None,
         subtitles: Mapping[str, Any] | None = None,
         trim: tuple[float, float] | None = None,
+        extras: Mapping[str, Any] | None = None,
         use_session: bool = False,
         session_browser: str = "chrome",
     ) -> Job:
@@ -382,6 +385,8 @@ class DownloadManager:
             "use_session": use_session,
             "session_browser": session_browser,
         }
+        if extras:
+            options.update(extras)
         job = self.db.create_job(
             url,
             self._dest_for(filename, dest_dir),

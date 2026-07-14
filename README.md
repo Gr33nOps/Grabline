@@ -79,9 +79,15 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
   no open ports, no localhost server.
 
 **Video & audio done right** (1000+ sites, powered by yt-dlp, no terminal)
-- Quality picker 4K → 144p with size estimates, **MP3/M4A** with tags and
+- Quality picker 4K → 144p with size estimates, **MP3/M4A/FLAC** with tags and
   cover art, subtitles (manual or auto, .srt or embedded), clip trimming,
   and playlists with checkbox selection.
+- **SponsorBlock** (mark or cut sponsor/self-promo segments), keep chapter
+  marks, save the thumbnail and full metadata (.info.json) as sidecars, and a
+  cookies.txt field for login-gated or age-restricted videos.
+- Sites yt-dlp has no dedicated extractor for still work: a best-effort
+  page scrape finds embedded `<video>` / og:video / m3u8 media before
+  Grabline gives up.
 - HLS/DASH streams reassembled into a clean .mp4 by FFmpeg, with quality
   picking and automatic retry.
 
@@ -136,7 +142,7 @@ like IDM.
 
 | You do | Grabline does |
 |---|---|
-| Hover a video or thumbnail → click **⬇** | In-page panel: Best / 1080p / 720p / 480p / MP3 / M4A - downloading starts immediately, a progress pill tracks it in the corner |
+| Hover a video or thumbnail → click **⬇** | In-page panel: Best / 1080p / 720p / 480p / MP3 / M4A / FLAC - downloading starts immediately, a progress pill tracks it in the corner |
 | Right-click anything → *Download with Grabline* | Link, image, video, audio, or the page itself - routed to the best engine |
 | Right-click a page → *Download all images / all links* | Every image or file link on the page, in a checkable, filterable picker |
 | Click the toolbar icon | Everything the page's network traffic loaded - streams (.m3u8/.mpd) and media files, one click each |
@@ -211,7 +217,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(268 tests, including an 8-connection download killed with SIGKILL and
+(277 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.
