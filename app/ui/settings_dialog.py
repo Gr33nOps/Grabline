@@ -385,6 +385,46 @@ class SettingsDialog(QDialog):
         cloud_layout.addStretch(1)
         tabs.addTab(cloud_tab, "Cloud")
 
+        # ---- Security --------------------------------------------------------
+        security_form = self._add_form_tab(tabs, "Security")
+        sec_note = QLabel(
+            "These checks only ever warn - a flagged file is kept and stays "
+            "usable, and you decide. Antivirus false positives are common."
+        )
+        sec_note.setWordWrap(True)
+        security_form.addRow(sec_note)
+        self.scan_downloads_check = QCheckBox(
+            "Security-check every finished download (local virus scan + VirusTotal if set)"
+        )
+        self.scan_downloads_check.setChecked(settings.scan_downloads)
+        security_form.addRow("", self.scan_downloads_check)
+        self.enforce_https_check = QCheckBox("Warn before downloading over unencrypted HTTP")
+        self.enforce_https_check.setChecked(settings.enforce_https)
+        security_form.addRow("", self.enforce_https_check)
+        self.virustotal_edit = QLineEdit(settings.virustotal_key)
+        self.virustotal_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.virustotal_edit.setPlaceholderText("your VirusTotal API key (optional)")
+        self.virustotal_edit.setToolTip(
+            "Only the file's SHA-256 hash is sent to VirusTotal, never the file "
+            "itself. Get a free key at virustotal.com."
+        )
+        security_form.addRow("VirusTotal key:", self.virustotal_edit)
+        self.safebrowsing_edit = QLineEdit(settings.safebrowsing_key)
+        self.safebrowsing_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.safebrowsing_edit.setPlaceholderText("your Google Safe Browsing API key (optional)")
+        self.safebrowsing_edit.setToolTip(
+            "When set, a download's URL is checked against Google Safe Browsing "
+            "before it starts. The URL is sent to Google, so this is opt-in."
+        )
+        security_form.addRow("Safe Browsing key:", self.safebrowsing_edit)
+        tls_note = QLabel(
+            "TLS certificates are always validated - a download over HTTPS with "
+            "a bad certificate fails on its own."
+        )
+        tls_note.setWordWrap(True)
+        tls_note.setStyleSheet("color: gray;")
+        security_form.addRow(tls_note)
+
         # ---- Browser & YouTube ---------------------------------------------
         browser_tab = QWidget()
         browser_layout = QVBoxLayout(browser_tab)
@@ -577,6 +617,10 @@ class SettingsDialog(QDialog):
         self.settings.auto_open_folder = self.open_folder_check.isChecked()
         self.settings.auto_extract = self.extract_check.isChecked()
         self.settings.scan_before_extract = self.scan_check.isChecked()
+        self.settings.scan_downloads = self.scan_downloads_check.isChecked()
+        self.settings.enforce_https = self.enforce_https_check.isChecked()
+        self.settings.virustotal_key = self.virustotal_edit.text()
+        self.settings.safebrowsing_key = self.safebrowsing_edit.text()
         self.settings.archive_passwords = self.passwords_edit.toPlainText().splitlines()
         self.settings.favorite_folders = self.favorites_edit.toPlainText().splitlines()
         self.settings.rename_rules = _parse_rename_rules(self.rename_edit.toPlainText())

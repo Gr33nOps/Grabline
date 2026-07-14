@@ -9,6 +9,7 @@ from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from typing import cast
+from urllib.parse import urlsplit
 
 from PySide6.QtCore import (
     QItemSelection,
@@ -50,7 +51,19 @@ from PySide6.QtWidgets import (
 )
 
 from app import __version__
-from app.core import archive, crawler, dupes, listio, naming, rss, update, verify, virusscan
+from app.core import (
+    archive,
+    crawler,
+    dupes,
+    listio,
+    naming,
+    reputation,
+    rss,
+    security,
+    update,
+    verify,
+    virusscan,
+)
 from app.core.batch import expand_all, expand_pattern, extract_urls
 from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
@@ -75,6 +88,7 @@ from app.ui.link_panel import LinkPanel
 from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
 from app.ui.queue_dialog import QueueManagerDialog
+from app.ui.security_dialog import SecurityDialog
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.setup_dialog import SetupDialog
 from app.ui.sparkline import Sparkline
@@ -129,6 +143,16 @@ class _ResolveThread(QThread):
         self.resolved.emit(
             resolution, self._page_title, self._quality, self._fallbacks, self._headers
         )
+
+
+class _ScanFlagged(DownloadError):
+    """A pre-extract virus scan flagged the archive. Advisory, not fatal: the
+    caller asks the user whether to extract anyway."""
+
+    def __init__(self, scanner: str, detail: str) -> None:
+        super().__init__(f"{scanner} flagged this archive")
+        self.scanner = scanner
+        self.detail = detail
 
 
 class _FileOpThread(QThread):
@@ -236,6 +260,7 @@ class MainWindow(QMainWindow):
         self._resolve_threads: list[_ResolveThread] = []
         self._file_ops: set[_FileOpThread] = set()
         self._auto_extracted: set[int] = set()
+        self._scanned: set[int] = set()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(500)
@@ -510,6 +535,67 @@ class MainWindow(QMainWindow):
                 if answer is not QMessageBox.StandardButton.Yes:
                     self.statusBar().showMessage("Ready")
                     return
+
+        # Advisory URL security: warn on plain HTTP (instant) and, if a Safe
+        # Browsing key is set, check the URL off-thread. Both only warn - the
+        # user can always proceed.
+        scheme = urlsplit(url).scheme.lower()
+        if self.settings.enforce_https and scheme == "http" and not self._confirm_insecure(url):
+            self.statusBar().showMessage("Ready")
+            return
+        args = (page_title, quality, fallbacks, headers)
+        if self.settings.safebrowsing_key and scheme in ("http", "https"):
+            self._safebrowsing_then_resolve(url, args)
+            return
+        self._resolve_and_queue(url, *args)
+
+    def _confirm_insecure(self, url: str) -> bool:
+        answer = QMessageBox.warning(
+            self,
+            "Grabline",
+            f"{url}\n\nThis download is over unencrypted HTTP - it could be "
+            "tampered with in transit. Download anyway?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer is QMessageBox.StandardButton.Yes
+
+    def _safebrowsing_then_resolve(
+        self, url: str, args: tuple[str | None, str | None, tuple[str, ...], dict[str, str] | None]
+    ) -> None:
+        key = self.settings.safebrowsing_key
+        proxy = self.settings.proxy
+        self.statusBar().showMessage("Checking Safe Browsing …")
+
+        def done(result: object) -> None:
+            threat = str(result) if result else ""
+            if threat:
+                answer = QMessageBox.warning(
+                    self,
+                    "Grabline",
+                    f"{url}\n\nGoogle Safe Browsing flags this as {threat}. Download anyway?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if answer is not QMessageBox.StandardButton.Yes:
+                    self.statusBar().showMessage("Ready")
+                    return
+            self._resolve_and_queue(url, *args)
+
+        self._run_file_op(
+            lambda: reputation.safebrowsing_check(url, key, proxy=proxy),
+            done,
+            lambda _e: self._resolve_and_queue(url, *args),  # a failed check never blocks
+        )
+
+    def _resolve_and_queue(
+        self,
+        url: str,
+        page_title: str | None,
+        quality: str | None,
+        fallbacks: tuple[str, ...],
+        headers: dict[str, str] | None,
+    ) -> None:
         self.statusBar().showMessage(f"Analyzing {url} …")
         thread = _ResolveThread(
             self.resolver, url, self.settings, page_title, quality, fallbacks, headers
@@ -738,6 +824,8 @@ class MainWindow(QMainWindow):
         copy_hash.setEnabled(done)
         verify_hash = menu.addAction("Verify checksum…")
         verify_hash.setEnabled(done)
+        security_action = menu.addAction("Security check…")
+        security_action.setEnabled(done)
         inspect_action = menu.addAction("Inspect…")
         inspect_action.setEnabled(view.kind in (JobKind.DIRECT, JobKind.SMART, JobKind.HLS))
         extract_here = menu.addAction("Extract here")
@@ -802,6 +890,8 @@ class MainWindow(QMainWindow):
             self._copy_hash(file_path)
         elif chosen is verify_hash:
             self._verify_hash(file_path)
+        elif chosen is security_action:
+            SecurityDialog(file_path, view.url, self.settings, self).exec()
         elif chosen is inspect_action:
             self._inspect_job(view, file_path)
         elif chosen is extract_here:
@@ -865,7 +955,9 @@ class MainWindow(QMainWindow):
 
     def _verify_hash(self, path: Path) -> None:
         expected, accepted = QInputDialog.getText(
-            self, "Verify checksum", f"Paste the expected MD5/SHA-1/SHA-256 for {path.name}:"
+            self,
+            "Verify checksum",
+            f"Paste the expected MD5 / SHA-1 / SHA-256 / SHA-512 / CRC32 for {path.name}:",
         )
         if not (accepted and expected.strip()):
             return
@@ -884,24 +976,29 @@ class MainWindow(QMainWindow):
         path: Path,
         members: list[str] | None = None,
         passwords: tuple[str, ...] = (),
+        *,
+        scan: bool = True,
     ) -> Callable[[], object]:
         """Extraction work for a background thread: the optional virus scan
-        first, then the extraction itself."""
+        first, then the extraction itself. A detection does not block - it
+        raises _ScanFlagged so the caller can ask the user whether to go on."""
 
         def work() -> object:
-            if self.settings.scan_before_extract:
+            if scan and self.settings.scan_before_extract and virusscan.find_scanner() is not None:
                 result = virusscan.scan(path)
                 if not result.clean:
-                    detail = f" ({result.detail})" if result.detail else ""
-                    raise DownloadError(
-                        f"{result.scanner} flagged {path.name}{detail} - not extracting."
-                    )
+                    raise _ScanFlagged(result.scanner, result.detail)
             return archive.extract(path, passwords=passwords, members=members)
 
         return work
 
     def _extract(
-        self, path: Path, members: list[str] | None = None, new_password: str | None = None
+        self,
+        path: Path,
+        members: list[str] | None = None,
+        new_password: str | None = None,
+        *,
+        scan: bool = True,
     ) -> None:
         passwords = self.settings.archive_passwords
         if new_password:
@@ -918,6 +1015,19 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Extracted to {Path(str(result)).name}", 6000)
 
         def failed(error: object) -> None:
+            if isinstance(error, _ScanFlagged):
+                detail = f"\n\n{error.detail}" if error.detail else ""
+                answer = QMessageBox.warning(
+                    self,
+                    "Grabline",
+                    f"{error.scanner} flagged {path.name}.{detail}\n\n"
+                    "Antivirus false positives are common. Extract it anyway?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if answer is QMessageBox.StandardButton.Yes:
+                    self._extract(path, members, new_password, scan=False)
+                return
             if isinstance(error, archive.PasswordRequired):
                 password, accepted = QInputDialog.getText(
                     self,
@@ -930,7 +1040,7 @@ class MainWindow(QMainWindow):
                 return
             QMessageBox.warning(self, "Grabline", str(error))
 
-        self._run_file_op(self._archive_work(path, members, passwords), done, failed)
+        self._run_file_op(self._archive_work(path, members, passwords, scan=scan), done, failed)
 
     def _preview_archive(self, path: Path) -> None:
         self.statusBar().showMessage(f"Reading {path.name} …")
@@ -1026,6 +1136,40 @@ class MainWindow(QMainWindow):
 
     def _open_dashboard(self) -> None:
         DashboardDialog(self.manager, self).exec()
+
+    # ------------------------------------------------------------- security
+
+    def _advisory_scan(self, view: JobView, file_path: Path) -> None:
+        """Opt-in post-download check. Runs the report off-thread; only speaks
+        up if something is worth a look - never blocks, never deletes."""
+        if not file_path.exists():
+            return
+        key = self.settings.virustotal_key
+        proxy = self.settings.proxy
+
+        def work() -> object:
+            return security.check_file(file_path, url=view.url, virustotal_key=key, proxy=proxy)
+
+        def done(result: object) -> None:
+            report = cast("security.SecurityReport", result)
+            if report.level is security.Risk.WARNING:
+                # Only a real warning interrupts; the file is already saved.
+                answer = QMessageBox.warning(
+                    self,
+                    "Grabline - security",
+                    f"{view.display_name}\n\n"
+                    + "\n".join(f"• {f}" for f in report.findings)
+                    + "\n\nThe file is saved and usable - this is advice only. "
+                    "Open the full report?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if answer is QMessageBox.StandardButton.Yes:
+                    SecurityDialog(file_path, view.url, self.settings, self).exec()
+            elif report.level is security.Risk.CAUTION:
+                self.statusBar().showMessage(f"{view.display_name}: {report.findings[0]}", 8000)
+
+        self._run_file_op(work, done, lambda _e: None)  # a scan error is silent
 
     # ------------------------------------------------------------ inspector
 
@@ -1385,6 +1529,9 @@ class MainWindow(QMainWindow):
             if just_completed:
                 file_path = Path(view.dest_dir) / view.filename
                 self.job_completed.emit(view.display_name, str(file_path))
+                if self.settings.scan_downloads and view.id not in self._scanned:
+                    self._scanned.add(view.id)
+                    self._advisory_scan(view, file_path)
                 if self.settings.auto_open_folder:
                     QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
                 if (

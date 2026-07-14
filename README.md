@@ -175,12 +175,28 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - Scrolling **graphs**: download speed, torrent upload, whole-machine network,
   CPU, and disk throughput.
 
-**Nice touches**
-- URL patterns like `file[1-100].jpg`, drag-and-drop URLs, checksum
-  verification, video → GIF, a dark/light theme,
-  start-minimized-in-the-tray on login, and an update check.
+**Security** (advisory - it warns, it never blocks or deletes)
+- **Checksums** in MD5, SHA-1, SHA-256, SHA-512, and CRC32. Paste any of
+  them into *Verify checksum* and Grabline figures out which and confirms it;
+  *Security check* shows all five at once.
+- **Virus scanning** using a scanner already on the machine (Windows Defender
+  or ClamAV), plus optional **VirusTotal** (opt-in, your own API key, and only
+  the file's hash is sent - never its contents).
+- **HTTPS enforcement** (warn before an unencrypted-HTTP download) and
+  optional **Safe Browsing** URL checks (opt-in, your own Google key).
+  **TLS certificates are always validated** - a bad-cert HTTPS download fails
+  on its own.
+- Executables and installers get an extra heads-up. Everything here is a
+  *heads-up*: a flagged file stays saved and usable, and **you decide** -
+  because antivirus false positives are common and shouldn't cost you a file.
 
-**Honest by design**: no DRM circumvention, no login bypass, no telemetry.
+**Nice touches**
+- URL patterns like `file[1-100].jpg`, drag-and-drop URLs, video → GIF,
+  a dark/light theme, start-minimized-in-the-tray on login, and an update
+  check.
+
+**Honest by design**: no DRM circumvention, no login bypass, no telemetry
+(the VirusTotal/Safe Browsing checks are opt-in and use *your* API keys).
 
 ---
 
@@ -301,7 +317,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(386 tests, including an 8-connection download killed with SIGKILL and
+(401 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.

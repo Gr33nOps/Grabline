@@ -512,3 +512,24 @@ def test_time_graph_pushes_samples(db: Database):
     for value in range(5):
         graph.push([float(value)])
     assert list(graph.series[0].samples) == [0.0, 1.0, 2.0, 3.0, 4.0]
+
+
+def test_security_dialog_render(db: Database):
+    from app.core.reputation import VirusTotalResult
+    from app.core.security import Risk, SecurityReport
+    from app.ui.security_dialog import _render
+
+    _qapp()
+    report = SecurityReport(
+        path="/tmp/setup.exe",
+        level=Risk.WARNING,
+        findings=["This is an executable or installer.", "VirusTotal: 5 of 70 engines flagged."],
+        checksums={"md5": "abc", "sha256": "def"},
+        virustotal=VirusTotalResult(malicious=5, suspicious=0, total=70, known=True),
+    )
+    text = _render(report)
+    assert "Warning" in text
+    assert "executable" in text.lower()
+    assert "VirusTotal" in text
+    assert "MD5" in text and "SHA256" in text
+    assert Risk.WARNING.label == "Warning"

@@ -358,6 +358,49 @@ class Settings:
     def scan_before_extract(self, value: bool) -> None:
         self._set_bool("scan_before_extract", value)
 
+    # ------------------------------------------------------------ security
+
+    @property
+    def scan_downloads(self) -> bool:
+        """Run an advisory security check on each finished download (a local
+        virus scan and, if configured, VirusTotal). Never blocks - it only
+        warns."""
+        return self._get_bool("scan_downloads", False)
+
+    @scan_downloads.setter
+    def scan_downloads(self, value: bool) -> None:
+        self._set_bool("scan_downloads", value)
+
+    @property
+    def enforce_https(self) -> bool:
+        """Warn before starting a download over unencrypted HTTP (you can
+        still proceed)."""
+        return self._get_bool("enforce_https", False)
+
+    @enforce_https.setter
+    def enforce_https(self, value: bool) -> None:
+        self._set_bool("enforce_https", value)
+
+    @property
+    def virustotal_key(self) -> str:
+        """The user's own VirusTotal API key. Empty = the VirusTotal check is
+        off. Only the file's hash is ever sent, never its contents."""
+        return self._db.get_setting("virustotal_key") or ""
+
+    @virustotal_key.setter
+    def virustotal_key(self, value: str) -> None:
+        self._db.set_setting("virustotal_key", value.strip())
+
+    @property
+    def safebrowsing_key(self) -> str:
+        """The user's own Google Safe Browsing API key. Empty = off. When set,
+        the URL is sent to Google before download - so this is opt-in."""
+        return self._db.get_setting("safebrowsing_key") or ""
+
+    @safebrowsing_key.setter
+    def safebrowsing_key(self, value: str) -> None:
+        self._db.set_setting("safebrowsing_key", value.strip())
+
     # ------------------------------------------------------------ torrents
 
     @property
