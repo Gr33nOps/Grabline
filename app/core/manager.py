@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from app.core import categories, naming
+from app.core import categories, connectivity, naming, power
 from app.core.credentials import CredentialStore
 from app.core.downloader import SegmentedDownload
 from app.core.errors import DownloadError
@@ -46,6 +46,7 @@ class DownloadTask(Protocol):
 
 _RETRY_BASE_SECONDS = 5.0
 _RETRY_CAP_SECONDS = 300.0
+_ONLINE_PROBE_SECONDS = 10.0
 
 #: Failures worth an automatic retry are everything EXCEPT these permanent
 #: ones (DRM, private, 404s, disk-full ...). Unknown errors are retried, which
@@ -152,6 +153,9 @@ class DownloadManager:
         self._retry_at: dict[int, float] = {}
         # Jobs paused because the download window closed; resumed when it opens.
         self._paused_by_schedule: set[int] = set()
+        # wait-for-network probe state (assume online until proven otherwise).
+        self._net_checked = 0.0
+        self._net_ok = True
         self._cond = threading.Condition()
         self._active: dict[int, DownloadTask] = {}
         self._threads: dict[int, threading.Thread] = {}
@@ -203,10 +207,35 @@ class DownloadManager:
     # -------------------------------------------------- timed download window
 
     def downloads_allowed_now(self) -> bool:
-        """False while a scheduled download window is closed."""
-        if not self.settings.download_schedule_enabled:
-            return True
-        return _in_window(datetime.now(), self.settings.download_start, self.settings.download_stop)
+        """False while any global restriction is closed: the timed window,
+        the allowed weekdays, battery mode, or a dead internet connection."""
+        now = datetime.now()
+        days = self.settings.download_days
+        if len(days) < 7 and now.weekday() not in days:
+            return False
+        if self.settings.pause_on_battery and power.on_battery():
+            return False
+        if self.settings.download_schedule_enabled and not _in_window(
+            now, self.settings.download_start, self.settings.download_stop
+        ):
+            return False
+        return not (self.settings.wait_for_network and not self._online())
+
+    def _online(self) -> bool:
+        """Throttled connectivity probe (wait-for-network only). When the
+        internet comes back, failed jobs retry immediately instead of
+        sitting out the rest of their backoff."""
+        now = time.monotonic()
+        if now - self._net_checked < _ONLINE_PROBE_SECONDS:
+            return self._net_ok
+        self._net_checked = now
+        was_online = self._net_ok
+        self._net_ok = connectivity.is_online()
+        if self._net_ok and not was_online:
+            for job_id in list(self._retry_at):
+                self._retry_at[job_id] = 0.0  # due now
+            log.info("internet is back - retrying failed downloads now")
+        return self._net_ok
 
     def _apply_download_schedule(self) -> None:
         """Pause active downloads when the window closes; resume them (and let
@@ -306,6 +335,20 @@ class DownloadManager:
     def set_job_queue(self, job_id: int, queue_id: int | None) -> None:
         """Move a download into a named queue / group (None = default)."""
         self.db.set_job_queue(job_id, queue_id)
+        self._kick()
+
+    def set_job_start_at(self, job_id: int, when: datetime | None) -> None:
+        """Download later: hold this job until ``when`` (None starts it
+        normally again)."""
+        job = self.db.get_job(job_id)
+        if job is None:
+            return
+        options = dict(job.options)
+        if when is not None:
+            options["start_at"] = when.isoformat(timespec="minutes")
+        else:
+            options.pop("start_at", None)
+        self.db.update_job_options(job_id, options)
         self._kick()
 
     def set_job_after(self, job_id: int, after_job_id: int | None) -> None:
@@ -833,6 +876,12 @@ class DownloadManager:
         unfinished_in_queue: Mapping[int | None, int],
         now: datetime,
     ) -> bool:
+        start_at = job.options.get("start_at")
+        if start_at:
+            # Download later: hold until the chosen moment (bad values ignore).
+            with contextlib.suppress(ValueError, TypeError):
+                if now < datetime.fromisoformat(str(start_at)):
+                    return False
         after = int(job.options.get("after_job") or 0)
         if after:
             dependency = by_id.get(after)

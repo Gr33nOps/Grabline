@@ -37,7 +37,7 @@ for h2_pkg in ("h2", "hpack", "hyperframe"):
     hidden += collect_submodules(h2_pkg)
 # libtorrent is imported lazily by the torrent engine; collect its binary
 # extension explicitly or frozen builds lose the torrent client.
-hidden += ["libtorrent"]
+hidden += ["libtorrent", "psutil"]
 # The cloud engine imports paramiko/boto3/keyring lazily; collect them (and
 # boto3's bundled service data) so SFTP/S3/credential storage work when frozen.
 for cloud_pkg in ("paramiko", "boto3", "botocore", "keyring", "keyring.backends"):

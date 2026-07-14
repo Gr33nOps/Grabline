@@ -199,6 +199,26 @@ class SettingsDialog(QDialog):
         retry_row.addWidget(self.retry_spin)
         retry_row.addStretch(1)
         dl_form.addRow("Reconnect:", retry_row)
+        days_row = QHBoxLayout()
+        self.day_checks: list[QCheckBox] = []
+        enabled_days = set(settings.download_days)
+        for index, label in enumerate(("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")):
+            check = QCheckBox(label)
+            check.setChecked(index in enabled_days)
+            self.day_checks.append(check)
+            days_row.addWidget(check)
+        days_row.addStretch(1)
+        dl_form.addRow("Days:", days_row)
+        self.battery_check = QCheckBox("Pause downloads while on battery")
+        self.battery_check.setChecked(settings.pause_on_battery)
+        dl_form.addRow("", self.battery_check)
+        self.network_check = QCheckBox("Wait for internet - resume the moment it reconnects")
+        self.network_check.setChecked(settings.wait_for_network)
+        self.network_check.setToolTip(
+            "Failed downloads always retry with backoff; this also holds new "
+            "starts while offline and retries immediately on reconnect."
+        )
+        dl_form.addRow("", self.network_check)
 
         # ---- When finished -------------------------------------------------
         finish_form = self._add_form_tab(tabs, "When finished")
@@ -236,13 +256,33 @@ class SettingsDialog(QDialog):
             ("Do nothing", "nothing"),
             ("Quit Grabline", "quit"),
             ("Sleep the computer", "sleep"),
+            ("Hibernate the computer", "hibernate"),
             ("Shut down the computer", "shutdown"),
+            ("Lock the computer", "lock"),
         ):
             self.after_combo.addItem(label, value)
         self.after_combo.setCurrentIndex(
             max(0, self.after_combo.findData(settings.after_queue_action))
         )
         finish_form.addRow("When the queue empties:", self.after_combo)
+        sound_row = QHBoxLayout()
+        self.sound_check = QCheckBox("Play a sound")
+        self.sound_check.setChecked(settings.sound_on_complete)
+        self.sound_file_edit = QLineEdit(settings.sound_file)
+        self.sound_file_edit.setPlaceholderText("blank = system sound")
+        sound_browse = QPushButton("Browse…")
+        sound_browse.clicked.connect(self._browse_sound)
+        sound_row.addWidget(self.sound_check)
+        sound_row.addWidget(self.sound_file_edit, 1)
+        sound_row.addWidget(sound_browse)
+        finish_form.addRow("On completion:", sound_row)
+        self.script_edit = QLineEdit(settings.script_on_complete)
+        self.script_edit.setPlaceholderText("e.g. /usr/bin/my-script --scan")
+        self.script_edit.setToolTip(
+            "Run after every finished download; the file's full path is "
+            "appended as the last argument. Runs directly, never via a shell."
+        )
+        finish_form.addRow("Run command:", self.script_edit)
 
         # ---- Torrents --------------------------------------------------------
         torrent_form = self._add_form_tab(tabs, "Torrents")
@@ -423,6 +463,13 @@ class SettingsDialog(QDialog):
         tabs.addTab(page, title)
         return form
 
+    def _browse_sound(self) -> None:
+        chosen, _ = QFileDialog.getOpenFileName(
+            self, "Completion sound", "", "Sounds (*.wav *.oga *.ogg *.aiff *.mp3);;All files (*)"
+        )
+        if chosen:
+            self.sound_file_edit.setText(chosen)
+
     def _manage_cloud_accounts(self) -> None:
         from app.core.credentials import CredentialStore
         from app.ui.cloud_dialog import CloudAccountsDialog
@@ -516,6 +563,14 @@ class SettingsDialog(QDialog):
         self.settings.check_updates = self.updates_check.isChecked()
         self.settings.auto_retry = self.retry_check.isChecked()
         self.settings.auto_retry_max = self.retry_spin.value()
+        self.settings.download_days = [
+            index for index, check in enumerate(self.day_checks) if check.isChecked()
+        ]
+        self.settings.pause_on_battery = self.battery_check.isChecked()
+        self.settings.wait_for_network = self.network_check.isChecked()
+        self.settings.sound_on_complete = self.sound_check.isChecked()
+        self.settings.sound_file = self.sound_file_edit.text()
+        self.settings.script_on_complete = self.script_edit.text()
         self.settings.theme = self.theme_combo.currentData()
         self.settings.proxy = self.proxy_edit.text().strip() or None
         self.settings.notify_on_complete = self.notify_check.isChecked()

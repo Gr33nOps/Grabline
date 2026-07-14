@@ -9,7 +9,7 @@ import threading
 from PySide6.QtCore import QBuffer, QIODevice, QTimer
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from app.core import instance, launcher, paths, power
+from app.core import alerts, instance, launcher, paths, power, scripts
 from app.core.ffmpeg import find_ffmpeg
 from app.core.manager import DownloadManager
 from app.core.settings import Settings
@@ -162,7 +162,7 @@ def main() -> int:
     if tray is not None:
         tray.messageClicked.connect(on_message_clicked)
 
-    def on_job_completed(name: str) -> None:
+    def on_job_completed(name: str, file_path: str) -> None:
         if tray is not None and settings.notify_on_complete:
             tray.showMessage(
                 "Download complete",
@@ -170,6 +170,10 @@ def main() -> int:
                 QSystemTrayIcon.MessageIcon.Information,
                 4000,
             )
+        if settings.sound_on_complete:
+            alerts.play_complete_sound(settings.sound_file)
+        if settings.script_on_complete:
+            scripts.run_script(settings.script_on_complete, file_path)
 
     def on_queue_drained() -> None:
         action = settings.after_queue_action
@@ -182,6 +186,10 @@ def main() -> int:
             power.sleep()
         elif action == "shutdown":
             power.shutdown()
+        elif action == "hibernate":
+            power.hibernate()
+        elif action == "lock":
+            power.lock()
 
     window.job_completed.connect(on_job_completed)
     window.queue_drained.connect(on_queue_drained)

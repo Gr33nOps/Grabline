@@ -74,8 +74,14 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
   downloads of that type join it automatically.
 - Reorder and prioritize, pause/resume/cancel, dashboard tabs
   (Active / Completed / Failed), search, a live speed graph.
-- **Timed schedule**: only download between the hours you choose (run it
-  overnight), and *notify / quit / sleep / shut down* when the queue finishes.
+- **Scheduler**: only download between the hours you choose, on the days you
+  choose (weekend-only works), *Start at…* a specific date and time per
+  download, and a nightly full-speed window. **Battery mode** pauses on
+  battery and resumes on AC; **wait-for-internet** resumes the instant the
+  connection returns.
+- **When it finishes**: notification, a completion sound, run your own
+  command (the file's path is passed to it), and when the queue empties -
+  quit / sleep / **hibernate** / shut down / **lock** the computer.
 - Auto-sort into Video / Music / Images / Documents / Archives / Programs /
   Games / Torrents.
 - Import/export your download list; back it up or move it to another machine.
@@ -277,7 +283,7 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(360 tests, including an 8-connection download killed with SIGKILL and
+(369 tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
 anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
 fetched only against pinned checksums.

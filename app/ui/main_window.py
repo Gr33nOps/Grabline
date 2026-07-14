@@ -148,9 +148,9 @@ class _FileOpThread(QThread):
 
 
 class MainWindow(QMainWindow):
-    #: Emitted when a download finishes (display name) and when the last
-    #: active/queued download drains, so __main__ can toast and act.
-    job_completed = Signal(str)
+    #: Emitted when a download finishes (display name, file path) and when the
+    #: last active/queued download drains, so __main__ can toast and act.
+    job_completed = Signal(str, str)
     queue_drained = Signal()
 
     def __init__(self, manager: DownloadManager, settings: Settings) -> None:
@@ -755,6 +755,8 @@ class MainWindow(QMainWindow):
             queue_actions[queue_action] = named_queue.id
         start_after = menu.addAction("Start after…")
         start_after.setEnabled(view.status in (JobStatus.QUEUED, JobStatus.PAUSED))
+        start_at = menu.addAction("Start at…")
+        start_at.setEnabled(view.status in (JobStatus.QUEUED, JobStatus.PAUSED))
 
         pending = view.status in (JobStatus.QUEUED, JobStatus.PAUSED)
         queue_menu = menu.addMenu("Move in queue")
@@ -804,6 +806,8 @@ class MainWindow(QMainWindow):
             self.manager.set_job_queue(view.id, queue_actions[chosen])
         elif chosen is start_after:
             self._pick_start_after(view)
+        elif chosen is start_at:
+            self._pick_start_at(view)
         elif chosen is move_top:
             self.manager.move_to_top(view.id)
         elif chosen is move_up:
@@ -1034,6 +1038,43 @@ class MainWindow(QMainWindow):
             return
         index = labels.index(choice)
         self.manager.set_job_after(view.id, None if index == 0 else others[index - 1].id)
+
+    def _pick_start_at(self, view: JobView) -> None:
+        """Download later: hold this download until a chosen date and time."""
+        from PySide6.QtCore import QDateTime
+        from PySide6.QtWidgets import QDateTimeEdit
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Start at - {view.display_name}")
+        form = QFormLayout(dialog)
+        when_edit = QDateTimeEdit(QDateTime.currentDateTime().addSecs(3600))
+        when_edit.setDisplayFormat("yyyy-MM-dd HH:mm")
+        when_edit.setCalendarPopup(True)
+        form.addRow("Start no earlier than:", when_edit)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Reset
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Reset).setText("Start normally")
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        buttons.button(QDialogButtonBox.StandardButton.Reset).clicked.connect(
+            lambda: dialog.done(2)
+        )
+        form.addRow(buttons)
+        result = dialog.exec()
+        if result == QDialog.DialogCode.Accepted:
+            from datetime import datetime as _datetime
+
+            when = cast("_datetime", when_edit.dateTime().toPython())
+            self.manager.set_job_start_at(view.id, when)
+            self.statusBar().showMessage(
+                f"{view.display_name} starts {when_edit.dateTime().toString('yyyy-MM-dd HH:mm')}",
+                6000,
+            )
+        elif result == 2:
+            self.manager.set_job_start_at(view.id, None)
 
     # ---------------------------------------------------------------- cloud
 
@@ -1302,10 +1343,10 @@ class MainWindow(QMainWindow):
                 and view.status is JobStatus.COMPLETED
             )
             if just_completed:
-                self.job_completed.emit(view.display_name)
+                file_path = Path(view.dest_dir) / view.filename
+                self.job_completed.emit(view.display_name, str(file_path))
                 if self.settings.auto_open_folder:
                     QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
-                file_path = Path(view.dest_dir) / view.filename
                 if (
                     self.settings.auto_extract
                     and view.id not in self._auto_extracted

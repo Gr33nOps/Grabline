@@ -12,6 +12,8 @@ from app.db.database import Database
 #: Browsers yt-dlp can read a cookie store from (F0.8).
 SESSION_BROWSERS = ("chrome", "firefox", "edge", "brave", "chromium", "opera", "safari")
 
+_AFTER_QUEUE_ACTIONS = ("nothing", "quit", "sleep", "shutdown", "hibernate", "lock")
+
 
 class Settings:
     def __init__(self, db: Database) -> None:
@@ -482,15 +484,80 @@ class Settings:
     @property
     def after_queue_action(self) -> str:
         """What to do once every download finishes: nothing / quit / sleep /
-        shutdown."""
+        shutdown / hibernate / lock."""
         raw = self._db.get_setting("after_queue_action")
-        return raw if raw in ("nothing", "quit", "sleep", "shutdown") else "nothing"
+        return raw if raw in _AFTER_QUEUE_ACTIONS else "nothing"
 
     @after_queue_action.setter
     def after_queue_action(self, value: str) -> None:
-        if value not in ("nothing", "quit", "sleep", "shutdown"):
+        if value not in _AFTER_QUEUE_ACTIONS:
             raise ValueError(f"unknown after-queue action: {value}")
         self._db.set_setting("after_queue_action", value)
+
+    @property
+    def download_days(self) -> tuple[int, ...]:
+        """Weekdays downloads may run (0=Mon .. 6=Sun). All days when unset;
+        an empty selection also means all days - you can't accidentally
+        configure 'never download'."""
+        raw = self._db.get_setting("download_days")
+        if not raw:
+            return (0, 1, 2, 3, 4, 5, 6)
+        try:
+            values = json.loads(raw)
+        except ValueError:
+            return (0, 1, 2, 3, 4, 5, 6)
+        days = tuple(sorted({int(v) for v in values if 0 <= int(v) <= 6}))
+        return days or (0, 1, 2, 3, 4, 5, 6)
+
+    @download_days.setter
+    def download_days(self, value: Sequence[int]) -> None:
+        self._db.set_setting("download_days", json.dumps(sorted({int(v) for v in value})))
+
+    @property
+    def pause_on_battery(self) -> bool:
+        """Battery mode: hold downloads while on battery, resume on AC."""
+        return self._get_bool("pause_on_battery", False)
+
+    @pause_on_battery.setter
+    def pause_on_battery(self, value: bool) -> None:
+        self._set_bool("pause_on_battery", value)
+
+    @property
+    def wait_for_network(self) -> bool:
+        """Hold new downloads while the internet is unreachable and retry
+        failed ones the moment it returns (instead of waiting out backoff)."""
+        return self._get_bool("wait_for_network", False)
+
+    @wait_for_network.setter
+    def wait_for_network(self, value: bool) -> None:
+        self._set_bool("wait_for_network", value)
+
+    @property
+    def sound_on_complete(self) -> bool:
+        return self._get_bool("sound_on_complete", False)
+
+    @sound_on_complete.setter
+    def sound_on_complete(self, value: bool) -> None:
+        self._set_bool("sound_on_complete", value)
+
+    @property
+    def sound_file(self) -> str:
+        """A custom completion sound (empty = the platform default sound)."""
+        return self._db.get_setting("sound_file") or ""
+
+    @sound_file.setter
+    def sound_file(self, value: str) -> None:
+        self._db.set_setting("sound_file", value.strip())
+
+    @property
+    def script_on_complete(self) -> str:
+        """A command run after each finished download, with the file path
+        appended as the last argument (empty = off)."""
+        return self._db.get_setting("script_on_complete") or ""
+
+    @script_on_complete.setter
+    def script_on_complete(self, value: str) -> None:
+        self._db.set_setting("script_on_complete", value.strip())
 
     @property
     def playlist_batch_cap(self) -> int:
