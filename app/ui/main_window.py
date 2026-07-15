@@ -24,6 +24,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
+    QColor,
     QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
@@ -35,17 +36,19 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
+    QHBoxLayout,
     QInputDialog,
+    QLabel,
     QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
     QPlainTextEdit,
-    QProgressBar,
-    QTabBar,
+    QPushButton,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
-    QToolBar,
     QVBoxLayout,
     QWidget,
 )
@@ -74,7 +77,7 @@ from app.core.settings import Settings
 from app.engines import cloud as cloud_engine
 from app.engines import torrent as torrent_engine
 from app.engines.smart import option_for_label
-from app.ui import theme
+from app.ui import components, design, icons, motion, theme
 from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.cloud_dialog import CloudFolderDialog, prompt_cloud_url
@@ -91,19 +94,20 @@ from app.ui.queue_dialog import QueueManagerDialog
 from app.ui.security_dialog import SecurityDialog
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.setup_dialog import SetupDialog
-from app.ui.sparkline import Sparkline
 from app.ui.torrent_dialog import AddTorrentDialog, CreateTorrentDialog
 
-_COLUMNS = ("Name", "Size", "Progress", "Speed", "Status")
+#: Table columns: an icon, name, size, progress, speed, ETA, status.
+_COLUMNS = ("", "Name", "Size", "Progress", "Speed", "ETA", "Status")
+_COL_ICON, _COL_NAME, _COL_SIZE, _COL_PROGRESS, _COL_SPEED, _COL_ETA, _COL_STATUS = range(7)
 _VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
 
-#: Dashboard tabs: label -> the statuses it shows (empty tuple = everything).
-_TABS: tuple[tuple[str, tuple[JobStatus, ...]], ...] = (
-    ("All", ()),
-    ("Active", (JobStatus.DOWNLOADING, JobStatus.QUEUED, JobStatus.PAUSED)),
-    ("Completed", (JobStatus.COMPLETED,)),
-    ("Failed", (JobStatus.FAILED, JobStatus.CANCELLED)),
-)
+#: Filter key -> the statuses it shows (empty tuple = everything).
+_FILTER_STATUSES: dict[str, tuple[JobStatus, ...]] = {
+    "all": (),
+    "active": (JobStatus.DOWNLOADING, JobStatus.QUEUED, JobStatus.PAUSED),
+    "completed": (JobStatus.COMPLETED,),
+    "failed": (JobStatus.FAILED, JobStatus.CANCELLED),
+}
 
 
 class _ResolveThread(QThread):
@@ -186,71 +190,37 @@ class MainWindow(QMainWindow):
         self.resolver = Resolver()
         self.close_to_tray = False
         self.setWindowTitle("Grabline")
-        self.resize(880, 440)
+        self.resize(1040, 600)
+        self.setMinimumSize(760, 420)
         self.setAcceptDrops(True)  # drop URLs (or text with URLs) onto the window
 
-        self._build_menu()
+        # State that per-row rendering + the theme toggle rely on.
+        self._retintable: list[components.IconButton | components.SidebarButton] = []
+        self._nav: dict[str, components.SidebarButton] = {}
+        self._progress_bars: dict[int, motion.SmoothProgressBar] = {}
+        self._pills: dict[int, components.StatusPill] = {}
+        self._speed_smoothers: dict[int, motion.SpeedSmoother] = {}
 
-        toolbar = QToolBar("Main", self)
-        toolbar.setMovable(False)
-        self.addToolBar(toolbar)
-        for label, handler in (
-            ("Add URL", self._add_url),
-            ("Import Links", self._import_links),
-            ("Pause", self._pause_selected),
-            ("Resume", self._resume_selected),
-            ("Cancel", self._cancel_selected),
-            ("Remove", self._remove_selected),
-            ("Open Folder", self._open_folder),
-            ("Settings", self._open_settings),
-        ):
-            action = QAction(label, self)
-            action.triggered.connect(handler)
-            toolbar.addAction(action)
-        self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Search downloads…")
-        self.search_box.setClearButtonEnabled(True)
-        self.search_box.setMaximumWidth(220)
-        self.search_box.textChanged.connect(lambda _text: self._apply_filter())
-        toolbar.addWidget(self.search_box)
-        self.speed_line = Sparkline()
-        toolbar.addWidget(self.speed_line)
-
-        self.tabs = QTabBar()
-        for label, _statuses in _TABS:
-            self.tabs.addTab(label)
-        self.tabs.currentChanged.connect(lambda _i: self._apply_filter())
-
-        self.table = QTableWidget(0, len(_COLUMNS), self)
-        self.table.setHorizontalHeaderLabels(_COLUMNS)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        # Extended: Ctrl/Shift-click to pick many rows and pause/remove them
-        # together (clean up finished downloads in one go).
-        self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.table.customContextMenuRequested.connect(self._show_row_menu)
-        self.table.itemSelectionChanged.connect(self._on_selection_changed)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setColumnWidth(0, 320)
-        self.table.setColumnWidth(1, 100)
-        self.table.setColumnWidth(2, 160)
-        self.table.setColumnWidth(3, 110)
-        self.table.setColumnWidth(4, 120)
-
-        container = QWidget()
-        container_layout = QVBoxLayout(container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.setSpacing(0)
-        container_layout.addWidget(self.tabs)
-        container_layout.addWidget(self.table)
-        self.setCentralWidget(container)
+        # Shell: a 48px icon rail on the left, the stacked content on the right.
+        self._pages = QStackedWidget()
+        self._pages.addWidget(self._build_downloads_page())
+        shell = QWidget()
+        row = QHBoxLayout(shell)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        row.addWidget(self._build_sidebar())
+        row.addWidget(self._pages, 1)
+        self.setCentralWidget(shell)
         self.statusBar().showMessage("Ready")
+        self._status_info = QLabel("")
+        self._status_info.setStyleSheet(
+            f"color: {theme.current().text3}; font-size: {design.FONT['small']}pt;"
+        )
+        self.statusBar().addPermanentWidget(self._status_info)
 
         self._row_job_ids: list[int] = []
         self._last_views: dict[int, JobView] = {}
         self._rates: dict[int, tuple[float, int]] = {}
-        self._speed_ema: dict[int, float] = {}
         self._selected_ids: set[int] = set()
         self.clipboard_suppressor: Callable[[str], None] | None = None
         self._prev_status: dict[int, JobStatus] = {}
@@ -276,62 +246,254 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(15_000, self._poll_rss)
         self.refresh()
 
-    def _build_menu(self) -> None:
-        bar = self.menuBar()
-        file_menu = bar.addMenu("&File")
-        for label, handler in (
-            ("Add URL…", self._add_url),
+    # ------------------------------------------------------------- shell
+
+    def _build_sidebar(self) -> QWidget:
+        p = theme.current()
+        bar = QFrame()
+        bar.setFixedWidth(48)
+        bar.setStyleSheet(f"background: {p.sidebar}; border-right: 1px solid {p.border};")
+        lay = QVBoxLayout(bar)
+        lay.setContentsMargins(5, 8, 5, 8)
+        lay.setSpacing(2)
+        lay.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        logo = components.app_logo(28)
+        lay.addWidget(logo, 0, Qt.AlignmentFlag.AlignHCenter)
+        lay.addSpacing(10)
+
+        nav = (
+            ("downloads", "download", "Downloads", lambda: self._switch_view("downloads")),
+            ("dashboard", "dashboard", "Dashboard", lambda: self._switch_view("dashboard")),
+            ("queue", "queue", "Queue Manager", lambda: self._switch_view("queue")),
+            ("settings", "settings", "Settings", lambda: self._switch_view("settings")),
+        )
+        for key, icon_name, tip, handler in nav:
+            btn = components.SidebarButton(icon_name, tip)
+            btn.clicked.connect(handler)
+            self._nav[key] = btn
+            self._retintable.append(btn)
+            lay.addWidget(btn, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._nav["downloads"].set_active(True)
+
+        lay.addStretch(1)
+
+        more = components.SidebarButton("queue", "More…")
+        more.setToolTip("More actions")
+        more.setIcon(icons.svg_icon("cancel", p.text3))  # placeholder glyph; menu below
+        more.clicked.connect(lambda: self._overflow_menu().popup(more.mapToGlobal(QPoint(38, 0))))
+        self._more_btn = more
+        self._retintable.append(more)
+        lay.addWidget(more, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        self._theme_btn = components.SidebarButton(
+            "sun" if p.dark else "moon", "Toggle light / dark"
+        )
+        self._theme_btn.clicked.connect(self._toggle_theme)
+        lay.addWidget(self._theme_btn, 0, Qt.AlignmentFlag.AlignHCenter)
+        return bar
+
+    def _overflow_menu(self) -> QMenu:
+        menu = QMenu(self)
+        actions: tuple[tuple[str, object], ...] = (
             ("Add Torrent File…", self._add_torrent_file),
             ("Add Cloud Download…", self._add_cloud),
-            ("Import Links…", self._import_links),
             ("Grab Site…", self._grab_site),
-        ):
-            action = QAction(label, self)
-            action.triggered.connect(handler)
-            file_menu.addAction(action)
-        file_menu.addSeparator()
-        for label, handler in (
+            ("__sep__", None),
             ("Create Torrent…", self._create_torrent),
             ("Search Torrents…", self._search_torrents),
-        ):
-            action = QAction(label, self)
-            action.triggered.connect(handler)
-            file_menu.addAction(action)
-        file_menu.addSeparator()
-        for label, handler in (
+            ("Inspect URL…", self._inspect_url_prompt),
+            ("Find Duplicate Files…", self._find_duplicates),
+            ("__sep__", None),
+            ("Import Links…", self._import_links),
             ("Import List…", self._import_list),
             ("Export List…", self._export_list),
+            ("Clear Completed", self._clear_completed),
+            ("__sep__", None),
+            ("Browser Setup…", self.open_setup),
+            ("Check for Updates…", lambda: self.check_for_updates(quiet=False)),
+            ("__sep__", None),
+            ("Quit", self._quit),
+        )
+        for label, handler in actions:
+            if label == "__sep__":
+                menu.addSeparator()
+                continue
+            act = menu.addAction(label)
+            act.triggered.connect(handler)
+        return menu
+
+    def _build_downloads_page(self) -> QWidget:
+        page = QWidget()
+        col = QVBoxLayout(page)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(0)
+        col.addWidget(self._build_toolbar())
+        col.addWidget(self._build_filter_bar())
+        col.addWidget(self._build_table(), 1)
+        return page
+
+    def _build_toolbar(self) -> QWidget:
+        p = theme.current()
+        bar = QFrame()
+        bar.setStyleSheet(f"background: {p.toolbar}; border-bottom: 1px solid {p.border};")
+        lay = QHBoxLayout(bar)
+        lay.setContentsMargins(10, 6, 12, 6)
+        lay.setSpacing(2)
+
+        def add_btn(icon_name: str, label: str, handler: object, *, danger: bool = False) -> None:
+            btn = components.IconButton(icon_name, label, danger=danger)
+            btn.clicked.connect(handler)
+            self._retintable.append(btn)
+            lay.addWidget(btn)
+
+        add_btn("add", "Add URL", self._add_url)
+        add_btn("torrent", "Add Torrent", self._add_torrent_file)
+        add_btn("cloud", "Add Cloud", self._add_cloud)
+        lay.addWidget(self._sep())
+        add_btn("pause", "", self._pause_selected)
+        add_btn("resume", "", self._resume_selected)
+        add_btn("cancel", "", self._cancel_selected)
+        add_btn("trash", "", self._remove_selected, danger=True)
+        lay.addWidget(self._sep())
+        add_btn("folder", "", self._open_folder)
+        lay.addStretch(1)
+
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Search downloads…")
+        self.search_box.setClearButtonEnabled(True)
+        self.search_box.setFixedWidth(200)
+        self.search_box.textChanged.connect(lambda _t: self._apply_filter())
+        lay.addWidget(self.search_box)
+        lay.addWidget(self._sep())
+
+        self.speed_line = motion.Sparkline()
+        lay.addWidget(self.speed_line)
+        self._total_speed = QLabel("—")
+        self._total_speed.setStyleSheet(
+            f"color: {p.accent}; font-weight: 600; font-size: {design.FONT['h2']}pt;"
+        )
+        lay.addWidget(self._total_speed)
+        return bar
+
+    def _sep(self) -> QFrame:
+        p = theme.current()
+        s = QFrame()
+        s.setFixedSize(1, 18)
+        s.setStyleSheet(f"background: {p.border}; margin: 0 4px;")
+        return s
+
+    def _build_filter_bar(self) -> QWidget:
+        p = theme.current()
+        bar = QFrame()
+        bar.setStyleSheet(f"background: {p.surface}; border-bottom: 1px solid {p.border};")
+        lay = QHBoxLayout(bar)
+        lay.setContentsMargins(10, 0, 10, 0)
+        lay.setSpacing(2)
+        self._filter = "all"
+        self._filter_buttons: dict[str, QPushButton] = {}
+        for key, label in (
+            ("all", "All"),
+            ("active", "Active"),
+            ("completed", "Completed"),
+            ("failed", "Failed"),
         ):
-            action = QAction(label, self)
-            action.triggered.connect(handler)
-            file_menu.addAction(action)
-        file_menu.addSeparator()
-        dashboard_action = QAction("Dashboard…", self)
-        dashboard_action.triggered.connect(self._open_dashboard)
-        file_menu.addAction(dashboard_action)
-        inspect_url_action = QAction("Inspect URL…", self)
-        inspect_url_action.triggered.connect(self._inspect_url_prompt)
-        file_menu.addAction(inspect_url_action)
-        queue_manager = QAction("Queue Manager…", self)
-        queue_manager.triggered.connect(self._open_queue_manager)
-        file_menu.addAction(queue_manager)
-        clear_done = QAction("Clear Completed", self)
-        clear_done.triggered.connect(self._clear_completed)
-        file_menu.addAction(clear_done)
-        find_dupes = QAction("Find Duplicate Files…", self)
-        find_dupes.triggered.connect(self._find_duplicates)
-        file_menu.addAction(find_dupes)
-        file_menu.addSeparator()
-        setup = QAction("Browser Setup…", self)
-        setup.triggered.connect(self.open_setup)
-        file_menu.addAction(setup)
-        updates = QAction("Check for Updates…", self)
-        updates.triggered.connect(lambda: self.check_for_updates(quiet=False))
-        file_menu.addAction(updates)
-        file_menu.addSeparator()
-        quit_action = QAction("Quit", self)
-        quit_action.triggered.connect(self._quit)
-        file_menu.addAction(quit_action)
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(lambda _c=False, k=key: self._set_filter(k))
+            self._filter_buttons[key] = btn
+            lay.addWidget(btn)
+        lay.addStretch(1)
+        self._style_filter_buttons()
+        return bar
+
+    def _style_filter_buttons(self) -> None:
+        p = theme.current()
+        for key, btn in self._filter_buttons.items():
+            active = key == self._filter
+            color = p.accent if active else p.text2
+            border = p.accent if active else "transparent"
+            weight = 600 if active else 400
+            btn.setStyleSheet(
+                f"QPushButton {{ border: none; background: transparent; padding: 8px 12px;"
+                f" color: {color}; font-weight: {weight};"
+                f" border-bottom: 2px solid {border}; }}"
+                f" QPushButton:hover {{ color: {p.text}; }}"
+            )
+
+    def _set_filter(self, key: str) -> None:
+        self._filter = key
+        self._style_filter_buttons()
+        self._apply_filter()
+
+    def _build_table(self) -> QWidget:
+        self.table = QTableWidget(0, len(_COLUMNS), self)
+        self.table.setHorizontalHeaderLabels(_COLUMNS)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_row_menu)
+        self.table.itemSelectionChanged.connect(self._on_selection_changed)
+        self.table.setShowGrid(False)
+        self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(34)
+        header = self.table.horizontalHeader()
+        header.setHighlightSections(False)
+        self.table.setColumnWidth(_COL_ICON, 30)
+        self.table.setColumnWidth(_COL_SIZE, 90)
+        self.table.setColumnWidth(_COL_PROGRESS, 150)
+        self.table.setColumnWidth(_COL_SPEED, 90)
+        self.table.setColumnWidth(_COL_ETA, 78)
+        self.table.setColumnWidth(_COL_STATUS, 116)
+        header.setStretchLastSection(False)
+        from PySide6.QtWidgets import QHeaderView
+
+        header.setSectionResizeMode(_COL_NAME, QHeaderView.ResizeMode.Stretch)
+        return self.table
+
+    def _switch_view(self, key: str) -> None:
+        """Sidebar navigation. Downloads is the embedded page; the others open
+        their (soon-to-be-embedded) dialogs for now."""
+        for nav_key, btn in self._nav.items():
+            btn.set_active(nav_key == key)
+        if key == "downloads":
+            self._pages.setCurrentIndex(0)
+            return
+        # Keep the Downloads nav highlighted after a modal closes.
+        openers = {
+            "dashboard": self._open_dashboard,
+            "queue": self._open_queue_manager,
+            "settings": self._open_settings,
+        }
+        opener = openers.get(key)
+        if opener is not None:
+            opener()
+        for nav_key, btn in self._nav.items():
+            btn.set_active(nav_key == "downloads")
+
+    def _toggle_theme(self) -> None:
+        new = "light" if theme.current().dark else "dark"
+        self.settings.theme = new
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            theme.apply_theme(app, new)
+        self._retint_all()
+
+    def _retint_all(self) -> None:
+        p = theme.current()
+        for btn in self._retintable:
+            btn.retint()
+        self._theme_btn.set_active(False)
+        self._theme_btn._icon_name = "sun" if p.dark else "moon"
+        self._theme_btn.retint()
+        self._style_filter_buttons()
+        # Rebuild rows so per-row widgets (pills, bars) repaint in the new theme.
+        self._row_job_ids = []
+        self._progress_bars.clear()
+        self._pills.clear()
+        self.refresh()
 
     def _quit(self) -> None:
         app = QApplication.instance()
@@ -1481,7 +1643,32 @@ class MainWindow(QMainWindow):
             self._restore_selection()
         for row, view in enumerate(views):
             self._update_row(row, view)
+        self._update_filter_counts(views)
+        self._update_status_info(views)
         self._apply_filter()
+
+    def _update_filter_counts(self, views: list[JobView]) -> None:
+        counts = {
+            "all": len(views),
+            "active": sum(
+                1
+                for v in views
+                if v.status in (JobStatus.DOWNLOADING, JobStatus.QUEUED, JobStatus.PAUSED)
+            ),
+            "completed": sum(1 for v in views if v.status is JobStatus.COMPLETED),
+            "failed": sum(1 for v in views if v.status in (JobStatus.FAILED, JobStatus.CANCELLED)),
+        }
+        labels = {"all": "All", "active": "Active", "completed": "Completed", "failed": "Failed"}
+        for key, btn in self._filter_buttons.items():
+            btn.setText(f"{labels[key]}  {counts[key]}")
+
+    def _update_status_info(self, views: list[JobView]) -> None:
+        active = sum(1 for v in views if v.status is JobStatus.DOWNLOADING)
+        done = sum(1 for v in views if v.status is JobStatus.COMPLETED)
+        self._status_info.setText(
+            f"{len(views)} items · {active} active · {done} completed"
+            f"     Grabline v{__version__} · No telemetry"
+        )
 
     def _restore_selection(self) -> None:
         """Re-select the remembered jobs after a rebuild so the toolbar keeps
@@ -1512,6 +1699,7 @@ class MainWindow(QMainWindow):
                     instant if self._agg_ema is None else self._agg_ema * 0.6 + instant * 0.4
                 )
                 self.speed_line.push(self._agg_ema)
+                self._total_speed.setText(motion.fmt_speed(self._agg_ema))
         self._agg = (now, total)
 
     def _detect_transitions(self, views: list[JobView]) -> None:
@@ -1562,7 +1750,7 @@ class MainWindow(QMainWindow):
 
     def _apply_filter(self) -> None:
         needle = self.search_box.text().strip().lower()
-        tab_statuses = _TABS[self.tabs.currentIndex()][1] if self.tabs.currentIndex() >= 0 else ()
+        statuses = _FILTER_STATUSES.get(self._filter, ())
         for row in range(self.table.rowCount()):
             view = self._view_for_row(row)
             matches_search = not needle or (
@@ -1574,20 +1762,37 @@ class MainWindow(QMainWindow):
                     or needle in view.notes.lower()
                 )
             )
-            matches_tab = not tab_statuses or (view is not None and view.status in tab_statuses)
+            matches_tab = not statuses or (view is not None and view.status in statuses)
             self.table.setRowHidden(row, not (matches_search and matches_tab))
 
     def _rebuild_rows(self, views: list[JobView]) -> None:
         self.table.setRowCount(len(views))
         self._row_job_ids = [view.id for view in views]
-        for row in range(len(views)):
-            for column in range(len(_COLUMNS)):
-                if column == 2:
-                    bar = QProgressBar()
-                    bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    self.table.setCellWidget(row, column, bar)
-                else:
-                    self.table.setItem(row, column, QTableWidgetItem(""))
+        self._progress_bars.clear()
+        self._pills.clear()
+        for row, view in enumerate(views):
+            # icon
+            icon_item = QTableWidgetItem()
+            icon_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, _COL_ICON, icon_item)
+            for col in (_COL_NAME, _COL_SIZE, _COL_SPEED, _COL_ETA):
+                self.table.setItem(row, col, QTableWidgetItem(""))
+            bar = motion.SmoothProgressBar()
+            self.table.setCellWidget(row, _COL_PROGRESS, self._pad(bar))
+            self._progress_bars[view.id] = bar
+            pill = components.StatusPill(view.status.value)
+            self.table.setCellWidget(row, _COL_STATUS, self._pad(pill))
+            self._pills[view.id] = pill
+
+    @staticmethod
+    def _pad(widget: QWidget) -> QWidget:
+        """Wrap a cell widget with a little horizontal padding so it doesn't
+        touch the gridless cell edges."""
+        holder = QWidget()
+        lay = QHBoxLayout(holder)
+        lay.setContentsMargins(6, 0, 6, 0)
+        lay.addWidget(widget)
+        return holder
 
     def _cell(self, row: int, column: int) -> QTableWidgetItem:
         item = self.table.item(row, column)
@@ -1595,50 +1800,71 @@ class MainWindow(QMainWindow):
         return item
 
     def _update_row(self, row: int, view: JobView) -> None:
-        name_item = self._cell(row, 0)
+        p = theme.current()
+        # type icon
+        ext = view.filename
+        name = icons.type_icon_name(
+            view.kind.value if view.kind.value in ("torrent", "cloud") else ext
+        )
+        self._cell(row, _COL_ICON).setIcon(icons.svg_icon(name, self._type_color(view)))
+
+        name_item = self._cell(row, _COL_NAME)
         name_item.setText(view.display_name)
         name_item.setToolTip(view.url)
 
-        size_text = human_bytes(view.total_size) if view.total_size is not None else "?"
-        self._cell(row, 1).setText(size_text)
+        self._cell(row, _COL_SIZE).setText(human_bytes(view.total_size) if view.total_size else "—")
 
-        bar = self.table.cellWidget(row, 2)
-        if isinstance(bar, QProgressBar):
+        bar = self._progress_bars.get(view.id)
+        if bar is not None:
             if view.total_size:
-                bar.setRange(0, 1000)
-                bar.setValue(int(view.downloaded / view.total_size * 1000))
+                bar.set_value(view.downloaded / view.total_size)
             elif view.status is JobStatus.DOWNLOADING:
-                bar.setRange(0, 0)  # indeterminate
+                bar.set_indeterminate(True)
             else:
-                bar.setRange(0, 1000)
-                bar.setValue(1000 if view.status is JobStatus.COMPLETED else 0)
+                bar.set_value(1.0 if view.status is JobStatus.COMPLETED else 0.0)
+            bar.set_color(design.status_color(p, view.status.value))
 
-        self._cell(row, 3).setText(self._speed_text(view))
+        speed = self._smoothed_speed(view)
+        speed_item = self._cell(row, _COL_SPEED)
+        speed_item.setText(motion.fmt_speed(speed) if view.status is JobStatus.DOWNLOADING else "—")
+        speed_item.setForeground(QColor(p.accent if speed > 0 else p.text3))
 
-        status_item = self._cell(row, 4)
-        status_item.setText(view.status.value)
-        status_item.setToolTip(view.error or "")
+        eta = "—"
+        if view.status is JobStatus.DOWNLOADING and speed > 1 and view.total_size:
+            eta = motion.fmt_eta((view.total_size - view.downloaded) / speed)
+        self._cell(row, _COL_ETA).setText(eta)
 
-    def _speed_text(self, view: JobView) -> str:
+        pill = self._pills.get(view.id)
+        if pill is not None:
+            pill.set_status(view.status.value)
+            pill.setToolTip(view.error or "")
+
+    @staticmethod
+    def _type_color(view: JobView) -> str:
+        p = theme.current()
+        return {
+            JobKind.TORRENT: p.accent,
+            JobKind.CLOUD: p.g_ndown,
+            JobKind.SMART: p.g_ndown,
+            JobKind.HLS: p.g_ndown,
+        }.get(view.kind, p.text2)
+
+    def _smoothed_speed(self, view: JobView) -> float:
+        """Per-download speed, EMA-smoothed so the readout drifts rather than
+        strobing to 0 between checkpointed bursts."""
         if view.status is not JobStatus.DOWNLOADING:
             self._rates.pop(view.id, None)
-            self._speed_ema.pop(view.id, None)
-            return ""
+            self._speed_smoothers.pop(view.id, None)
+            return 0.0
         now = time.monotonic()
         previous = self._rates.get(view.id)
         self._rates[view.id] = (now, view.downloaded)
+        smoother = self._speed_smoothers.setdefault(view.id, motion.SpeedSmoother())
         if previous is None:
-            return "…"
+            return 0.0
         elapsed = now - previous[0]
-        if elapsed <= 0:
-            return f"{human_bytes(self._speed_ema.get(view.id, 0.0))}/s"
-        instant = max(0, view.downloaded - previous[1]) / elapsed
-        # Exponential moving average: progress is checkpointed in bursts, so a
-        # single zero-delta sample must not drop the display to 0 B/s.
-        ema = self._speed_ema.get(view.id)
-        smoothed = instant if ema is None else ema * 0.6 + instant * 0.4
-        self._speed_ema[view.id] = smoothed
-        return f"{human_bytes(smoothed)}/s"
+        instant = max(0, view.downloaded - previous[1]) / elapsed if elapsed > 0 else 0.0
+        return smoother.push(instant)
 
     # ---------------------------------------------------------- drag & drop
 

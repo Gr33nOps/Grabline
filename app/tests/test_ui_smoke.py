@@ -10,7 +10,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication, QProgressBar
+from PySide6.QtWidgets import QApplication
 
 from app.core.manager import DownloadManager
 from app.core.settings import Settings
@@ -79,15 +79,18 @@ def test_main_window_lists_jobs(db: Database, tmp_path: Path):
     # network activity.
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
-        db.create_job("http://example.invalid/x.bin", str(tmp_path), "x.bin")
+        from app.ui.motion import SmoothProgressBar
+
+        job = db.create_job("http://example.invalid/x.bin", str(tmp_path), "x.bin")
         window = MainWindow(manager, settings)
         window.refresh()
         assert window.table.rowCount() == 1
-        name_item = window.table.item(0, 0)
-        status_item = window.table.item(0, 4)
+        # Name lives in column 1 (column 0 is the type icon).
+        name_item = window.table.item(0, 1)
         assert name_item is not None and name_item.text() == "x.bin"
-        assert status_item is not None and status_item.text() == "queued"
-        assert isinstance(window.table.cellWidget(0, 2), QProgressBar)
+        # Progress is a SmoothProgressBar and status a StatusPill (widget cells).
+        assert isinstance(window._progress_bars[job.id], SmoothProgressBar)
+        assert window._pills[job.id].text() == "Queued"
     finally:
         manager.shutdown()
 
@@ -170,15 +173,20 @@ def test_remove_selected_and_clear_completed(db: Database, tmp_path: Path):
         manager.shutdown()
 
 
-def test_main_window_has_file_menu(db: Database, tmp_path: Path):
+def test_main_window_sidebar_and_overflow(db: Database, tmp_path: Path):
     _qapp()
     settings = Settings(db)
     settings.download_dir = tmp_path
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
-        titles = [action.text() for action in window.menuBar().actions()]
-        assert "&File" in titles
+        # The redesigned shell has a sidebar (Downloads/Dashboard/Queue/Settings)
+        # and an overflow menu holding the less-common File actions.
+        assert set(window._nav) == {"downloads", "dashboard", "queue", "settings"}
+        labels = {a.text() for a in window._overflow_menu().actions() if a.text()}
+        assert "Create Torrent…" in labels
+        assert "Inspect URL…" in labels
+        assert "Quit" in labels
     finally:
         manager.shutdown()
 
