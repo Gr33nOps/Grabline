@@ -82,6 +82,7 @@ from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.cloud_dialog import CloudFolderDialog, prompt_cloud_url
 from app.ui.dashboard import DashboardDialog
+from app.ui.dashboard_view import DashboardView
 from app.ui.detail_drawer import DetailDrawer
 from app.ui.dupes_dialog import DupesDialog
 from app.ui.format import human_bytes
@@ -92,6 +93,7 @@ from app.ui.link_panel import LinkPanel
 from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
 from app.ui.queue_dialog import QueueManagerDialog
+from app.ui.queue_view import QueueView
 from app.ui.security_dialog import SecurityDialog
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.setup_dialog import SetupDialog
@@ -204,7 +206,12 @@ class MainWindow(QMainWindow):
 
         # Shell: a 48px icon rail on the left, the stacked content on the right.
         self._pages = QStackedWidget()
-        self._pages.addWidget(self._build_downloads_page())
+        self._pages.addWidget(self._build_downloads_page())  # index 0
+        self._dashboard_view = DashboardView(self.manager)
+        self._pages.addWidget(self._dashboard_view)  # index 1
+        self._queue_view = QueueView(self.manager)
+        self._pages.addWidget(self._queue_view)  # index 2
+        self._page_index = {"downloads": 0, "dashboard": 1, "queue": 2}
         shell = QWidget()
         row = QHBoxLayout(shell)
         row.setContentsMargins(0, 0, 0, 0)
@@ -483,22 +490,15 @@ class MainWindow(QMainWindow):
         return self.table
 
     def _switch_view(self, key: str) -> None:
-        """Sidebar navigation. Downloads is the embedded page; the others open
-        their (soon-to-be-embedded) dialogs for now."""
-        for nav_key, btn in self._nav.items():
-            btn.set_active(nav_key == key)
-        if key == "downloads":
-            self._pages.setCurrentIndex(0)
+        """Sidebar navigation. Downloads/Dashboard/Queue are embedded pages;
+        Settings still opens its dialog (returns to Downloads after)."""
+        if key in self._page_index:
+            for nav_key, btn in self._nav.items():
+                btn.set_active(nav_key == key)
+            self._pages.setCurrentIndex(self._page_index[key])
             return
-        # Keep the Downloads nav highlighted after a modal closes.
-        openers = {
-            "dashboard": self._open_dashboard,
-            "queue": self._open_queue_manager,
-            "settings": self._open_settings,
-        }
-        opener = openers.get(key)
-        if opener is not None:
-            opener()
+        # Settings: modal for now, then restore the Downloads highlight.
+        self._open_settings()
         for nav_key, btn in self._nav.items():
             btn.set_active(nav_key == "downloads")
 
