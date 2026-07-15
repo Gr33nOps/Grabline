@@ -82,6 +82,7 @@ from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.cloud_dialog import CloudFolderDialog, prompt_cloud_url
 from app.ui.dashboard import DashboardDialog
+from app.ui.detail_drawer import DetailDrawer
 from app.ui.dupes_dialog import DupesDialog
 from app.ui.format import human_bytes
 from app.ui.gallery_panel import GalleryPanel
@@ -330,8 +331,36 @@ class MainWindow(QMainWindow):
         col.setSpacing(0)
         col.addWidget(self._build_toolbar())
         col.addWidget(self._build_filter_bar())
-        col.addWidget(self._build_table(), 1)
+        # table + slide-in detail drawer side by side
+        split = QWidget()
+        srow = QHBoxLayout(split)
+        srow.setContentsMargins(0, 0, 0, 0)
+        srow.setSpacing(0)
+        srow.addWidget(self._build_table(), 1)
+        self._drawer = DetailDrawer(
+            self.manager,
+            on_open_folder=self._open_view_folder,
+            on_copy_url=self._copy_view_url,
+            on_copy_hash=lambda v: self._copy_hash(Path(v.dest_dir) / v.filename),
+            on_remove=self._remove_from_drawer,
+        )
+        srow.addWidget(self._drawer)
+        col.addWidget(split, 1)
         return page
+
+    def _copy_view_url(self, view: JobView) -> None:
+        if self.clipboard_suppressor is not None:
+            self.clipboard_suppressor(view.url)
+        QGuiApplication.clipboard().setText(view.url)
+        self.statusBar().showMessage("URL copied", 3000)
+
+    def _open_view_folder(self, view: JobView) -> None:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
+
+    def _remove_from_drawer(self, view: JobView) -> None:
+        self.manager.remove(view.id)
+        self._drawer.hide()
+        self.refresh()
 
     def _build_toolbar(self) -> QWidget:
         p = theme.current()
@@ -904,6 +933,14 @@ class MainWindow(QMainWindow):
         self._selected_ids = {
             self._row_job_ids[i.row()] for i in rows if 0 <= i.row() < len(self._row_job_ids)
         }
+        # A single selection opens the detail drawer; multi/empty closes it.
+        if len(self._selected_ids) == 1:
+            (job_id,) = tuple(self._selected_ids)
+            view = self._last_views.get(job_id)
+            if view is not None:
+                self._drawer.show_view(view, self._smoothed_speed(view))
+        else:
+            self._drawer.hide()
 
     def _pause_selected(self) -> None:
         for job_id in self._selected_job_ids():
@@ -1646,6 +1683,14 @@ class MainWindow(QMainWindow):
         self._update_filter_counts(views)
         self._update_status_info(views)
         self._apply_filter()
+        # Keep an open detail drawer live.
+        drawer_id = self._drawer.current_id()
+        if self._drawer.isVisible() and drawer_id is not None:
+            live = self._last_views.get(drawer_id)
+            if live is not None:
+                self._drawer.show_view(live, self._smoothed_speed(live))
+            else:
+                self._drawer.hide()
 
     def _update_filter_counts(self, views: list[JobView]) -> None:
         counts = {
