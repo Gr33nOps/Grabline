@@ -96,6 +96,7 @@ from app.ui.queue_dialog import QueueManagerDialog
 from app.ui.queue_view import QueueView
 from app.ui.security_dialog import SecurityDialog
 from app.ui.settings_dialog import SettingsDialog
+from app.ui.settings_view import SettingsView
 from app.ui.setup_dialog import SetupDialog
 from app.ui.torrent_dialog import AddTorrentDialog, CreateTorrentDialog
 
@@ -211,7 +212,9 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self._dashboard_view)  # index 1
         self._queue_view = QueueView(self.manager)
         self._pages.addWidget(self._queue_view)  # index 2
-        self._page_index = {"downloads": 0, "dashboard": 1, "queue": 2}
+        self._settings_view = SettingsView(self.settings, self._on_settings_applied)
+        self._pages.addWidget(self._settings_view)  # index 3
+        self._page_index = {"downloads": 0, "dashboard": 1, "queue": 2, "settings": 3}
         shell = QWidget()
         row = QHBoxLayout(shell)
         row.setContentsMargins(0, 0, 0, 0)
@@ -490,17 +493,22 @@ class MainWindow(QMainWindow):
         return self.table
 
     def _switch_view(self, key: str) -> None:
-        """Sidebar navigation. Downloads/Dashboard/Queue are embedded pages;
-        Settings still opens its dialog (returns to Downloads after)."""
-        if key in self._page_index:
-            for nav_key, btn in self._nav.items():
-                btn.set_active(nav_key == key)
-            self._pages.setCurrentIndex(self._page_index[key])
+        """Sidebar navigation between the embedded pages."""
+        if key not in self._page_index:
             return
-        # Settings: modal for now, then restore the Downloads highlight.
-        self._open_settings()
         for nav_key, btn in self._nav.items():
-            btn.set_active(nav_key == "downloads")
+            btn.set_active(nav_key == key)
+        self._pages.setCurrentIndex(self._page_index[key])
+
+    def _on_settings_applied(self) -> None:
+        """Live-apply after the Settings page saves: theme (may have changed),
+        rate/schedule/proxy, and retint the chrome."""
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            theme.apply_theme(app, self.settings.theme)
+        self.manager.reload_settings()
+        self._retint_all()
+        self.statusBar().showMessage("Settings saved", 4000)
 
     def _toggle_theme(self) -> None:
         new = "light" if theme.current().dark else "dark"

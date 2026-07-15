@@ -92,6 +92,7 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(520)
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
+        self.tabs = tabs  # exposed so SettingsView can embed the pages
         layout.addWidget(tabs)
 
         # ---- General -------------------------------------------------------
@@ -659,12 +660,18 @@ class SettingsDialog(QDialog):
         installer.start()
 
     def _save(self) -> None:
+        if self.apply():
+            self.accept()
+
+    def apply(self) -> bool:
+        """Persist every field. Returns False (without saving) if the proxy is
+        malformed. Shared by the modal Save button and the embedded page."""
         from app.core import net
 
         proxy_error = net.validate_proxy(self.proxy_edit.text())
         if proxy_error is not None:
             QMessageBox.warning(self, "Grabline", proxy_error)
-            return
+            return False
         self.settings.download_dir = self.folder_edit.text().strip() or str(
             self.settings.download_dir
         )
@@ -728,7 +735,7 @@ class SettingsDialog(QDialog):
             launcher.set_autostart(self.autostart_check.isChecked())
         except OSError as exc:
             QMessageBox.warning(self, "Grabline", f"Could not update autostart: {exc}")
-        self.accept()
+        return True
 
     def done(self, result: int) -> None:
         if self._installer is not None and self._installer.isRunning():
