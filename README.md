@@ -42,7 +42,9 @@ queue you actually control. On the 1000+ sites it knows (YouTube, SoundCloud
 and friends) you also get a quality panel: 4K → 144p, MP3/M4A/FLAC with tags
 and cover art, subtitles, and clip trimming. Magnets, .torrent files, and
 cloud (SFTP/FTP/S3/WebDAV + Drive/Dropbox share links) all open right in the
-app. Windows, macOS, and Linux. No ads, no telemetry, no paid tier. AGPL-3.0.
+app. A fast, modern interface — sidebar navigation, a live dashboard, a
+details drawer, and smooth light/dark themes. Windows, macOS, and Linux. No
+ads, no telemetry, no paid tier. AGPL-3.0.
 
 ## ✨ Why Grabline
 
