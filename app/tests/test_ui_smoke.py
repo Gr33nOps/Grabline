@@ -635,3 +635,31 @@ def test_security_dialog_render(db: Database):
     assert "VirusTotal" in text
     assert "MD5" in text and "SHA256" in text
     assert Risk.WARNING.label == "Warning"
+
+
+def test_quality_label_add_skips_analysis(db: Database, tmp_path: Path, monkeypatch):
+    """The in-page quality panel already chose - the add must queue straight to
+    the download's single extraction (reels-fast), never analyze first."""
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        queued: list[tuple[str, str, str, dict[str, object]]] = []
+        monkeypatch.setattr(
+            manager,
+            "add_smart_entry",
+            lambda url, title, option, **kw: queued.append((url, title, option.label, kw)),
+        )
+        resolved: list[str] = []
+        monkeypatch.setattr(window, "_on_resolved", lambda *a, **k: resolved.append("x"))
+
+        window._resolve_and_queue(
+            "https://www.youtube.com/watch?v=abc", "Video page", "1080p", (), None
+        )
+        assert len(queued) == 1 and queued[0][2] == "1080p"
+        assert queued[0][3]["extras"] == {"name_from_metadata": True}
+        assert window._resolve_threads == []  # no analysis thread was spawned
+    finally:
+        manager.shutdown()

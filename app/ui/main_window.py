@@ -871,6 +871,25 @@ class MainWindow(QMainWindow):
         fallbacks: tuple[str, ...],
         headers: dict[str, str] | None,
     ) -> None:
+        # The in-page quality panel already chose - skip analysis entirely and
+        # let the download's single extraction do everything (formats resolve
+        # at download time, the file is named from the real title). This is
+        # what makes a hover-button YouTube add start as fast as any other
+        # site: one extraction instead of two.
+        if quality and self.resolver.smart.matches(url):
+            option = option_for_label(quality)
+            if option is not None:
+                self.manager.add_smart_entry(
+                    url,
+                    page_title or "Fetching title…",
+                    option,
+                    use_session=self.settings.use_browser_session,
+                    session_browser=self.settings.session_browser,
+                    extras={"name_from_metadata": True},
+                )
+                self.statusBar().showMessage(f"Queued ({option.label})", 5000)
+                self.refresh()
+                return
         self.statusBar().showMessage(f"Analyzing {url} …")
         thread = _ResolveThread(
             self.resolver, url, self.settings, page_title, quality, fallbacks, headers

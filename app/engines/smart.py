@@ -14,6 +14,7 @@ yt-dlp is imported lazily so the CLI stays fast for plain direct downloads.
 
 from __future__ import annotations
 
+import copy
 import logging
 import threading
 import time
@@ -374,6 +375,37 @@ def curate_formats(info: dict[str, Any]) -> tuple[QualityOption, ...]:
     return tuple(options)
 
 
+#: Raw single-video info dicts from analysis, handed to the download so a
+#: fresh add never pays the extraction twice (analysis for the quality panel,
+#: then the download re-extracting the very same thing - the reason YouTube
+#: felt twice as slow as single-extraction sites). Keyed (url, proxy); only
+#: cookie-free, non-generic extractions are stored, and format URLs from
+#: YouTube stay valid for hours, far beyond this TTL.
+_INFO_TTL = 300.0
+_info_lock = threading.Lock()
+_info_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
+
+
+def _remember_info(url: str, proxy: str | None, info: dict[str, Any]) -> None:
+    if not info.get("formats"):
+        return  # a flat playlist listing can't be downloaded from
+    with _info_lock:
+        now = time.monotonic()
+        for key, (at, _value) in list(_info_cache.items()):
+            if now - at >= _INFO_TTL:
+                del _info_cache[key]
+        _info_cache[(url, proxy or "")] = (now, copy.deepcopy(info))
+
+
+def recall_info(url: str, proxy: str | None = None) -> dict[str, Any] | None:
+    """A fresh analysis of ``url``, ready for ``process_ie_result`` - or None."""
+    with _info_lock:
+        hit = _info_cache.get((url, proxy or ""))
+        if hit is None or time.monotonic() - hit[0] >= _INFO_TTL:
+            return None
+        return copy.deepcopy(hit[1])
+
+
 def needs_js_runtime(url: str, *, use_session: bool = False) -> bool:
     """Does this URL need a JavaScript runtime to extract properly?
 
@@ -589,6 +621,9 @@ class SmartEngine:
             raise DownloadError(friendly_error(str(exc))) from exc
         if not isinstance(info, dict):
             raise DownloadError("No downloadable media was found at this address.")
+        if not use_session and not force_generic:
+            # Hand this analysis to the download so it can skip re-extracting.
+            _remember_info(url, proxy, info)
         return info
 
     def _parse_inspected(
@@ -712,8 +747,14 @@ class SmartDownload:
         self, *, with_cookies: bool = False, with_runtime: bool = False
     ) -> dict[str, Any]:
         options = self.job.options
-        base = Path(self.job.filename).stem or "download"
-        outtmpl = str(Path(self.job.dest_dir) / f"{base}.%(ext)s")
+        if options.get("name_from_metadata"):
+            # Queued without an analysis (the in-page quality panel): the job's
+            # stored name is a placeholder, so let yt-dlp name the file from
+            # the real title - _finalize adopts whatever lands on disk.
+            outtmpl = str(Path(self.job.dest_dir) / "%(title)s.%(ext)s")
+        else:
+            base = Path(self.job.filename).stem or "download"
+            outtmpl = str(Path(self.job.dest_dir) / f"{base}.%(ext)s")
         ydl_opts: dict[str, Any] = {
             "format": options.get("format_spec") or "bv*+ba/b",
             "outtmpl": {"default": outtmpl},
@@ -863,6 +904,26 @@ class SmartDownload:
         import yt_dlp
 
         opts = self._build_options(with_cookies=with_cookies, with_runtime=with_runtime)
+        # Fast start: a fresh analysis of this URL means the extraction is
+        # already done - feed it straight to the downloader (yt-dlp's
+        # --load-info-json path) instead of extracting the same thing again.
+        # Cookie/runtime escalations always extract fresh.
+        cached = None
+        if not with_cookies and not with_runtime and not self.job.options.get("hq_first"):
+            cached = recall_info(self.job.url, self.proxy)
+        if cached is not None:
+            log.info("job %s: downloading from the cached analysis", self.job.id)
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.process_ie_result(cached, download=True)
+                if isinstance(info, dict):
+                    return info
+            except yt_dlp.utils.DownloadError as exc:
+                if self._stop_event.is_set():
+                    raise
+                log.info(
+                    "job %s: cached analysis rejected (%s); extracting fresh", self.job.id, exc
+                )
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(self.job.url, download=True)
         if not isinstance(info, dict):
@@ -973,8 +1034,12 @@ class SmartDownload:
         self.db.update_job_filename(self.job.id, filepath.name)
         self.db.update_job_total(self.job.id, size)
         self.db.update_job_downloaded(self.job.id, size)
-        if info.get("title") and not self.job.title:
+        # Adopt (and persist) the real title when the job had none - or when it
+        # was queued on a placeholder because the analysis was skipped.
+        placeholder = bool(self.job.options.get("name_from_metadata"))
+        if info.get("title") and (not self.job.title or placeholder):
             self.job.title = str(info["title"])
+            self.db.update_job_title(self.job.id, self.job.title)
         self.db.set_job_status(self.job.id, JobStatus.COMPLETED)
         return JobStatus.COMPLETED
 

@@ -335,6 +335,13 @@ class Database:
                 (filename, job_id),
             )
 
+    def update_job_title(self, job_id: int, title: str) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE jobs SET title = ?, updated_at = datetime('now') WHERE id = ?",
+                (title, job_id),
+            )
+
     def update_job_dest(self, job_id: int, dest_dir: str) -> None:
         """Re-point a job at a new folder (the move-to-favorite action moves
         the file first; this keeps the row honest about where it lives)."""

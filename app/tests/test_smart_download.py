@@ -423,3 +423,113 @@ def test_smart_download_video_with_metadata_pass(
     assert status is JobStatus.COMPLETED
     output = dest / "tagged.mp4"
     assert output.exists() and output.stat().st_size > 0
+
+
+def test_download_reuses_a_fresh_analysis(db: Database, dest: Path, monkeypatch):
+    # Analysis already extracted everything - the download must start from it
+    # (process_ie_result) instead of paying a second extraction.
+    import yt_dlp
+
+    from app.engines import smart
+
+    smart._info_cache.clear()
+    smart._remember_info("https://youtu.be/x", None, {"id": "x", "formats": [{"url": "u"}]})
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    calls: list[str] = []
+
+    class FakeYDL:
+        def __init__(self, opts):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def process_ie_result(self, info, download):
+            calls.append("process")
+            assert info["id"] == "x" and download
+            return {"title": "ok"}
+
+        def extract_info(self, url, download):
+            calls.append("extract")
+            return {"title": "ok"}
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYDL)
+    assert task._download(with_cookies=False, with_runtime=False) == {"title": "ok"}
+    assert calls == ["process"]  # no second extraction
+
+    # Escalations (cookies/runtime) and a cold cache extract fresh.
+    calls.clear()
+    smart._info_cache.clear()
+    assert task._download(with_cookies=False, with_runtime=False) == {"title": "ok"}
+    assert calls == ["extract"]
+
+
+def test_download_falls_back_when_the_cached_analysis_is_stale(
+    db: Database, dest: Path, monkeypatch
+):
+    import yt_dlp
+
+    from app.engines import smart
+
+    smart._info_cache.clear()
+    smart._remember_info("https://youtu.be/y", None, {"id": "y", "formats": [{"url": "u"}]})
+    job = _smart_job(db, "https://youtu.be/y", dest, "v.mp4")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    calls: list[str] = []
+
+    class FakeYDL:
+        def __init__(self, opts):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def process_ie_result(self, info, download):
+            calls.append("process")
+            raise yt_dlp.utils.DownloadError("HTTP Error 403: expired URL")
+
+        def extract_info(self, url, download):
+            calls.append("extract")
+            return {"title": "ok"}
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYDL)
+    assert task._download(with_cookies=False, with_runtime=False) == {"title": "ok"}
+    assert calls == ["process", "extract"]  # rejected cache never fails the job
+
+
+def test_info_cache_round_trip_and_expiry(monkeypatch):
+    from app.engines import smart
+
+    smart._info_cache.clear()
+    smart._remember_info("https://youtu.be/z", None, {"id": "z", "formats": [{"url": "u"}]})
+    hit = smart.recall_info("https://youtu.be/z")
+    assert hit is not None and hit["id"] == "z"
+    hit["formats"].clear()  # the cache hands out copies, never its own dict
+    again = smart.recall_info("https://youtu.be/z")
+    assert again is not None and again["formats"]
+
+    # flat playlists (no formats) are never stored; stale entries expire
+    smart._remember_info("https://youtu.be/list", None, {"_type": "playlist"})
+    assert smart.recall_info("https://youtu.be/list") is None
+    monkeypatch.setattr(smart, "_INFO_TTL", -1.0)
+    assert smart.recall_info("https://youtu.be/z") is None
+
+
+def test_metadata_naming_uses_a_title_template(db: Database, dest: Path):
+    # A quality-label add skips analysis, so the stored filename is a
+    # placeholder - yt-dlp must name the output from the real title.
+    job = _smart_job(db, "https://youtu.be/x", dest, "Fetching title….mp4", name_from_metadata=True)
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    opts = task._build_options()
+    assert "%(title)s" in opts["outtmpl"]["default"]
+
+    plain = _smart_job(db, "https://youtu.be/y", dest, "video.mp4")
+    opts = SmartDownload(db, plain, ffmpeg_path=None)._build_options()
+    assert "%(title)s" not in opts["outtmpl"]["default"]
