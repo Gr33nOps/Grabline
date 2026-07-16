@@ -34,8 +34,28 @@ _STATUS_LABEL = {
 }
 
 
+def _dim(hex_color: str, alpha: float) -> str:
+    c = QColor(hex_color)
+    return f"rgba({c.red()},{c.green()},{c.blue()},{alpha})"
+
+
+def role_label(text: str, role: str, *, size: int | None = None, bold: bool = False) -> QLabel:
+    """A label whose *color* comes from the global stylesheet (``role`` -> a
+    QLabel[role=...] rule), so it re-tints automatically on a theme swap. Size
+    and weight are set on the font here since QSS can't be re-read per widget."""
+    lbl = QLabel(text)
+    lbl.setProperty("role", role)
+    if size is not None or bold:
+        font = lbl.font()
+        if size is not None:
+            font.setPointSize(size)
+        font.setBold(bold)
+        lbl.setFont(font)
+    return lbl
+
+
 class StatusPill(QLabel):
-    """A colored, rounded status label. Downloading pulses a subtle dot."""
+    """A subtle, rounded status label with a leading dot, coloured by status."""
 
     def __init__(self, status: str = "queued", parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -46,30 +66,20 @@ class StatusPill(QLabel):
         p = theme.current()
         color = design.status_color(p, status)
         label = _STATUS_LABEL.get(status, status.title())
-        self.setText(label)
+        self.setText(f"●  {label}")
         self.setStyleSheet(
             f"QLabel {{ color: {color}; background: {_dim(color, 0.14)};"
-            f" border-radius: 4px; padding: 2px 8px; font-size: {design.FONT['small']}pt;"
+            f" border-radius: 4px; padding: 2px 9px; font-size: {design.FONT['small']}pt;"
             f" font-weight: 600; }}"
         )
 
 
-def _dim(hex_color: str, alpha: float) -> str:
-    c = QColor(hex_color)
-    return f"rgba({c.red()},{c.green()},{c.blue()},{alpha})"
-
-
 class Chip(QLabel):
-    """A small tag/label chip."""
+    """A small tag/label chip; colours follow the theme via the stylesheet."""
 
     def __init__(self, text: str, parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
-        p = theme.current()
-        self.setStyleSheet(
-            f"QLabel {{ color: {p.text2}; background: {p.surface2};"
-            f" border: 1px solid {p.border}; border-radius: 3px; padding: 1px 7px;"
-            f" font-size: {design.FONT['small']}pt; }}"
-        )
+        self.setProperty("chip", "true")
 
 
 class SectionLabel(QLabel):
@@ -77,11 +87,11 @@ class SectionLabel(QLabel):
 
     def __init__(self, text: str, parent: QWidget | None = None) -> None:
         super().__init__(text.upper(), parent)
-        p = theme.current()
-        self.setStyleSheet(
-            f"QLabel {{ color: {p.text3}; font-size: {design.FONT['caption']}pt;"
-            f" font-weight: 700; letter-spacing: 1px; }}"
-        )
+        self.setProperty("role", "caption")
+        font = self.font()
+        font.setPointSize(design.FONT["caption"])
+        font.setBold(True)
+        self.setFont(font)
 
 
 class StatTile(QFrame):
@@ -89,26 +99,15 @@ class StatTile(QFrame):
 
     def __init__(self, caption: str, accent: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        p = theme.current()
-        self.setStyleSheet(
-            f"QFrame {{ background: {p.surface}; border: 1px solid {p.border};"
-            f" border-radius: {design.RADIUS['md']}px; }}"
-        )
+        self.setProperty("card", "true")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(14, 11, 14, 11)
         lay.setSpacing(3)
-        cap = QLabel(caption.upper())
-        cap.setStyleSheet(
-            f"color: {p.text3}; font-size: {design.FONT['caption']}pt;"
-            f" font-weight: 700; letter-spacing: 0.6px;"
+        cap = role_label(caption.upper(), "caption", size=design.FONT["caption"])
+        self.value = role_label(
+            "—", "accent" if accent else "strong", size=design.FONT["display"], bold=True
         )
-        self.value = QLabel("—")
-        self.value.setStyleSheet(
-            f"color: {p.accent if accent else p.text}; font-size: {design.FONT['display']}pt;"
-            f" font-weight: 700;"
-        )
-        self.sub = QLabel("")
-        self.sub.setStyleSheet(f"color: {p.text3}; font-size: {design.FONT['small']}pt;")
+        self.sub = role_label("", "muted", size=design.FONT["small"])
         self.sub.hide()
         lay.addWidget(cap)
         lay.addWidget(self.value)
@@ -200,11 +199,7 @@ class GraphCard(QFrame):
         self._fmt = fmt
         self._fixed_max = fixed_max
         self._series: list[deque[float]] = [deque(maxlen=_GRAPH_HISTORY) for _ in colors]
-        p = theme.current()
-        self.setStyleSheet(
-            f"QFrame {{ background: {p.surface}; border: 1px solid {p.border};"
-            f" border-radius: {design.RADIUS['md']}px; }}"
-        )
+        self.setProperty("card", "true")
         self.setMinimumHeight(118)
 
     def push(self, values: list[float]) -> None:
@@ -276,29 +271,23 @@ def accent_button(text: str) -> QPushButton:
 
 
 def card_frame() -> QFrame:
-    p = theme.current()
     frame = QFrame()
-    frame.setStyleSheet(
-        f"QFrame {{ background: {p.surface}; border: 1px solid {p.border};"
-        f" border-radius: {design.RADIUS['md']}px; }}"
-    )
+    frame.setProperty("card", "true")
     return frame
 
 
 def hline() -> QFrame:
-    p = theme.current()
     line = QFrame()
     line.setFixedWidth(1)
-    line.setStyleSheet(f"background: {p.border};")
+    line.setObjectName("Separator")
     return line
 
 
 def app_logo(size: int = 28) -> QLabel:
     """The rounded-square blue app mark with the white download glyph."""
-    p = theme.current()
     label = QLabel()
+    label.setObjectName("AppLogo")
     label.setFixedSize(size, size)
-    label.setStyleSheet(f"background: {p.accent}; border-radius: {design.RADIUS['md']}px;")
     label.setPixmap(svg_icon("download", "#ffffff").pixmap(int(size * 0.6), int(size * 0.6)))
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
     return label

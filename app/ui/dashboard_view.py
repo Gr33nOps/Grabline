@@ -22,7 +22,7 @@ from app.core import net
 from app.core.manager import DownloadManager
 from app.core.models import JobStatus
 from app.core.stats import SpeedTracker, SystemSampler
-from app.ui import components, design, motion, theme
+from app.ui import components, motion, theme
 from app.ui.format import human_bytes
 
 
@@ -96,11 +96,7 @@ class DashboardView(QWidget):
         root.addLayout(grid)
 
         self._vpn = QLabel("")
-        self._vpn.setStyleSheet(
-            f"QLabel {{ color: {p.accent}; background: {p.accent_dim};"
-            f" border: 1px solid {p.accent}; border-radius: {design.RADIUS['md']}px;"
-            f" padding: 8px 12px; }}"
-        )
+        self._vpn.setObjectName("VpnBanner")
         root.addWidget(self._vpn)
 
         tables = QHBoxLayout()

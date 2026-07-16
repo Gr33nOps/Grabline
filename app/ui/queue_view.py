@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from app.core.manager import DownloadManager
 from app.core.models import Queue
-from app.ui import components, design, theme
+from app.ui import components, design
 from app.ui.queue_dialog import _CATEGORIES, _would_cycle
 
 
@@ -35,18 +35,16 @@ class QueueView(QWidget):
         super().__init__(parent)
         self.manager = manager
         self._editing: int | None = None
-        p = theme.current()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         header = QFrame()
-        header.setStyleSheet(f"background: {p.toolbar}; border-bottom: 1px solid {p.border};")
+        header.setObjectName("Toolbar")
         hl = QHBoxLayout(header)
         hl.setContentsMargins(16, 10, 12, 10)
-        title = QLabel("Queue Manager")
-        title.setStyleSheet(f"font-weight: 600; font-size: {design.FONT['h1']}pt;")
+        title = components.role_label("Queue Manager", "strong", size=design.FONT["h1"], bold=True)
         hl.addWidget(title)
         hl.addStretch(1)
         new_btn = components.IconButton("add", "New queue")
@@ -84,35 +82,29 @@ class QueueView(QWidget):
         self._body.addStretch(1)
 
     def _card(self, index: int, queue: Queue, queues: dict[int, Queue]) -> QWidget:
-        p = theme.current()
         selected = self._editing == queue.id
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background: {p.surface};"
-            f" border: 1px solid {p.accent if selected else p.border};"
-            f" border-radius: {design.RADIUS['md']}px; }}"
-        )
+        card.setProperty("card", "true")
+        if selected:
+            card.setProperty("selected", "true")
         lay = QHBoxLayout(card)
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(12)
 
         badge = QLabel(str(index))
+        badge.setObjectName("QueueBadge")
         badge.setFixedSize(30, 30)
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        badge.setStyleSheet(
-            f"background: {p.accent_dim}; color: {p.accent};"
-            f" border-radius: {design.RADIUS['md']}px; font-weight: 700;"
-        )
         lay.addWidget(badge)
 
         text = QWidget()
         tl = QVBoxLayout(text)
         tl.setContentsMargins(0, 0, 0, 0)
         tl.setSpacing(1)
-        name = QLabel(queue.name)
-        name.setStyleSheet(f"font-weight: 600; font-size: {design.FONT['h2']}pt;")
-        traits = QLabel(self._traits(queue, queues))
-        traits.setStyleSheet(f"color: {p.text3}; font-size: {design.FONT['small']}pt;")
+        name = components.role_label(queue.name, "strong", size=design.FONT["h2"], bold=True)
+        traits = components.role_label(
+            self._traits(queue, queues), "muted", size=design.FONT["small"]
+        )
         tl.addWidget(name)
         tl.addWidget(traits)
         lay.addWidget(text, 1)
@@ -145,12 +137,8 @@ class QueueView(QWidget):
         return "  ·  ".join(parts)
 
     def _editor(self, queue: Queue, all_queues: list[Queue]) -> QWidget:
-        p = theme.current()
         box = QFrame()
-        box.setStyleSheet(
-            f"QFrame {{ background: {p.surface2}; border: 1px solid {p.border};"
-            f" border-radius: {design.RADIUS['md']}px; }}"
-        )
+        box.setProperty("panel", "true")
         form = QVBoxLayout(box)
         form.setContentsMargins(16, 14, 16, 14)
         form.setSpacing(10)
@@ -237,11 +225,9 @@ class QueueView(QWidget):
         from PySide6.QtWidgets import QLayout
         from PySide6.QtWidgets import QWidget as _QW
 
-        p = theme.current()
         row = QHBoxLayout()
-        cap = QLabel(label)
+        cap = components.role_label(label, "dim")
         cap.setFixedWidth(150)
-        cap.setStyleSheet(f"color: {p.text2};")
         row.addWidget(cap)
         if isinstance(widget, QLayout):
             row.addLayout(widget, 1)

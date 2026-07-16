@@ -13,7 +13,6 @@ from collections.abc import Callable
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -48,8 +47,8 @@ class SettingsView(QWidget):
 
         # ---- left nav -------------------------------------------------------
         nav = QFrame()
-        nav.setFixedWidth(176)
-        nav.setStyleSheet(f"background: {p.surface2}; border-right: 1px solid {p.border};")
+        nav.setObjectName("SettingsNav")
+        nav.setFixedWidth(196)
         nlay = QVBoxLayout(nav)
         nlay.setContentsMargins(10, 12, 10, 12)
         nlay.setSpacing(8)
@@ -63,14 +62,7 @@ class SettingsView(QWidget):
         nlay.addWidget(self._search)
 
         self._list = QListWidget()
-        self._list.setStyleSheet(
-            f"QListWidget {{ border: none; background: transparent; }}"
-            f" QListWidget::item {{ padding: 7px 10px; border-radius: {design.RADIUS['sm']}px;"
-            f" color: {p.text2}; }}"
-            f" QListWidget::item:selected {{ background: {p.accent_dim}; color: {p.accent};"
-            f" border-left: 2px solid {p.accent}; }}"
-            f" QListWidget::item:hover {{ background: {p.row_hover}; }}"
-        )
+        self._list.setObjectName("SettingsList")
         self._list.currentRowChanged.connect(self._on_nav)
         nlay.addWidget(self._list, 1)
         row.addWidget(nav)
@@ -81,10 +73,8 @@ class SettingsView(QWidget):
         clay.setContentsMargins(0, 0, 0, 0)
         clay.setSpacing(0)
 
-        self._title = QLabel("")
-        self._title.setStyleSheet(
-            f"font-size: {design.FONT['h1']}pt; font-weight: 600; padding: 18px 24px 8px;"
-        )
+        self._title = components.role_label("", "strong", size=design.FONT["h1"], bold=True)
+        self._title.setContentsMargins(24, 18, 24, 8)
         clay.addWidget(self._title)
 
         self._stack = QStackedWidget()
@@ -104,6 +94,9 @@ class SettingsView(QWidget):
             hl.setContentsMargins(24, 8, 24, 20)
             hl.addWidget(page)
             hl.addStretch(1)
+            # The QTabWidget explicitly hides its pages; lifting one out keeps it
+            # hidden, so re-show it or the content pane renders blank.
+            page.show()
             scroll.setWidget(holder)
             self._stack.addWidget(scroll)
             self._titles.append(title)
@@ -112,12 +105,11 @@ class SettingsView(QWidget):
         clay.addWidget(self._stack, 1)
 
         footer = QFrame()
-        footer.setStyleSheet(f"border-top: 1px solid {p.border};")
+        footer.setObjectName("SettingsFooter")
         flay = QHBoxLayout(footer)
         flay.setContentsMargins(24, 10, 24, 10)
         flay.addStretch(1)
-        self._saved = QLabel("")
-        self._saved.setStyleSheet(f"color: {p.ok}; font-size: {design.FONT['small']}pt;")
+        self._saved = components.role_label("", "ok", size=design.FONT["small"])
         flay.addWidget(self._saved)
         save = components.accent_button("Save changes")
         save.clicked.connect(self._save)

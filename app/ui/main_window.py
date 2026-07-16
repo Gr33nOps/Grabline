@@ -39,7 +39,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QInputDialog,
-    QLabel,
     QLineEdit,
     QMainWindow,
     QMenu,
@@ -223,10 +222,7 @@ class MainWindow(QMainWindow):
         row.addWidget(self._pages, 1)
         self.setCentralWidget(shell)
         self.statusBar().showMessage("Ready")
-        self._status_info = QLabel("")
-        self._status_info.setStyleSheet(
-            f"color: {theme.current().text3}; font-size: {design.FONT['small']}pt;"
-        )
+        self._status_info = components.role_label("", "muted", size=design.FONT["small"])
         self.statusBar().addPermanentWidget(self._status_info)
 
         self._row_job_ids: list[int] = []
@@ -260,10 +256,9 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------- shell
 
     def _build_sidebar(self) -> QWidget:
-        p = theme.current()
         bar = QFrame()
+        bar.setObjectName("Sidebar")
         bar.setFixedWidth(48)
-        bar.setStyleSheet(f"background: {p.sidebar}; border-right: 1px solid {p.border};")
         lay = QVBoxLayout(bar)
         lay.setContentsMargins(5, 8, 5, 8)
         lay.setSpacing(2)
@@ -289,20 +284,30 @@ class MainWindow(QMainWindow):
 
         lay.addStretch(1)
 
-        more = components.SidebarButton("queue", "More…")
-        more.setToolTip("More actions")
-        more.setIcon(icons.svg_icon("cancel", p.text3))  # placeholder glyph; menu below
-        more.clicked.connect(lambda: self._overflow_menu().popup(more.mapToGlobal(QPoint(38, 0))))
+        more = components.SidebarButton("more", "More actions")
+        more.clicked.connect(self._show_overflow_menu)
+        more.setCheckable(False)  # a menu trigger, not a nav destination
         self._more_btn = more
         self._retintable.append(more)
         lay.addWidget(more, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self._theme_btn = components.SidebarButton(
-            "sun" if p.dark else "moon", "Toggle light / dark"
+            "sun" if theme.current().dark else "moon", "Toggle light / dark"
         )
+        self._theme_btn.setCheckable(False)
         self._theme_btn.clicked.connect(self._toggle_theme)
         lay.addWidget(self._theme_btn, 0, Qt.AlignmentFlag.AlignHCenter)
         return bar
+
+    def _show_overflow_menu(self) -> None:
+        """Pop the overflow menu just to the right of the rail. It's a tall
+        menu anchored to a button near the bottom, so align its lower edge with
+        the button and let Qt nudge it onto the screen."""
+        menu = self._overflow_menu()
+        button = self._more_btn
+        size = menu.sizeHint()
+        top_left = button.mapToGlobal(QPoint(button.width() + 6, button.height() - size.height()))
+        menu.exec(top_left)
 
     def _overflow_menu(self) -> QMenu:
         menu = QMenu(self)
@@ -373,9 +378,8 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def _build_toolbar(self) -> QWidget:
-        p = theme.current()
         bar = QFrame()
-        bar.setStyleSheet(f"background: {p.toolbar}; border-bottom: 1px solid {p.border};")
+        bar.setObjectName("Toolbar")
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(10, 6, 12, 6)
         lay.setSpacing(2)
@@ -408,24 +412,19 @@ class MainWindow(QMainWindow):
 
         self.speed_line = motion.Sparkline()
         lay.addWidget(self.speed_line)
-        self._total_speed = QLabel("—")
-        self._total_speed.setStyleSheet(
-            f"color: {p.accent}; font-weight: 600; font-size: {design.FONT['h2']}pt;"
-        )
+        self._total_speed = components.role_label("—", "accent", size=design.FONT["h2"], bold=True)
         lay.addWidget(self._total_speed)
         return bar
 
     def _sep(self) -> QFrame:
-        p = theme.current()
         s = QFrame()
+        s.setObjectName("Separator")
         s.setFixedSize(1, 18)
-        s.setStyleSheet(f"background: {p.border}; margin: 0 4px;")
         return s
 
     def _build_filter_bar(self) -> QWidget:
-        p = theme.current()
         bar = QFrame()
-        bar.setStyleSheet(f"background: {p.surface}; border-bottom: 1px solid {p.border};")
+        bar.setObjectName("FilterBar")
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(10, 0, 10, 0)
         lay.setSpacing(2)

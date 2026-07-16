@@ -68,10 +68,14 @@ class Animated:
     (framerate-independent). Call :meth:`set` with a new target; read
     :attr:`value` each frame. ``on_change`` fires while it's still moving."""
 
-    def __init__(self, value: float = 0.0, speed: float = 14.0) -> None:
+    def __init__(self, value: float = 0.0, speed: float = 14.0, *, epsilon: float = 0.4) -> None:
         self.value = value
         self._target = value
         self._speed = speed  # higher = snappier
+        # How close counts as "arrived". Must match the value's scale: pixels
+        # want ~0.4, but a 0..1 progress fraction needs something tiny, or every
+        # small per-poll step snaps instantly and the bar looks like it stalls.
+        self._epsilon = epsilon
         self._running = False
         self._on_change: Callable[[], None] | None = None
 
@@ -80,7 +84,7 @@ class Animated:
 
     def set(self, target: float, *, immediate: bool = False) -> None:
         self._target = target
-        if immediate or abs(target - self.value) < 0.01:
+        if immediate or abs(target - self.value) < self._epsilon:
             self.value = target
             self._stop()
             if self._on_change:
@@ -95,7 +99,7 @@ class Animated:
         # Exponential smoothing toward the target; ~1/60s per frame.
         alpha = 1.0 - pow(2.718281828, -self._speed / _FPS)
         self.value += (self._target - self.value) * alpha
-        if abs(self._target - self.value) < 0.4:
+        if abs(self._target - self.value) < self._epsilon:
             self.value = self._target
             self._stop()
         if self._on_change:
@@ -159,7 +163,11 @@ class SmoothProgressBar(QWidget):
         super().__init__(parent)
         self.setFixedHeight(5)
         self.setMinimumWidth(60)
-        self._fill = Animated(0.0, speed=10.0)
+        # speed ~7 makes the glide take a hair longer than the 500ms poll, so a
+        # steadily-advancing download keeps the fill in continuous motion rather
+        # than jumping and pausing; epsilon is tiny because value is a 0..1
+        # fraction (see Animated).
+        self._fill = Animated(0.0, speed=7.0, epsilon=0.0008)
         self._fill.bind(self.update)
         self._indeterminate = False
         self._marquee = 0.0
@@ -228,6 +236,10 @@ class Sparkline(QWidget):
 
     def push(self, bytes_per_second: float) -> None:
         self._samples.append(max(0.0, bytes_per_second))
+        self.update()
+
+    def clear(self) -> None:
+        self._samples.clear()
         self.update()
 
     def paintEvent(self, _event: object) -> None:

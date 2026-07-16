@@ -344,4 +344,52 @@ def stylesheet(p: Palette) -> str:
     QStatusBar {{ background: {p.toolbar}; color: {p.text2}; }}
     QStatusBar::item {{ border: none; }}
     QLabel {{ background: transparent; }}
+
+    /* --- app chrome (object names so a theme swap re-applies them) --- */
+    QFrame#Sidebar {{ background: {p.sidebar}; border-right: 1px solid {p.border}; }}
+    QFrame#Toolbar {{ background: {p.toolbar}; border-bottom: 1px solid {p.border}; }}
+    QFrame#FilterBar {{ background: {p.surface}; border-bottom: 1px solid {p.border}; }}
+    QFrame#Separator {{ background: {p.border}; }}
+    QFrame#Drawer {{ background: {p.surface}; border-left: 1px solid {p.border}; }}
+    QFrame#DrawerHeader {{ background: transparent; border-bottom: 1px solid {p.border}; }}
+    QFrame#DrawerFooter {{ background: transparent; border-top: 1px solid {p.border}; }}
+    QFrame#SettingsNav {{ background: {p.surface2}; border-right: 1px solid {p.border}; }}
+    QFrame#SettingsFooter {{ background: transparent; border-top: 1px solid {p.border}; }}
+    QListWidget#SettingsList {{ border: none; background: transparent; }}
+    QListWidget#SettingsList::item {{
+        padding: 8px 10px; border-radius: {RADIUS["sm"]}px; color: {p.text2}; margin: 1px 0;
+    }}
+    QListWidget#SettingsList::item:selected {{ background: {p.accent_dim}; color: {p.accent}; }}
+    QListWidget#SettingsList::item:hover {{ background: {p.row_hover}; }}
+    QLabel#AppLogo {{ background: {p.accent}; border-radius: {RADIUS["md"]}px; }}
+
+    /* --- cards + semantic labels (property selectors, re-apply on theme swap) --- */
+    QFrame[card="true"] {{
+        background: {p.surface}; border: 1px solid {p.border};
+        border-radius: {RADIUS["md"]}px;
+    }}
+    QFrame[card="true"][selected="true"] {{ border: 1px solid {p.accent}; }}
+    QFrame[panel="true"] {{
+        background: {p.surface2}; border: 1px solid {p.border};
+        border-radius: {RADIUS["md"]}px;
+    }}
+    QLabel#QueueBadge {{
+        background: {p.accent_dim}; color: {p.accent};
+        border-radius: {RADIUS["md"]}px; font-weight: 700;
+    }}
+    QLabel#VpnBanner {{
+        color: {p.accent}; background: {p.accent_dim}; border: 1px solid {p.accent};
+        border-radius: {RADIUS["md"]}px; padding: 8px 12px;
+    }}
+    QLabel[role="caption"] {{ color: {p.text3}; font-weight: 700; }}
+    QLabel[role="muted"] {{ color: {p.text3}; }}
+    QLabel[role="dim"] {{ color: {p.text2}; }}
+    QLabel[role="value"] {{ color: {p.text}; }}
+    QLabel[role="strong"] {{ color: {p.text}; font-weight: 600; }}
+    QLabel[role="accent"] {{ color: {p.accent}; font-weight: 600; }}
+    QLabel[role="ok"] {{ color: {p.ok}; }}
+    QLabel[chip="true"] {{
+        color: {p.text2}; background: {p.surface2}; border: 1px solid {p.border};
+        border-radius: 3px; padding: 1px 7px;
+    }}
     """

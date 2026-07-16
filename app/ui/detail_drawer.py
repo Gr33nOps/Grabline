@@ -1,7 +1,7 @@
-"""The Downloads detail drawer: a 292px panel that slides in beside the table
-when a single download is selected. Shows its type, status, progress, a live
-mini speed graph, metadata, tags, and quick actions — everything the selected
-row can tell us, updated live while it stays open.
+"""The Downloads detail drawer: a 300px panel that shows beside the table when
+a single download is selected. Its widgets are built once and only their text /
+visibility change as the selection or live progress updates - no teardown and
+rebuild - so nothing flickers or doubles up, and it stays cheap to keep live.
 """
 
 from __future__ import annotations
@@ -26,26 +26,6 @@ from app.ui.format import human_bytes
 from app.ui.icons import svg_icon, type_icon_name
 
 
-def _meta_label(caption: str, value: str) -> QWidget:
-    p = theme.current()
-    box = QWidget()
-    lay = QVBoxLayout(box)
-    lay.setContentsMargins(0, 0, 0, 0)
-    lay.setSpacing(2)
-    cap = QLabel(caption.upper())
-    cap.setStyleSheet(
-        f"color: {p.text3}; font-size: {design.FONT['caption']}pt;"
-        f" font-weight: 700; letter-spacing: 0.5px;"
-    )
-    val = QLabel(value)
-    val.setStyleSheet(f"color: {p.text}; font-size: {design.FONT['small']}pt;")
-    val.setWordWrap(True)
-    val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-    lay.addWidget(cap)
-    lay.addWidget(val)
-    return box
-
-
 class DetailDrawer(QFrame):
     def __init__(
         self,
@@ -61,23 +41,19 @@ class DetailDrawer(QFrame):
         self.manager = manager
         self._view: JobView | None = None
         self._callbacks = (on_open_folder, on_copy_url, on_copy_hash, on_remove)
+        self.setObjectName("Drawer")
         self.setFixedWidth(300)
-        p = theme.current()
-        self.setStyleSheet(f"background: {p.surface}; border-left: 1px solid {p.border};")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # ---- header ---------------------------------------------------------
         header = QFrame()
-        header.setStyleSheet(f"border-bottom: 1px solid {p.border};")
+        header.setObjectName("DrawerHeader")
         hlay = QHBoxLayout(header)
         hlay.setContentsMargins(14, 10, 8, 10)
-        title = QLabel("DETAILS")
-        title.setStyleSheet(
-            f"color: {p.text3}; font-size: {design.FONT['caption']}pt;"
-            f" font-weight: 700; letter-spacing: 1px;"
-        )
+        title = components.role_label("DETAILS", "caption", size=design.FONT["caption"])
         hlay.addWidget(title)
         hlay.addStretch(1)
         close = components.IconButton("cancel", "")
@@ -85,19 +61,86 @@ class DetailDrawer(QFrame):
         hlay.addWidget(close)
         root.addWidget(header)
 
+        # ---- body (static widgets, filled in _update) -----------------------
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         body = QWidget()
         self._body = QVBoxLayout(body)
-        self._body.setContentsMargins(14, 12, 14, 10)
+        self._body.setContentsMargins(14, 12, 14, 12)
         self._body.setSpacing(11)
         scroll.setWidget(body)
         root.addWidget(scroll, 1)
 
-        # actions footer
+        # name + type icon
+        top = QWidget()
+        tl = QHBoxLayout(top)
+        tl.setContentsMargins(0, 0, 0, 0)
+        tl.setSpacing(8)
+        self._icon = QLabel()
+        self._icon.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._icon.setFixedWidth(18)
+        self._name = components.role_label("", "strong", size=design.FONT["h2"], bold=True)
+        self._name.setWordWrap(True)
+        tl.addWidget(self._icon)
+        tl.addWidget(self._name, 1)
+        self._body.addWidget(top)
+
+        # status pill
+        pill_row = QHBoxLayout()
+        self._pill = components.StatusPill("queued")
+        pill_row.addWidget(self._pill)
+        pill_row.addStretch(1)
+        self._body.addLayout(pill_row)
+
+        # progress bar + percent
+        prow = QHBoxLayout()
+        prow.setSpacing(8)
+        self._progress = motion.SmoothProgressBar()
+        self._percent = components.role_label("", "muted", size=design.FONT["small"])
+        self._percent.setMinimumWidth(30)
+        self._percent.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        prow.addWidget(self._progress, 1)
+        prow.addWidget(self._percent, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._body.addLayout(prow)
+
+        self._size = components.role_label("", "muted", size=design.FONT["small"])
+        self._body.addWidget(self._size)
+
+        # live speed card
+        self._spark = motion.Sparkline()
+        self._spark.setFixedHeight(52)
+        self._spark_card = components.card_frame()
+        sc = QVBoxLayout(self._spark_card)
+        sc.setContentsMargins(11, 9, 11, 9)
+        sc.setSpacing(4)
+        sc.addWidget(
+            components.role_label("SPEED · LAST 30s", "caption", size=design.FONT["caption"])
+        )
+        sc.addWidget(self._spark)
+        self._spark_val = components.role_label("—", "accent", size=design.FONT["h2"], bold=True)
+        self._spark_val.setAlignment(Qt.AlignmentFlag.AlignRight)
+        sc.addWidget(self._spark_val)
+        self._body.addWidget(self._spark_card)
+
+        # metadata
+        self._meta_queue = self._meta_block("Queue")
+        self._meta_server = self._meta_block("Server")
+        self._meta_eta = self._meta_block("ETA")
+        self._meta_dest = self._meta_block("Destination")
+        self._meta_url = self._meta_block("URL")
+
+        # tags (the only variable-count part - rebuilt in place)
+        self._tags_box = QWidget()
+        self._tags_layout = QHBoxLayout(self._tags_box)
+        self._tags_layout.setContentsMargins(0, 0, 0, 0)
+        self._tags_layout.setSpacing(4)
+        self._body.addWidget(self._tags_box)
+        self._body.addStretch(1)
+
+        # ---- actions footer -------------------------------------------------
         footer = QFrame()
-        footer.setStyleSheet(f"border-top: 1px solid {p.border};")
+        footer.setObjectName("DrawerFooter")
         flay = QHBoxLayout(footer)
         flay.setContentsMargins(8, 7, 8, 7)
         flay.setSpacing(2)
@@ -113,119 +156,66 @@ class DetailDrawer(QFrame):
             flay.addWidget(b)
         root.addWidget(footer)
 
-        self._spark = motion.Sparkline()
-        self._spark.setFixedHeight(46)
         self.hide()
+
+    def _meta_block(self, caption: str) -> QLabel:
+        """A caption + value pair; returns the value label to fill in later."""
+        box = QWidget()
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(2)
+        lay.addWidget(
+            components.role_label(caption.upper(), "caption", size=design.FONT["caption"])
+        )
+        value = components.role_label("—", "value", size=design.FONT["small"])
+        value.setWordWrap(True)
+        value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        lay.addWidget(value)
+        self._body.addWidget(box)
+        return value
 
     def _fire(self, index: int) -> None:
         if self._view is not None:
             self._callbacks[index](self._view)
 
     def show_view(self, view: JobView, speed_bps: float) -> None:
-        first = self._view is None or self._view.id != view.id
+        new = self._view is None or self._view.id != view.id
+        if new:
+            self._spark.clear()
         self._view = view
-        if first:
-            self._spark = motion.Sparkline()
-            self._spark.setFixedHeight(46)
-            self._rebuild()
-        self._update_live(view, speed_bps)
+        self._update(view, speed_bps, new)
         self.show()
 
     def current_id(self) -> int | None:
         return self._view.id if self._view is not None else None
 
-    def _rebuild(self) -> None:
-        while self._body.count():
-            item = self._body.takeAt(0)
-            if item is None:
-                break
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
-        view = self._view
-        if view is None:
-            return
+    def _update(self, view: JobView, speed_bps: float, new: bool) -> None:
         p = theme.current()
+        if new:
+            kind = view.kind.value if view.kind.value in ("torrent", "cloud") else view.filename
+            self._icon.setPixmap(svg_icon(type_icon_name(kind), p.accent).pixmap(16, 16))
+            self._name.setText(view.display_name)
+            self._meta_queue.setText(self._queue_name(view.queue_id))
+            self._meta_server.setText(urlsplit(view.url).hostname or "—")
+            self._meta_dest.setText(view.dest_dir)
+            self._meta_url.setText(view.url)
+            self._rebuild_tags(view)
 
-        # name + type icon
-        top = QWidget()
-        tl = QHBoxLayout(top)
-        tl.setContentsMargins(0, 0, 0, 0)
-        tl.setSpacing(8)
-        icon = QLabel()
-        kind = view.kind.value if view.kind.value in ("torrent", "cloud") else view.filename
-        icon.setPixmap(svg_icon(type_icon_name(kind), p.accent).pixmap(16, 16))
-        icon.setAlignment(Qt.AlignmentFlag.AlignTop)
-        name = QLabel(view.display_name)
-        name.setWordWrap(True)
-        name.setStyleSheet(f"font-weight: 600; font-size: {design.FONT['h2']}pt;")
-        tl.addWidget(icon)
-        tl.addWidget(name, 1)
-        self._body.addWidget(top)
-
-        self._pill = components.StatusPill(view.status.value)
-        pill_row = QHBoxLayout()
-        pill_row.addWidget(self._pill)
-        pill_row.addStretch(1)
-        self._body.addLayout(pill_row)
-
-        self._progress = motion.SmoothProgressBar()
-        self._body.addWidget(self._progress)
-        self._prog_text = QLabel("")
-        self._prog_text.setStyleSheet(f"color: {p.text3}; font-size: {design.FONT['small']}pt;")
-        self._body.addWidget(self._prog_text)
-
-        # mini speed card
-        spark_card = components.card_frame()
-        sc = QVBoxLayout(spark_card)
-        sc.setContentsMargins(10, 8, 10, 8)
-        cap = QLabel("SPEED · LAST 30s")
-        cap.setStyleSheet(
-            f"color: {p.text3}; font-size: {design.FONT['caption']}pt; font-weight: 700;"
-        )
-        sc.addWidget(cap)
-        sc.addWidget(self._spark)
-        self._spark_val = QLabel("—")
-        self._spark_val.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self._spark_val.setStyleSheet(f"color: {p.accent}; font-weight: 600;")
-        sc.addWidget(self._spark_val)
-        self._spark_card = spark_card
-        self._body.addWidget(spark_card)
-
-        # metadata
-        queue = self._queue_name(view.queue_id)
-        host = urlsplit(view.url).hostname or "—"
-        self._body.addWidget(_meta_label("Queue", queue))
-        self._body.addWidget(_meta_label("Server", host))
-        self._eta_meta = _meta_label("ETA", "—")
-        self._body.addWidget(self._eta_meta)
-        self._body.addWidget(_meta_label("Destination", view.dest_dir))
-        self._body.addWidget(_meta_label("URL", view.url))
-        if view.tags:
-            tags = QWidget()
-            tw = QHBoxLayout(tags)
-            tw.setContentsMargins(0, 0, 0, 0)
-            tw.setSpacing(4)
-            for tag in (t.strip() for t in view.tags.split(",") if t.strip()):
-                tw.addWidget(components.Chip(tag))
-            tw.addStretch(1)
-            self._body.addWidget(tags)
-        self._body.addStretch(1)
-
-    def _update_live(self, view: JobView, speed_bps: float) -> None:
         self._pill.set_status(view.status.value)
+        self._progress.set_color(design.status_color(p, view.status.value))
         if view.total_size:
-            self._progress.set_value(view.downloaded / view.total_size)
-            self._prog_text.setText(
-                f"{human_bytes(view.downloaded)} of {human_bytes(view.total_size)}"
-            )
+            fraction = view.downloaded / view.total_size
+            self._progress.set_value(fraction)
+            self._percent.setText(f"{int(fraction * 100)}%")
+            self._size.setText(f"{human_bytes(view.downloaded)} of {human_bytes(view.total_size)}")
         elif view.status is JobStatus.DOWNLOADING:
             self._progress.set_indeterminate(True)
-            self._prog_text.setText("Fetching metadata…")
+            self._percent.setText("")
+            self._size.setText("Fetching metadata…")
         else:
             self._progress.set_value(1.0 if view.status is JobStatus.COMPLETED else 0.0)
-            self._prog_text.setText("")
-        self._progress.set_color(design.status_color(theme.current(), view.status.value))
+            self._percent.setText("")
+            self._size.setText("")
 
         downloading = view.status is JobStatus.DOWNLOADING
         self._spark_card.setVisible(downloading)
@@ -235,15 +225,24 @@ class DetailDrawer(QFrame):
             eta = "—"
             if speed_bps > 1 and view.total_size:
                 eta = motion.fmt_eta((view.total_size - view.downloaded) / speed_bps)
-            self._set_eta(eta)
+            self._meta_eta.setText(eta)
         else:
-            self._set_eta("—")
+            self._meta_eta.setText("—")
         self._act_hash.setVisible(view.status is JobStatus.COMPLETED)
 
-    def _set_eta(self, text: str) -> None:
-        # the meta value label is the second child of the eta meta box
-        val = self._eta_meta.findChildren(QLabel)[-1]
-        val.setText(text)
+    def _rebuild_tags(self, view: JobView) -> None:
+        while self._tags_layout.count():
+            item = self._tags_layout.takeAt(0)
+            if item is None:
+                break
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        tags = [t.strip() for t in view.tags.split(",") if t.strip()] if view.tags else []
+        for tag in tags:
+            self._tags_layout.addWidget(components.Chip(tag))
+        self._tags_layout.addStretch(1)
+        self._tags_box.setVisible(bool(tags))
 
     def _queue_name(self, queue_id: int | None) -> str:
         if queue_id is None:
