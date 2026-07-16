@@ -758,3 +758,43 @@ def test_quiet_hours_window(db: Database):
     assert settings.in_quiet_hours() is True
     settings.quiet_enabled = False
     assert settings.in_quiet_hours() is False
+
+
+def test_global_busy_indicator_tracks_background_work(db: Database, tmp_path: Path):
+    """Anything that makes the user wait must show the activity shimmer: it
+    appears when background work starts and disappears when the last finishes."""
+    import time as _time
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        assert window._busy_bar.isHidden()
+
+        window._busy_begin()
+        assert not window._busy_bar.isHidden()
+        window._busy_begin()
+        assert window._busy_count.text() == "2 tasks"
+        window._busy_end()
+        assert not window._busy_bar.isHidden()  # one op still running
+        window._busy_end()
+        assert window._busy_bar.isHidden()
+
+        # And the real funnel: a file op flips it on, completion flips it off.
+        done: list[object] = []
+
+        def slow_work() -> str:
+            _time.sleep(0.05)
+            return "x"
+
+        window._run_file_op(slow_work, done.append)
+        assert not window._busy_bar.isHidden()
+        deadline = _time.monotonic() + 5
+        while not done and _time.monotonic() < deadline:
+            QApplication.processEvents()
+        assert done == ["x"]
+        assert window._busy_bar.isHidden()
+    finally:
+        manager.shutdown()

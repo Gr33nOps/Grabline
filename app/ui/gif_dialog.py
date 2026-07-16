@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 
 from app.core import gif
 from app.core.errors import DownloadError
-from app.ui import chrome
+from app.ui import chrome, motion
 from app.ui.quality_panel import parse_timestamp
 
 #: Running conversions stay referenced until finished (QThread lifetime rule).
@@ -83,6 +83,12 @@ class GifDialog(chrome.Dialog):
         hint.setStyleSheet("color: gray; font-size: 11px;")
         form.addRow(hint)
 
+        self._working_bar = motion.SmoothProgressBar()
+        self._working_bar.hide()
+        form.addRow(self._working_bar)
+        self._working_note = QLabel("Converting… this runs in the background.")
+        self._working_note.hide()
+        form.addRow(self._working_note)
         self._buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -103,6 +109,9 @@ class GifDialog(chrome.Dialog):
             QMessageBox.warning(self, "Grabline", "The end timestamp must be after the start.")
             return
         self._buttons.setEnabled(False)
+        self._working_bar.show()
+        self._working_bar.set_indeterminate(True)
+        self._working_note.show()
         thread = _GifThread(
             self._ffmpeg_path,
             self._source,
@@ -118,6 +127,9 @@ class GifDialog(chrome.Dialog):
 
     def _on_done(self, target: object, error: object) -> None:
         self._buttons.setEnabled(True)
+        self._working_bar.set_indeterminate(False)
+        self._working_bar.hide()
+        self._working_note.hide()
         if error is not None:
             QMessageBox.warning(self, "Grabline", str(error))
             return

@@ -241,6 +241,18 @@ class MainWindow(QMainWindow):
         column.addWidget(shell, 1)
         self.setCentralWidget(central)
         self.statusBar().showMessage("Ready")
+        # A global activity indicator: whenever anything is working in the
+        # background (analyzing, hashing, extracting, converting, listing,
+        # crawling…) this shimmer runs next to the status text, so a wait is
+        # never a mystery. Permanent widgets survive showMessage().
+        self._busy_ops = 0
+        self._busy_bar = motion.SmoothProgressBar()
+        self._busy_bar.setFixedWidth(90)
+        self._busy_bar.hide()
+        self._busy_count = components.role_label("", "muted", size=design.FONT["small"])
+        self._busy_count.hide()
+        self.statusBar().addPermanentWidget(self._busy_count)
+        self.statusBar().addPermanentWidget(self._busy_bar)
         self._status_info = components.role_label("", "muted", size=design.FONT["small"])
         self.statusBar().addPermanentWidget(self._status_info)
 
@@ -778,10 +790,12 @@ class MainWindow(QMainWindow):
         if not urls:
             return
         thread = BatchImportThread(self.manager, self.settings, urls)
+        self._busy_begin()
         thread.progress.connect(
             lambda done, total: self.statusBar().showMessage(f"Importing {done}/{total} …")
         )
         thread.summary.connect(self._on_batch_summary)
+        thread.finished.connect(self._busy_end)
         thread.start_tracked()
 
     def _on_batch_summary(self, queued: int, skipped: object) -> None:
@@ -932,11 +946,17 @@ class MainWindow(QMainWindow):
                 self.refresh()
                 return
         self.statusBar().showMessage(f"Analyzing {url} …")
+        self._busy_begin()
         thread = _ResolveThread(
             self.resolver, url, self.settings, page_title, quality, fallbacks, headers
         )
         thread.resolved.connect(self._on_resolved)
-        thread.finished.connect(lambda: self._resolve_threads.remove(thread))
+
+        def _resolve_finished() -> None:
+            self._resolve_threads.remove(thread)
+            self._busy_end()
+
+        thread.finished.connect(_resolve_finished)
         self._resolve_threads.append(thread)
         thread.start()
 
@@ -1315,6 +1335,23 @@ class MainWindow(QMainWindow):
             self._removing.add(view.id)
             self.refresh()
 
+    def _busy_begin(self) -> None:
+        self._busy_ops += 1
+        self._busy_bar.show()
+        self._busy_bar.set_indeterminate(True)
+        self._busy_count.setText(f"{self._busy_ops} tasks" if self._busy_ops > 1 else "")
+        self._busy_count.setVisible(self._busy_ops > 1)
+
+    def _busy_end(self) -> None:
+        self._busy_ops = max(0, self._busy_ops - 1)
+        if self._busy_ops == 0:
+            self._busy_bar.set_indeterminate(False)
+            self._busy_bar.hide()
+            self._busy_count.hide()
+        else:
+            self._busy_count.setText(f"{self._busy_ops} tasks" if self._busy_ops > 1 else "")
+            self._busy_count.setVisible(self._busy_ops > 1)
+
     def _run_file_op(
         self,
         work: Callable[[], object],
@@ -1323,9 +1360,11 @@ class MainWindow(QMainWindow):
     ) -> None:
         thread = _FileOpThread(work)
         self._file_ops.add(thread)
+        self._busy_begin()
 
         def finished(result: object, error: object) -> None:
             self._file_ops.discard(thread)
+            self._busy_end()
             if error is not None:
                 if on_error is not None:
                     on_error(error)
