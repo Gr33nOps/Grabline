@@ -228,6 +228,10 @@ class TorrentSession:
             "dht_bootstrap_nodes": _DHT_ROUTERS,
             "user_agent": "Grabline",
         }
+        # Peer encryption (Settings -> Torrent): prefer = enabled either way,
+        # require = encrypted peers only, off = plaintext only.
+        enc = {"prefer": (1, 1), "require": (0, 0), "off": (2, 2)}[settings.torrent_encryption]
+        pack["out_enc_policy"], pack["in_enc_policy"] = enc
         pack.update(_proxy_settings(settings.proxy))
         return pack
 
@@ -284,7 +288,8 @@ class TorrentSession:
             if session is None or settings is None:
                 continue
             limit = settings.torrent_ratio_limit
-            if not settings.torrent_seed or limit <= 0:
+            minutes = settings.torrent_seed_minutes
+            if not settings.torrent_seed or (limit <= 0 and minutes <= 0):
                 continue
             try:
                 for handle in session.get_torrents():
@@ -292,7 +297,11 @@ class TorrentSession:
                     if not status.is_seeding or status.paused:
                         continue
                     done = max(int(status.total_done), 1)
-                    if int(status.all_time_upload) / done >= limit:
+                    if limit > 0 and int(status.all_time_upload) / done >= limit:
+                        handle.pause()
+                        continue
+                    # Seeding-time limit (Settings -> Torrent): stop after N minutes.
+                    if minutes > 0 and int(status.seeding_duration) >= minutes * 60:
                         handle.pause()
             except Exception:  # pragma: no cover - never kill the ticker
                 pass

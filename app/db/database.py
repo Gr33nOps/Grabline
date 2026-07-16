@@ -12,7 +12,7 @@ import json
 import sqlite3
 import threading
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -476,6 +476,55 @@ class Database:
         history (the jobs list) is untouched."""
         with self._lock, self._conn:
             self._conn.execute("DELETE FROM download_stats")
+
+    def prune_stats(self, keep_days: int) -> None:
+        """Drop per-day statistics older than ``keep_days`` (0 = keep all)."""
+        if keep_days <= 0:
+            return
+        cutoff = (datetime.now() - timedelta(days=keep_days)).strftime("%Y-%m-%d")
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM download_stats WHERE day < ?", (cutoff,))
+
+    def stats_rows(self) -> list[tuple[str, str, str, int, int]]:
+        """Every (day, category, host, bytes, files) row, for CSV export."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT day, category, host, bytes, files FROM download_stats ORDER BY day"
+            ).fetchall()
+        return [(r[0], r[1] or "", r[2] or "", int(r[3]), int(r[4])) for r in rows]
+
+    def all_settings(self) -> dict[str, str]:
+        """Every persisted setting, for export/backup."""
+        with self._lock:
+            rows = self._conn.execute("SELECT key, value FROM settings").fetchall()
+        return {str(r[0]): str(r[1]) for r in rows}
+
+    def import_settings(self, values: dict[str, str]) -> int:
+        """Bulk-restore settings from an export; returns how many were set."""
+        with self._lock, self._conn:
+            for key, value in values.items():
+                self._conn.execute(
+                    "INSERT INTO settings (key, value) VALUES (?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    (str(key), str(value)),
+                )
+        return len(values)
+
+    def reset_settings(self) -> None:
+        """Delete every persisted setting - everything returns to defaults."""
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM settings")
+
+    def vacuum(self) -> None:
+        """Compact the database file (VACUUM cannot run inside a transaction)."""
+        with self._lock:
+            self._conn.execute("VACUUM")
+
+    def integrity_check(self) -> str:
+        """SQLite's own integrity verdict - "ok" when the file is healthy."""
+        with self._lock:
+            row = self._conn.execute("PRAGMA integrity_check").fetchone()
+        return str(row[0]) if row else "unknown"
 
     def update_job_downloaded(self, job_id: int, downloaded: int) -> None:
         """Progress mirror for smart/hls jobs (direct jobs checkpoint segments)."""

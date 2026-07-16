@@ -796,7 +796,11 @@ class SmartDownload:
                 {
                     "key": "FFmpegExtractAudio",
                     "preferredcodec": audio_format,
-                    "preferredquality": "0",
+                    # mp3 re-encodes: honor the configured bitrate; lossless
+                    # (flac/wav) and remuxes keep the source quality ("0").
+                    "preferredquality": (
+                        str(options.get("audio_bitrate") or "192") if audio_format == "mp3" else "0"
+                    ),
                 }
             )
             postprocessors.append({"key": "FFmpegMetadata", "add_metadata": True})

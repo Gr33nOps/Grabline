@@ -109,7 +109,8 @@ class DashboardView(QWidget):
         root.addStretch(1)
 
         self._timer = QTimer(self)
-        self._timer.setInterval(500)
+        # Settings → Statistics: sampling interval (default 500ms).
+        self._timer.setInterval(self.manager.settings.dashboard_refresh_ms)
         self._timer.timeout.connect(self._tick)
 
     def _tile_row(self, specs: list[tuple[str, str, bool]]) -> QHBoxLayout:

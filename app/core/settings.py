@@ -692,3 +692,377 @@ class Settings:
     @ffmpeg_path.setter
     def ffmpeg_path(self, value: str | None) -> None:
         self._db.set_setting("ffmpeg_path", value or "")
+
+    # ------------------------------------------------- general / window
+
+    @property
+    def start_minimized(self) -> bool:
+        """Start in the tray even when launched by hand (autostart always does)."""
+        return self._get_bool("start_minimized", False)
+
+    @start_minimized.setter
+    def start_minimized(self, value: bool) -> None:
+        self._set_bool("start_minimized", value)
+
+    @property
+    def minimize_to_tray(self) -> bool:
+        """Minimize hides to the tray instead of the taskbar."""
+        return self._get_bool("minimize_to_tray", False)
+
+    @minimize_to_tray.setter
+    def minimize_to_tray(self, value: bool) -> None:
+        self._set_bool("minimize_to_tray", value)
+
+    @property
+    def close_to_tray(self) -> bool:
+        """Closing the window keeps Grabline running in the tray."""
+        return self._get_bool("close_to_tray", True)
+
+    @close_to_tray.setter
+    def close_to_tray(self, value: bool) -> None:
+        self._set_bool("close_to_tray", value)
+
+    @property
+    def confirm_exit_active(self) -> bool:
+        """Ask before quitting while downloads are still running."""
+        return self._get_bool("confirm_exit_active", True)
+
+    @confirm_exit_active.setter
+    def confirm_exit_active(self, value: bool) -> None:
+        self._set_bool("confirm_exit_active", value)
+
+    @property
+    def auto_start_downloads(self) -> bool:
+        """Off = new downloads are added paused, started by hand."""
+        return self._get_bool("auto_start_downloads", True)
+
+    @auto_start_downloads.setter
+    def auto_start_downloads(self, value: bool) -> None:
+        self._set_bool("auto_start_downloads", value)
+
+    # -------------------------------------------------------- downloads
+
+    @property
+    def ask_save_dir(self) -> bool:
+        """Ask where to save on every add (instead of the default folder)."""
+        return self._get_bool("ask_save_dir", False)
+
+    @ask_save_dir.setter
+    def ask_save_dir(self, value: bool) -> None:
+        self._set_bool("ask_save_dir", value)
+
+    @property
+    def min_free_mb(self) -> int:
+        """Warn when the destination has less than this free (MB); 0 = off."""
+        return max(0, self._get_int("min_free_mb", 500))
+
+    @min_free_mb.setter
+    def min_free_mb(self, value: int) -> None:
+        self._db.set_setting("min_free_mb", str(max(0, value)))
+
+    # ------------------------------------------------------------ video
+
+    @property
+    def video_default_quality(self) -> str:
+        """The quality preselected in the panel ("Best", "1080p", "MP3", …)."""
+        return self._db.get_setting("video_default_quality") or "Best"
+
+    @video_default_quality.setter
+    def video_default_quality(self, value: str) -> None:
+        self._db.set_setting("video_default_quality", value.strip() or "Best")
+
+    @property
+    def audio_bitrate(self) -> str:
+        """Target bitrate (kbps) for MP3 extraction."""
+        raw = self._db.get_setting("audio_bitrate")
+        return raw if raw in ("128", "192", "256", "320") else "192"
+
+    @audio_bitrate.setter
+    def audio_bitrate(self, value: str) -> None:
+        self._db.set_setting("audio_bitrate", value)
+
+    @property
+    def cookies_file(self) -> str:
+        """A cookies.txt handed to yt-dlp for every video download (blank = off)."""
+        return self._db.get_setting("cookies_file") or ""
+
+    @cookies_file.setter
+    def cookies_file(self, value: str) -> None:
+        self._db.set_setting("cookies_file", value.strip())
+
+    # ---------------------------------------------------------- torrent
+
+    @property
+    def torrent_encryption(self) -> str:
+        """Peer encryption: "prefer" (default), "require", or "off"."""
+        raw = self._db.get_setting("torrent_encryption")
+        return raw if raw in ("prefer", "require", "off") else "prefer"
+
+    @torrent_encryption.setter
+    def torrent_encryption(self, value: str) -> None:
+        if value not in ("prefer", "require", "off"):
+            raise ValueError(f"unknown encryption mode: {value}")
+        self._db.set_setting("torrent_encryption", value)
+
+    @property
+    def torrent_seed_minutes(self) -> int:
+        """Stop seeding after this many minutes (0 = no time limit)."""
+        return max(0, self._get_int("torrent_seed_minutes", 0))
+
+    @torrent_seed_minutes.setter
+    def torrent_seed_minutes(self, value: int) -> None:
+        self._db.set_setting("torrent_seed_minutes", str(max(0, value)))
+
+    @property
+    def torrent_trackers(self) -> tuple[str, ...]:
+        """Default tracker URLs offered when creating a torrent."""
+        return self._get_str_list("torrent_trackers")
+
+    @torrent_trackers.setter
+    def torrent_trackers(self, value: Sequence[str]) -> None:
+        deduped = list(dict.fromkeys(v.strip() for v in value if v.strip()))
+        self._db.set_setting("torrent_trackers", json.dumps(deduped))
+
+    # ---------------------------------------------------------- archive
+
+    @property
+    def extract_to_subfolder(self) -> bool:
+        """Extract into a folder named after the archive (default: next to it)."""
+        return self._get_bool("extract_to_subfolder", False)
+
+    @extract_to_subfolder.setter
+    def extract_to_subfolder(self, value: bool) -> None:
+        self._set_bool("extract_to_subfolder", value)
+
+    @property
+    def delete_archive_after_extract(self) -> bool:
+        """Remove the archive once it extracted cleanly."""
+        return self._get_bool("delete_archive_after_extract", False)
+
+    @delete_archive_after_extract.setter
+    def delete_archive_after_extract(self, value: bool) -> None:
+        self._set_bool("delete_archive_after_extract", value)
+
+    # -------------------------------------------------- file management
+
+    @property
+    def default_tags(self) -> str:
+        """Tags applied to every new download (comma separated; blank = none)."""
+        return self._db.get_setting("default_tags") or ""
+
+    @default_tags.setter
+    def default_tags(self, value: str) -> None:
+        self._db.set_setting("default_tags", value.strip())
+
+    # ------------------------------------------------------------ queue
+
+    @property
+    def default_queue_id(self) -> int:
+        """Queue for new downloads when no category rule claims them (0 = none)."""
+        return max(0, self._get_int("default_queue_id", 0))
+
+    @default_queue_id.setter
+    def default_queue_id(self, value: int) -> None:
+        self._db.set_setting("default_queue_id", str(max(0, value)))
+
+    # -------------------------------------------------------- scheduler
+
+    @property
+    def battery_min_percent(self) -> int:
+        """With battery pause on: only pause below this charge (0 = always)."""
+        return max(0, min(100, self._get_int("battery_min_percent", 0)))
+
+    @battery_min_percent.setter
+    def battery_min_percent(self, value: int) -> None:
+        self._db.set_setting("battery_min_percent", str(max(0, min(100, value))))
+
+    # ---------------------------------------------------------- network
+
+    @property
+    def proxy_bypass(self) -> tuple[str, ...]:
+        """Hosts that connect directly even when a proxy is set."""
+        return self._get_str_list("proxy_bypass")
+
+    @proxy_bypass.setter
+    def proxy_bypass(self, value: Sequence[str]) -> None:
+        deduped = list(dict.fromkeys(v.strip().lower() for v in value if v.strip()))
+        self._db.set_setting("proxy_bypass", json.dumps(deduped))
+
+    @property
+    def user_agent(self) -> str:
+        """A custom User-Agent for plain downloads (blank = default)."""
+        return self._db.get_setting("user_agent") or ""
+
+    @user_agent.setter
+    def user_agent(self, value: str) -> None:
+        self._db.set_setting("user_agent", value.strip())
+
+    # --------------------------------------------------------- security
+
+    @property
+    def scanner_pref(self) -> str:
+        """Virus scanner: "auto" (first found), "defender", or "clamav"."""
+        raw = self._db.get_setting("scanner_pref")
+        return raw if raw in ("auto", "defender", "clamav") else "auto"
+
+    @scanner_pref.setter
+    def scanner_pref(self, value: str) -> None:
+        if value not in ("auto", "defender", "clamav"):
+            raise ValueError(f"unknown scanner: {value}")
+        self._db.set_setting("scanner_pref", value)
+
+    @property
+    def scan_extensions(self) -> str:
+        """Only security-check these suffixes (comma separated; blank = all)."""
+        return self._db.get_setting("scan_extensions") or ""
+
+    @scan_extensions.setter
+    def scan_extensions(self, value: str) -> None:
+        self._db.set_setting("scan_extensions", value.strip())
+
+    # ---------------------------------------------------- notifications
+
+    @property
+    def notify_on_failed(self) -> bool:
+        return self._get_bool("notify_on_failed", True)
+
+    @notify_on_failed.setter
+    def notify_on_failed(self, value: bool) -> None:
+        self._set_bool("notify_on_failed", value)
+
+    @property
+    def notify_queue_done(self) -> bool:
+        """Notify when the whole queue drains."""
+        return self._get_bool("notify_queue_done", False)
+
+    @notify_queue_done.setter
+    def notify_queue_done(self, value: bool) -> None:
+        self._set_bool("notify_queue_done", value)
+
+    @property
+    def toast_seconds(self) -> int:
+        """How long notifications stay up."""
+        return max(1, min(30, self._get_int("toast_seconds", 4)))
+
+    @toast_seconds.setter
+    def toast_seconds(self, value: int) -> None:
+        self._db.set_setting("toast_seconds", str(max(1, min(30, value))))
+
+    @property
+    def quiet_enabled(self) -> bool:
+        """Suppress notifications and sounds inside the quiet window."""
+        return self._get_bool("quiet_enabled", False)
+
+    @quiet_enabled.setter
+    def quiet_enabled(self, value: bool) -> None:
+        self._set_bool("quiet_enabled", value)
+
+    @property
+    def quiet_from(self) -> str:
+        return self._get_time("quiet_from", "22:00")
+
+    @quiet_from.setter
+    def quiet_from(self, value: str) -> None:
+        self._db.set_setting("quiet_from", value)
+
+    @property
+    def quiet_to(self) -> str:
+        return self._get_time("quiet_to", "08:00")
+
+    @quiet_to.setter
+    def quiet_to(self, value: str) -> None:
+        self._db.set_setting("quiet_to", value)
+
+    def in_quiet_hours(self) -> bool:
+        """True when notifications should stay silent right now."""
+        if not self.quiet_enabled:
+            return False
+        from datetime import datetime
+
+        now = datetime.now().strftime("%H:%M")
+        start, end = self.quiet_from, self.quiet_to
+        if start <= end:
+            return start <= now < end
+        return now >= start or now < end  # a window that crosses midnight
+
+    # ------------------------------------------------------- statistics
+
+    @property
+    def stats_enabled(self) -> bool:
+        """Record download statistics for the dashboard (always local-only)."""
+        return self._get_bool("stats_enabled", True)
+
+    @stats_enabled.setter
+    def stats_enabled(self, value: bool) -> None:
+        self._set_bool("stats_enabled", value)
+
+    @property
+    def stats_retention_days(self) -> int:
+        """Prune per-day statistics older than this (0 = keep forever)."""
+        return max(0, self._get_int("stats_retention_days", 0))
+
+    @stats_retention_days.setter
+    def stats_retention_days(self, value: int) -> None:
+        self._db.set_setting("stats_retention_days", str(max(0, value)))
+
+    @property
+    def dashboard_refresh_ms(self) -> int:
+        """Dashboard sampling interval."""
+        return max(100, min(5000, self._get_int("dashboard_refresh_ms", 500)))
+
+    @dashboard_refresh_ms.setter
+    def dashboard_refresh_ms(self, value: int) -> None:
+        self._db.set_setting("dashboard_refresh_ms", str(max(100, min(5000, value))))
+
+    # ------------------------------------------------------- appearance
+
+    @property
+    def accent_color(self) -> str:
+        """Accent override: "" = the brand blue, else a preset hex."""
+        return self._db.get_setting("accent_color") or ""
+
+    @accent_color.setter
+    def accent_color(self, value: str) -> None:
+        self._db.set_setting("accent_color", value.strip())
+
+    @property
+    def ui_density(self) -> str:
+        raw = self._db.get_setting("ui_density")
+        return raw if raw in ("comfortable", "compact") else "comfortable"
+
+    @ui_density.setter
+    def ui_density(self, value: str) -> None:
+        if value not in ("comfortable", "compact"):
+            raise ValueError(f"unknown density: {value}")
+        self._db.set_setting("ui_density", value)
+
+    @property
+    def hidden_columns(self) -> tuple[str, ...]:
+        """Downloads-list columns the user switched off ("size", "speed", …)."""
+        return self._get_str_list("hidden_columns")
+
+    @hidden_columns.setter
+    def hidden_columns(self, value: Sequence[str]) -> None:
+        self._db.set_setting("hidden_columns", json.dumps(sorted(set(value))))
+
+    # --------------------------------------------------------- advanced
+
+    @property
+    def log_level(self) -> str:
+        raw = self._db.get_setting("log_level")
+        return raw if raw in ("debug", "info", "warning", "error") else "info"
+
+    @log_level.setter
+    def log_level(self, value: str) -> None:
+        if value not in ("debug", "info", "warning", "error"):
+            raise ValueError(f"unknown log level: {value}")
+        self._db.set_setting("log_level", value)
+
+    @property
+    def log_to_file(self) -> bool:
+        """Also write the log to grabline.log in the data folder."""
+        return self._get_bool("log_to_file", False)
+
+    @log_to_file.setter
+    def log_to_file(self, value: bool) -> None:
+        self._set_bool("log_to_file", value)

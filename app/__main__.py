@@ -71,6 +71,16 @@ def _open_arg(args: list[str]) -> tuple[str, str] | None:
     return None
 
 
+def _configure_logging(settings: Settings) -> None:
+    """Apply the configured level (and grabline.log, if on) once settings load."""
+    level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    logging.getLogger().setLevel(level)
+    if settings.log_to_file:
+        handler = logging.FileHandler(paths.data_dir() / "grabline.log", encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        logging.getLogger().addHandler(handler)
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -107,7 +117,8 @@ def main() -> int:
     settings.download_dir.mkdir(parents=True, exist_ok=True)
     _register_native_host_once(settings)
     theme.remember_default(app)
-    theme.apply_theme(app, settings.theme)
+    _configure_logging(settings)
+    theme.apply_theme(app, settings.theme, accent=settings.accent_color or None)
     manager = DownloadManager(db, settings=settings)
 
     window = MainWindow(manager, settings)
@@ -162,20 +173,30 @@ def main() -> int:
     if tray is not None:
         tray.messageClicked.connect(on_message_clicked)
 
+    def toast(title: str, body: str, icon: QSystemTrayIcon.MessageIcon) -> None:
+        # One gate for every notification: tray present + outside quiet hours.
+        if tray is not None and not settings.in_quiet_hours():
+            tray.showMessage(title, body, icon, settings.toast_seconds * 1000)
+
     def on_job_completed(name: str, file_path: str) -> None:
-        if tray is not None and settings.notify_on_complete:
-            tray.showMessage(
-                "Download complete",
-                name,
-                QSystemTrayIcon.MessageIcon.Information,
-                4000,
-            )
-        if settings.sound_on_complete:
+        if settings.notify_on_complete:
+            toast("Download complete", name, QSystemTrayIcon.MessageIcon.Information)
+        if settings.sound_on_complete and not settings.in_quiet_hours():
             alerts.play_complete_sound(settings.sound_file)
         if settings.script_on_complete:
             scripts.run_script(settings.script_on_complete, file_path)
 
+    def on_job_failed(name: str, error: str) -> None:
+        if settings.notify_on_failed:
+            toast(f"Download failed: {name}", error, QSystemTrayIcon.MessageIcon.Warning)
+
     def on_queue_drained() -> None:
+        if settings.notify_queue_done:
+            toast(
+                "Queue finished",
+                "Every download has completed.",
+                QSystemTrayIcon.MessageIcon.Information,
+            )
         action = settings.after_queue_action
         if action == "nothing":
             return
@@ -192,6 +213,7 @@ def main() -> int:
             power.lock()
 
     window.job_completed.connect(on_job_completed)
+    window.job_failed.connect(on_job_failed)
     window.queue_drained.connect(on_queue_drained)
 
     if not settings.setup_seen and not minimized:
@@ -203,8 +225,8 @@ def main() -> int:
         # A few seconds after launch so it never delays the window appearing.
         QTimer.singleShot(3000, lambda: window.check_for_updates(quiet=True))
 
-    if minimized and tray is not None:
-        log.info("started minimized to the tray (autostart)")
+    if (minimized or settings.start_minimized) and tray is not None:
+        log.info("started minimized to the tray")
     else:
         window.show()
     if open_with is not None:

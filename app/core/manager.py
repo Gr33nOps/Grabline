@@ -171,6 +171,9 @@ class DownloadManager:
         #: worker deletes the row once it has actually stopped.
         self._pending_removal: set[int] = set()
         self._running = True
+        # Retention (Settings -> Statistics): prune old per-day rows at startup.
+        with contextlib.suppress(Exception):
+            self.db.prune_stats(self.settings.stats_retention_days)
         self._scheduler = threading.Thread(target=self._loop, name="gl-scheduler", daemon=True)
         self._scheduler.start()
 
@@ -252,7 +255,11 @@ class DownloadManager:
         if len(days) < 7 and now.weekday() not in days:
             return False
         if self.settings.pause_on_battery and power.on_battery():
-            return False
+            threshold = self.settings.battery_min_percent
+            percent = power.battery_percent()
+            # 0 = pause whenever on battery; otherwise only below the threshold.
+            if threshold == 0 or percent is None or percent < threshold:
+                return False
         if self.settings.download_schedule_enabled and not _in_window(
             now, self.settings.download_start, self.settings.download_stop
         ):
@@ -420,14 +427,32 @@ class DownloadManager:
         self._kick()
 
     def _queue_for(self, filename: str) -> int | None:
-        """The category queue for a new download, if one is configured."""
+        """The category queue for a new download; else the configured default
+        queue (Settings → Queue Manager); else the global default (None)."""
         category = categories.category_for(filename)
-        if category is None:
-            return None
-        for queue in self.db.list_queues():
-            if queue.category == category:
-                return queue.id
+        if category is not None:
+            for queue in self.db.list_queues():
+                if queue.category == category:
+                    return queue.id
+        default = self.settings.default_queue_id
+        if default and any(q.id == default for q in self.db.list_queues()):
+            return default
         return None
+
+    def _apply_add_defaults(self, job: Job) -> Job:
+        """Post-create defaults for every add path: hold the job when
+        auto-start is off, and stamp the configured default tags."""
+        changed = False
+        if self.settings.default_tags:
+            self.set_job_tags(job.id, self.settings.default_tags)
+            changed = True
+        if not self.settings.auto_start_downloads:
+            self.db.set_job_status(job.id, JobStatus.PAUSED)
+            changed = True
+        if changed:
+            fresh = self.db.get_job(job.id)
+            return fresh if fresh is not None else job
+        return job
 
     def find_existing(self, url: str) -> Job | None:
         """Duplicate detection at add time: the first job (any status) already
@@ -534,6 +559,7 @@ class DownloadManager:
             options=options,
             queue_id=self._queue_for(name),
         )
+        job = self._apply_add_defaults(job)
         self._kick()
         return job
 
@@ -594,7 +620,11 @@ class DownloadManager:
             # from the first attempt for the full format ladder, trading the
             # fast jsless start.
             "hq_first": self.settings.video_hq_first,
+            # Global video defaults; per-download extras below override them.
+            "audio_bitrate": self.settings.audio_bitrate,
         }
+        if self.settings.cookies_file:
+            options["cookie_file"] = self.settings.cookies_file
         if extras:
             options.update(extras)
         job = self.db.create_job(
@@ -606,6 +636,7 @@ class DownloadManager:
             options=options,
             queue_id=self._queue_for(filename),
         )
+        job = self._apply_add_defaults(job)
         self._kick()
         return job
 
@@ -638,6 +669,7 @@ class DownloadManager:
             options=options,
             queue_id=self._queue_for(filename),
         )
+        job = self._apply_add_defaults(job)
         self._kick()
         return job
 
@@ -670,6 +702,7 @@ class DownloadManager:
             options=dict(options or {}),
             queue_id=self._queue_for(name),
         )
+        job = self._apply_add_defaults(job)
         self._kick()
         return job
 
@@ -694,6 +727,7 @@ class DownloadManager:
             options={},
             queue_id=self._queue_for(name),
         )
+        job = self._apply_add_defaults(job)
         self._kick()
         return job
 
@@ -872,6 +906,8 @@ class DownloadManager:
             host_limiter=self._host_limiter_for(job),
             proxy=proxy,
             headers=job.options.get("http_headers") or None,
+            bypass_hosts=self.settings.proxy_bypass,
+            user_agent=self.settings.user_agent or None,
         )
 
     def _kick(self) -> None:
@@ -1066,6 +1102,8 @@ class DownloadManager:
         its category and server host."""
         fresh = self.db.get_job(job_id)
         if fresh is None:
+            return
+        if not self.settings.stats_enabled:
             return
         byte_count = fresh.total_size or fresh.downloaded
         if byte_count <= 0:

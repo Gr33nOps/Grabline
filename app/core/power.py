@@ -82,6 +82,17 @@ _battery_checked = 0.0
 _battery_state = False
 
 
+def battery_percent() -> int | None:
+    """Current charge (0-100), or None when there is no battery / no reading."""
+    try:
+        import psutil
+
+        battery = psutil.sensors_battery()
+        return int(battery.percent) if battery is not None else None
+    except Exception:  # pragma: no cover - platform/driver quirks
+        return None
+
+
 def on_battery() -> bool:
     """True when running on battery power (battery mode pauses downloads).
 

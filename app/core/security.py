@@ -85,6 +85,7 @@ def check_file(
     run_local_scan: bool = True,
     compute_checksums: bool = True,
     proxy: str | None = None,
+    scanner_pref: str = "auto",
 ) -> SecurityReport:
     """Assemble an advisory report for a finished file. Never raises for a
     detection - a missing scanner or a network error just leaves that section
@@ -115,9 +116,9 @@ def check_file(
                     "tampered with in transit.",
                 )
 
-    if run_local_scan and virusscan.find_scanner() is not None:
+    if run_local_scan and virusscan.find_scanner(scanner_pref) is not None:
         try:
-            result = virusscan.scan(path)
+            result = virusscan.scan(path, scanner_pref)
         except Exception:  # never let a scan failure sink the report
             result = None
         if result is not None:

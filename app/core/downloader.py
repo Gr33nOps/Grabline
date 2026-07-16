@@ -119,6 +119,8 @@ class SegmentedDownload:
         host_limiter: RateLimiter | None = None,
         proxy: str | None = None,
         headers: dict[str, str] | None = None,
+        bypass_hosts: tuple[str, ...] = (),
+        user_agent: str | None = None,
     ) -> None:
         self.db = db
         self.job = job
@@ -134,6 +136,8 @@ class SegmentedDownload:
         self.host_limiter = host_limiter
         self._client = net.build_client(
             proxy=proxy,
+            bypass_hosts=bypass_hosts,
+            user_agent=user_agent,
             follow_redirects=True,
             # HTTP/2 when the server offers it (negotiated via TLS ALPN, so
             # plain-http servers silently stay on 1.1): range requests

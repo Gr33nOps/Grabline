@@ -45,9 +45,29 @@ def _client_kwargs(proxy: str | None) -> dict[str, Any]:
     return {"proxy": proxy}
 
 
-def build_client(*, proxy: str | None = None, **kwargs: Any) -> httpx.Client:
-    """An httpx.Client honoring ``proxy`` for any supported scheme."""
-    return httpx.Client(**_client_kwargs(proxy), **kwargs)
+def build_client(
+    *,
+    proxy: str | None = None,
+    bypass_hosts: tuple[str, ...] = (),
+    user_agent: str | None = None,
+    **kwargs: Any,
+) -> httpx.Client:
+    """An httpx.Client honoring ``proxy`` for any supported scheme.
+
+    ``bypass_hosts`` connect directly even with a proxy set; ``user_agent``
+    overrides the default UA header for every request from this client."""
+    client_kwargs = _client_kwargs(proxy)
+    if proxy and bypass_hosts:
+        mounts = dict(client_kwargs.get("mounts") or {})
+        for host in bypass_hosts:
+            mounts[f"all://{host}"] = httpx.HTTPTransport()
+            mounts[f"all://*.{host}"] = httpx.HTTPTransport()
+        client_kwargs["mounts"] = mounts
+    if user_agent:
+        headers = dict(kwargs.pop("headers", None) or {})
+        headers.setdefault("User-Agent", user_agent)
+        kwargs["headers"] = headers
+    return httpx.Client(**client_kwargs, **kwargs)
 
 
 #: Interface-name fragments that strongly suggest a VPN / tunnel is up.

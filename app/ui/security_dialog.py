@@ -114,6 +114,7 @@ class SecurityDialog(chrome.Dialog):
                 virustotal_key=settings.virustotal_key,
                 run_local_scan=True,
                 proxy=settings.proxy,
+                scanner_pref=settings.scanner_pref,
             )
         )
         self._thread.done.connect(self._show)

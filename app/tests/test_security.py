@@ -114,7 +114,7 @@ def test_safebrowsing_clean_is_none(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_report_is_ok_for_a_plain_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("app.core.security.virusscan.find_scanner", lambda: None)
+    monkeypatch.setattr("app.core.security.virusscan.find_scanner", lambda pref="auto": None)
     target = tmp_path / "doc.pdf"
     target.write_bytes(b"%PDF-1.4 ...")
     report = security.check_file(target, url="https://example.com/doc.pdf")
@@ -124,7 +124,7 @@ def test_report_is_ok_for_a_plain_file(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 def test_executable_over_http_raises_caution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("app.core.security.virusscan.find_scanner", lambda: None)
+    monkeypatch.setattr("app.core.security.virusscan.find_scanner", lambda pref="auto": None)
     target = tmp_path / "setup.exe"
     target.write_bytes(b"MZ...")
     report = security.check_file(target, url="http://downloads.test/setup.exe")
@@ -139,10 +139,12 @@ def test_local_scan_detection_is_a_warning_not_a_block(
 ):
     from app.core.virusscan import ScanResult
 
-    monkeypatch.setattr("app.core.security.virusscan.find_scanner", lambda: ("ClamAV", ["x"]))
+    monkeypatch.setattr(
+        "app.core.security.virusscan.find_scanner", lambda pref="auto": ("ClamAV", ["x"])
+    )
     monkeypatch.setattr(
         "app.core.security.virusscan.scan",
-        lambda p: ScanResult(clean=False, scanner="ClamAV", detail="Eicar-Test"),
+        lambda p, pref="auto": ScanResult(clean=False, scanner="ClamAV", detail="Eicar-Test"),
     )
     target = tmp_path / "sample.bin"
     target.write_bytes(b"x")
@@ -155,7 +157,7 @@ def test_local_scan_detection_is_a_warning_not_a_block(
 def test_virustotal_flag_raises_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from app.core.reputation import VirusTotalResult
 
-    monkeypatch.setattr("app.core.security.virusscan.find_scanner", lambda: None)
+    monkeypatch.setattr("app.core.security.virusscan.find_scanner", lambda pref="auto": None)
     monkeypatch.setattr(
         "app.core.security.reputation.virustotal_lookup",
         lambda *a, **k: VirusTotalResult(malicious=5, suspicious=0, total=70, known=True),

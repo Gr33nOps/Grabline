@@ -27,8 +27,17 @@ class ScanResult:
     detail: str = ""
 
 
-def find_scanner() -> tuple[str, list[str]] | None:
-    """(display name, command prefix) of the first scanner found, or None."""
+def find_scanner(pref: str = "auto") -> tuple[str, list[str]] | None:
+    """(display name, command prefix) of the first scanner found, or None.
+    ``pref`` pins one scanner ("defender" / "clamav"); "auto" takes the first."""
+    if pref == "clamav":
+        return _find_clamav()
+    if pref == "defender":
+        return _find_defender()
+    return _find_defender() or _find_clamav()
+
+
+def _find_defender() -> tuple[str, list[str]] | None:
     if sys.platform == "win32":
         for base in (os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMW6432")):
             if not base:
@@ -39,6 +48,10 @@ def find_scanner() -> tuple[str, list[str]] | None:
                     "Windows Defender",
                     [str(exe), "-Scan", "-ScanType", "3", "-DisableRemediation", "-File"],
                 )
+    return None
+
+
+def _find_clamav() -> tuple[str, list[str]] | None:
     if tool := shutil.which("clamdscan"):
         # --fdpass lets the daemon read files it has no permission for.
         return ("ClamAV", [tool, "--no-summary", "--fdpass", "--"])
@@ -47,10 +60,10 @@ def find_scanner() -> tuple[str, list[str]] | None:
     return None
 
 
-def scan(path: Path) -> ScanResult:
+def scan(path: Path, pref: str = "auto") -> ScanResult:
     """Scan one file. Raises DownloadError when no scanner is installed or the
     scan itself fails - never silently passes a file it could not check."""
-    found = find_scanner()
+    found = find_scanner(pref)
     if found is None:
         raise DownloadError(
             "no virus scanner was found - install ClamAV (or use Windows "

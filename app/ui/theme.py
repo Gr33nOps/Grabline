@@ -43,13 +43,17 @@ def remember_default(app: QApplication) -> None:
     """No-op retained for callers/tests; the design system owns the look."""
 
 
-def apply_theme(app: QApplication, mode: str) -> None:
-    """Apply "system", "light", or "dark" to the running application."""
+def apply_theme(app: QApplication, mode: str, accent: str | None = None) -> None:
+    """Apply "system", "light", or "dark" - optionally re-tinted around an
+    ``accent`` hex (Settings → Appearance; None/"" = the brand blue)."""
     global _current
     if mode not in THEMES:
         mode = "system"
     dark = _system_prefers_dark(app) if mode == "system" else mode == "dark"
-    _current = design.DARK if dark else design.LIGHT
+    palette = design.DARK if dark else design.LIGHT
+    if accent:
+        palette = design.with_accent(palette, accent)
+    _current = palette
     app.setStyle("Fusion")  # a consistent base for the stylesheet everywhere
     app.setPalette(design.qpalette(_current))
     app.setStyleSheet(design.stylesheet(_current))

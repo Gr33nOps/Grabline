@@ -663,3 +663,98 @@ def test_quality_label_add_skips_analysis(db: Database, tmp_path: Path, monkeypa
         assert window._resolve_threads == []  # no analysis thread was spawned
     finally:
         manager.shutdown()
+
+
+def test_expanded_settings_roundtrip(db: Database, monkeypatch):
+    """A sample from every new section persists through apply()."""
+    from app.core import launcher
+    from app.ui.settings_dialog import SettingsDialog
+
+    _qapp()
+    settings = Settings(db)
+    dialog = SettingsDialog(settings)
+    monkeypatch.setattr(launcher, "set_autostart", lambda enabled: None)
+
+    dialog.tray_min_check.setChecked(True)
+    dialog.new_dl_combo.setCurrentIndex(1)  # add paused
+    dialog.ask_save_check.setChecked(True)
+    dialog.free_mb_spin.setValue(1000)
+    dialog.default_quality_combo.setCurrentText("1080p")
+    dialog.bitrate_combo.setCurrentIndex(dialog.bitrate_combo.findData("320"))
+    dialog.encryption_combo.setCurrentIndex(dialog.encryption_combo.findData("require"))
+    dialog.seed_minutes_spin.setValue(90)
+    dialog.extract_subfolder_check.setChecked(True)
+    dialog.default_tags_edit.setText("new, fresh")
+    dialog.battery_pct_spin.setValue(30)
+    dialog.bypass_edit.setText("intranet.local, nas.home")
+    dialog.ua_edit.setText("Grabline/UA")
+    dialog.scanner_combo.setCurrentIndex(dialog.scanner_combo.findData("clamav"))
+    dialog.notify_queue_check.setChecked(True)
+    dialog.toast_spin.setValue(9)
+    dialog.quiet_check.setChecked(True)
+    dialog.retention_spin.setValue(30)
+    dialog.accent_combo.setCurrentIndex(1)  # Violet
+    dialog.density_combo.setCurrentIndex(dialog.density_combo.findData("compact"))
+    dialog.column_checks["eta"].setChecked(False)
+    dialog.log_combo.setCurrentIndex(dialog.log_combo.findData("debug"))
+    assert dialog.apply()
+
+    assert settings.minimize_to_tray is True
+    assert settings.auto_start_downloads is False
+    assert settings.ask_save_dir is True and settings.min_free_mb == 1000
+    assert settings.video_default_quality == "1080p" and settings.audio_bitrate == "320"
+    assert settings.torrent_encryption == "require" and settings.torrent_seed_minutes == 90
+    assert settings.extract_to_subfolder is True
+    assert settings.default_tags == "new, fresh"
+    assert settings.battery_min_percent == 30
+    assert settings.proxy_bypass == ("intranet.local", "nas.home")
+    assert settings.user_agent == "Grabline/UA"
+    assert settings.scanner_pref == "clamav"
+    assert settings.notify_queue_done is True and settings.toast_seconds == 9
+    assert settings.quiet_enabled is True
+    assert settings.stats_retention_days == 30
+    assert settings.accent_color == "#7c3aed"
+    assert settings.ui_density == "compact"
+    assert settings.hidden_columns == ("eta",)
+    assert settings.log_level == "debug"
+
+
+def test_paused_add_and_default_tags(db: Database, tmp_path: Path):
+    """Settings → General 'Add paused' + File Management default tags apply to
+    every new download."""
+    from app.core.models import JobStatus
+
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    settings.auto_start_downloads = False
+    settings.default_tags = "inbox"
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        job = manager.add_url("https://example.invalid/held.bin")
+        assert job.status is JobStatus.PAUSED
+        fresh = db.get_job(job.id)
+        assert fresh is not None and fresh.status is JobStatus.PAUSED
+        assert fresh.options.get("tags") == "inbox"
+    finally:
+        manager.shutdown()
+
+
+def test_accent_override_palette():
+    from app.ui import design
+
+    tinted = design.with_accent(design.DARK, "#7c3aed")
+    assert tinted.accent == "#7c3aed"
+    assert tinted.st_downloading == "#7c3aed" and tinted.g_dl == "#7c3aed"
+    assert tinted.accent_h != tinted.accent  # hover derived, not identical
+    assert design.DARK.accent != "#7c3aed"  # the base palette is untouched
+
+
+def test_quiet_hours_window(db: Database):
+    settings = Settings(db)
+    assert settings.in_quiet_hours() is False  # off by default
+    settings.quiet_enabled = True
+    settings.quiet_from = "00:00"
+    settings.quiet_to = "24:00"  # the whole day - always inside
+    assert settings.in_quiet_hours() is True
+    settings.quiet_enabled = False
+    assert settings.in_quiet_hours() is False

@@ -141,6 +141,36 @@ RADIUS = {"sm": 4, "md": 6, "lg": 8, "pill": 999}
 FONT = {"caption": 8, "small": 9, "body": 10, "h2": 11, "h1": 13, "display": 16}
 
 
+#: Accent presets offered in Settings → Appearance ("" = the brand blue).
+ACCENT_PRESETS: tuple[tuple[str, str], ...] = (
+    ("Grabline Blue", ""),
+    ("Violet", "#7c3aed"),
+    ("Green", "#059669"),
+    ("Orange", "#ea580c"),
+    ("Rose", "#e11d48"),
+    ("Teal", "#0d9488"),
+)
+
+
+def with_accent(palette: Palette, accent: str) -> Palette:
+    """The palette re-tinted around a different accent. Hover shifts darker in
+    light mode and lighter in dark mode; the dim wash and the downloading /
+    download-graph colors follow the accent."""
+    from dataclasses import replace
+
+    base = QColor(accent)
+    hover = base.lighter(125) if palette.dark else base.darker(120)
+    dim = f"rgba({base.red()},{base.green()},{base.blue()},{0.18 if palette.dark else 0.12})"
+    return replace(
+        palette,
+        accent=base.name(),
+        accent_h=hover.name(),
+        accent_dim=dim,
+        st_downloading=base.name(),
+        g_dl=base.name(),
+    )
+
+
 def status_color(palette: Palette, status: str) -> str:
     return {
         "downloading": palette.st_downloading,

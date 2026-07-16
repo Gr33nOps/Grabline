@@ -12,6 +12,7 @@ from typing import cast
 from urllib.parse import urlsplit
 
 from PySide6.QtCore import (
+    QEvent,
     QItemSelection,
     QItemSelectionModel,
     QPoint,
@@ -185,6 +186,7 @@ class MainWindow(QMainWindow):
     #: Emitted when a download finishes (display name, file path) and when the
     #: last active/queued download drains, so __main__ can toast and act.
     job_completed = Signal(str, str)
+    job_failed = Signal(str, str)  # display name, error text
     queue_drained = Signal()
 
     def __init__(self, manager: DownloadManager, settings: Settings) -> None:
@@ -515,7 +517,23 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QHeaderView
 
         header.setSectionResizeMode(_COL_NAME, QHeaderView.ResizeMode.Stretch)
+        self._apply_table_prefs()
         return self.table
+
+    def _apply_table_prefs(self) -> None:
+        """Appearance prefs: row density and which columns are visible."""
+        compact = self.settings.ui_density == "compact"
+        self.table.verticalHeader().setDefaultSectionSize(26 if compact else 34)
+        hidden = set(self.settings.hidden_columns)
+        toggles = {
+            "size": _COL_SIZE,
+            "progress": _COL_PROGRESS,
+            "speed": _COL_SPEED,
+            "eta": _COL_ETA,
+            "status": _COL_STATUS,
+        }
+        for key, column in toggles.items():
+            self.table.setColumnHidden(column, key in hidden)
 
     def _switch_view(self, key: str) -> None:
         """Sidebar navigation between the embedded pages."""
@@ -530,8 +548,9 @@ class MainWindow(QMainWindow):
         rate/schedule/proxy, and retint the chrome."""
         app = QApplication.instance()
         if isinstance(app, QApplication):
-            theme.apply_theme(app, self.settings.theme)
+            theme.apply_theme(app, self.settings.theme, accent=self.settings.accent_color or None)
         self.manager.reload_settings()
+        self._apply_table_prefs()
         self._retint_all()
         self.statusBar().showMessage("Settings saved", 4000)
 
@@ -540,7 +559,7 @@ class MainWindow(QMainWindow):
         self.settings.theme = new
         app = QApplication.instance()
         if isinstance(app, QApplication):
-            theme.apply_theme(app, new)
+            theme.apply_theme(app, new, accent=self.settings.accent_color or None)
         self._retint_all()
 
     def _retint_all(self) -> None:
@@ -811,6 +830,28 @@ class MainWindow(QMainWindow):
                     self.statusBar().showMessage("Ready")
                     return
 
+        # Low-disk warning (advisory, Settings → Downloads): free space on the
+        # download drive below the configured floor still lets you proceed.
+        floor_mb = self.settings.min_free_mb
+        if floor_mb:
+            import shutil as _shutil
+
+            try:
+                free_mb = _shutil.disk_usage(str(self.settings.download_dir)).free // (1024 * 1024)
+            except OSError:
+                free_mb = None
+            if free_mb is not None and free_mb < floor_mb:
+                answer = QMessageBox.warning(
+                    self,
+                    "Grabline",
+                    f"Only {free_mb} MB free on the download drive "
+                    f"(warning floor: {floor_mb} MB). Download anyway?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    self.statusBar().showMessage("Ready")
+                    return
         # Advisory URL security: warn on plain HTTP (instant) and, if a Safe
         # Browsing key is set, check the URL off-thread. Both only warn - the
         # user can always proceed.
@@ -899,6 +940,16 @@ class MainWindow(QMainWindow):
         self._resolve_threads.append(thread)
         thread.start()
 
+    def _ask_dest(self) -> str | None:
+        """Settings → Downloads 'Ask where to save': a folder for this add,
+        "" when the setting is off (use defaults), or None on cancel."""
+        if not self.settings.ask_save_dir:
+            return ""
+        chosen = QFileDialog.getExistingDirectory(
+            self, "Save this download to", str(self.settings.download_dir)
+        )
+        return chosen or None
+
     def _on_resolved(
         self,
         resolution: Resolution,
@@ -935,15 +986,22 @@ class MainWindow(QMainWindow):
             and (option := option_for_label(quality, resolution.media.options)) is not None
         ):
             # F1.3: the quality was already chosen in the page - no dialog.
+            dest = self._ask_dest()
+            if dest is None:
+                return
             self.manager.add_smart(
                 resolution.url,
                 resolution.media,
                 option,
+                dest_dir=dest or None,
                 use_session=self.settings.use_browser_session,
                 session_browser=self.settings.session_browser,
             )
             self.statusBar().showMessage(f"Queued {resolution.media.title} ({option.label})", 5000)
             self.refresh()
+            return
+        dest = self._ask_dest()
+        if dest is None:
             return
         if resolution.kind is JobKind.SMART and resolution.playlist is not None:
             playlist_panel = PlaylistPanel(
@@ -959,11 +1017,14 @@ class MainWindow(QMainWindow):
                     entry.url,
                     entry.title,
                     batch_option,
+                    dest_dir=dest or None,
                     use_session=self.settings.use_browser_session,
                     session_browser=self.settings.session_browser,
                 )
         elif resolution.kind is JobKind.SMART and resolution.media is not None:
-            quality_panel = QualityPanel(resolution.media, self)
+            quality_panel = QualityPanel(
+                resolution.media, self, default_label=self.settings.video_default_quality
+            )
             if quality_panel.exec() != QualityPanel.DialogCode.Accepted:
                 return
             option = quality_panel.selected_option()
@@ -973,6 +1034,7 @@ class MainWindow(QMainWindow):
                 resolution.url,
                 resolution.media,
                 option,
+                dest_dir=dest or None,
                 subtitles=quality_panel.subtitles_config(),
                 trim=quality_panel.trim_range(),
                 extras=quality_panel.extras_config(),
@@ -998,7 +1060,9 @@ class MainWindow(QMainWindow):
                 variant = resolution.variants[labels.index(choice)]
             elif resolution.variants:
                 variant = resolution.variants[0]
-            self.manager.add_hls(resolution.url, title=page_title, variant=variant)
+            self.manager.add_hls(
+                resolution.url, dest_dir=dest or None, title=page_title, variant=variant
+            )
         else:
             # F1.8 name fixer: prefer Content-Disposition, then rescue ugly
             # URL names (videoplayback.mp4 …) with the page title.
@@ -1016,6 +1080,7 @@ class MainWindow(QMainWindow):
             # URL later dies for good, the download switches to the next one.
             self.manager.add_url(
                 resolution.url,
+                dest_dir=dest or None,
                 filename=filename,
                 headers=headers or None,
                 mirrors=list(fallbacks) or None,
@@ -1321,11 +1386,21 @@ class MainWindow(QMainWindow):
         raises _ScanFlagged so the caller can ask the user whether to go on."""
 
         def work() -> object:
-            if scan and self.settings.scan_before_extract and virusscan.find_scanner() is not None:
-                result = virusscan.scan(path)
+            pref = self.settings.scanner_pref
+            if (
+                scan
+                and self.settings.scan_before_extract
+                and virusscan.find_scanner(pref) is not None
+            ):
+                result = virusscan.scan(path, pref)
                 if not result.clean:
                     raise _ScanFlagged(result.scanner, result.detail)
-            return archive.extract(path, passwords=passwords, members=members)
+            dest = path.parent / path.stem if self.settings.extract_to_subfolder else None
+            extracted = archive.extract(path, dest, passwords=passwords, members=members)
+            if self.settings.delete_archive_after_extract and members is None:
+                # Only after a full, clean extraction - never on partial picks.
+                path.unlink(missing_ok=True)
+            return extracted
 
         return work
 
@@ -1481,11 +1556,19 @@ class MainWindow(QMainWindow):
         up if something is worth a look - never blocks, never deletes."""
         if not file_path.exists():
             return
+        allowed = self.settings.scan_extensions
+        if allowed:
+            wanted = {e.strip().lower().lstrip(".") for e in allowed.split(",") if e.strip()}
+            if file_path.suffix.lower().lstrip(".") not in wanted:
+                return  # the user scoped scanning to specific types
         key = self.settings.virustotal_key
         proxy = self.settings.proxy
+        pref = self.settings.scanner_pref
 
         def work() -> object:
-            return security.check_file(file_path, url=view.url, virustotal_key=key, proxy=proxy)
+            return security.check_file(
+                file_path, url=view.url, virustotal_key=key, proxy=proxy, scanner_pref=pref
+            )
 
         def done(result: object) -> None:
             report = cast("security.SecurityReport", result)
@@ -1703,6 +1786,8 @@ class MainWindow(QMainWindow):
 
     def _create_torrent(self) -> None:
         dialog = CreateTorrentDialog(self)
+        if self.settings.torrent_trackers:  # Settings → Torrent: default trackers
+            dialog.trackers_edit.setPlainText("\n".join(self.settings.torrent_trackers))
         if dialog.exec() != CreateTorrentDialog.DialogCode.Accepted:
             return
         source = dialog.source()
@@ -1892,6 +1977,12 @@ class MainWindow(QMainWindow):
             previous = self._prev_status.get(view.id)
             if view.status in (JobStatus.DOWNLOADING, JobStatus.QUEUED):
                 active_now = True
+            if (
+                previous is not None
+                and previous is not JobStatus.FAILED
+                and view.status is JobStatus.FAILED
+            ):
+                self.job_failed.emit(view.display_name, view.error or "download failed")
             just_completed = (
                 previous is not None
                 and previous is not JobStatus.COMPLETED
@@ -2111,9 +2202,36 @@ class MainWindow(QMainWindow):
 
     # --------------------------------------------------------------- close
 
+    def changeEvent(self, event: QEvent) -> None:
+        # Minimize-to-tray (Settings → General): hide instead of the taskbar.
+        if (
+            event.type() == QEvent.Type.WindowStateChange
+            and self.isMinimized()
+            and self.close_to_tray  # tray is available
+            and self.settings.minimize_to_tray
+        ):
+            QTimer.singleShot(0, self.hide)
+        super().changeEvent(event)
+
+    def _active_download_count(self) -> int:
+        return sum(1 for v in self._last_views.values() if v.status is JobStatus.DOWNLOADING)
+
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self.close_to_tray and self.isVisible():
+        if self.close_to_tray and self.settings.close_to_tray and self.isVisible():
             event.ignore()
             self.hide()
-        else:
-            event.accept()
+            return
+        active = self._active_download_count()
+        if active and self.settings.confirm_exit_active:
+            answer = QMessageBox.question(
+                self,
+                "Grabline",
+                f"{active} download(s) are still running - quit anyway?\n"
+                "(Progress is saved; they resume next launch.)",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+        event.accept()

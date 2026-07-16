@@ -265,14 +265,14 @@ def _fake_run(returncode: int, stdout: str = "", stderr: str = ""):
 
 
 def test_scan_clean(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    monkeypatch.setattr(virusscan, "find_scanner", lambda: ("ClamAV", ["clamscan"]))
+    monkeypatch.setattr(virusscan, "find_scanner", lambda pref="auto": ("ClamAV", ["clamscan"]))
     monkeypatch.setattr("app.core.virusscan.subprocess.run", _fake_run(0))
     result = virusscan.scan(tmp_path / "x.zip")
     assert result.clean and result.scanner == "ClamAV"
 
 
 def test_scan_infected_reports_the_finding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    monkeypatch.setattr(virusscan, "find_scanner", lambda: ("ClamAV", ["clamscan"]))
+    monkeypatch.setattr(virusscan, "find_scanner", lambda pref="auto": ("ClamAV", ["clamscan"]))
     monkeypatch.setattr(
         "app.core.virusscan.subprocess.run",
         _fake_run(1, stdout="x.zip: Eicar-Test-Signature FOUND\n"),
@@ -283,7 +283,7 @@ def test_scan_infected_reports_the_finding(monkeypatch: pytest.MonkeyPatch, tmp_
 
 
 def test_scan_without_a_scanner_refuses_honestly(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    monkeypatch.setattr(virusscan, "find_scanner", lambda: None)
+    monkeypatch.setattr(virusscan, "find_scanner", lambda pref="auto": None)
     with pytest.raises(DownloadError, match="no virus scanner"):
         virusscan.scan(tmp_path / "x.zip")
 
@@ -291,7 +291,7 @@ def test_scan_without_a_scanner_refuses_honestly(monkeypatch: pytest.MonkeyPatch
 def test_scan_error_exit_code_is_not_treated_as_clean(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
-    monkeypatch.setattr(virusscan, "find_scanner", lambda: ("ClamAV", ["clamscan"]))
+    monkeypatch.setattr(virusscan, "find_scanner", lambda pref="auto": ("ClamAV", ["clamscan"]))
     monkeypatch.setattr(
         "app.core.virusscan.subprocess.run", _fake_run(2, stderr="database missing")
     )

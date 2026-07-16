@@ -59,7 +59,13 @@ class _ThumbnailFetcher(QThread):
 
 
 class QualityPanel(chrome.Dialog):
-    def __init__(self, media: MediaInfo, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        media: MediaInfo,
+        parent: QWidget | None = None,
+        *,
+        default_label: str = "",
+    ) -> None:
         super().__init__(parent)
         self.media = media
         self.setWindowTitle("Grabline - choose quality")
@@ -97,7 +103,15 @@ class QualityPanel(chrome.Dialog):
             item.setData(Qt.ItemDataRole.UserRole, index)
             self.options_list.addItem(item)
         if media.options:
-            self.options_list.setCurrentRow(0)
+            # Preselect the configured default quality (Settings → Video
+            # Downloader) when this video offers it; else the top option.
+            preferred = 0
+            if default_label:
+                for index, option in enumerate(media.options):
+                    if option.label.lower() == default_label.lower():
+                        preferred = index
+                        break
+            self.options_list.setCurrentRow(preferred)
         self.options_list.itemDoubleClicked.connect(lambda _item: self.accept())
         layout.addWidget(self.options_list)
 
