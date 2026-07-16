@@ -10,7 +10,6 @@ from collections.abc import Callable
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QLabel,
     QPlainTextEdit,
@@ -19,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.inspector import InspectionReport, inspect_url
+from app.ui import chrome, motion
 from app.ui.format import human_bytes
 
 
@@ -105,7 +105,7 @@ def _render(report: InspectionReport) -> str:
     return "\n".join(lines).strip()
 
 
-class InspectorDialog(QDialog):
+class InspectorDialog(chrome.Dialog):
     def __init__(
         self,
         url: str,
@@ -124,10 +124,17 @@ class InspectorDialog(QDialog):
         layout = QVBoxLayout(self)
         self._status = QLabel(f"Inspecting {url} …")
         layout.addWidget(self._status)
+        # A visible loading state while the probe runs - never a blank window.
+        self._loading_bar = motion.SmoothProgressBar()
+        self._loading_bar.set_indeterminate(True)
+        layout.addWidget(self._loading_bar)
+        self._loading_note = QLabel("Gathering information… (network probe, DNS, TLS)")
+        layout.addWidget(self._loading_note)
         self._text = QPlainTextEdit()
         self._text.setReadOnly(True)
         self._text.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self._text.setStyleSheet("font-family: monospace;")
+        self._text.hide()  # shown when the report lands
         layout.addWidget(self._text)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
@@ -159,6 +166,10 @@ class InspectorDialog(QDialog):
 
     def _show(self, report: object) -> None:
         assert isinstance(report, InspectionReport)
+        self._loading_bar.set_indeterminate(False)
+        self._loading_bar.hide()
+        self._loading_note.hide()
+        self._text.show()
         self._status.setText(
             "Unreachable" if not report.reachable else f"HTTP {report.status} · done"
         )

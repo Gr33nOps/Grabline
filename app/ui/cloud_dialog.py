@@ -26,12 +26,13 @@ from PySide6.QtWidgets import (
 
 from app.core.credentials import CloudAccount, CredentialStore
 from app.engines.cloud import RemoteFile
+from app.ui import chrome
 from app.ui.format import human_bytes
 
 _SERVICES = ("sftp", "ftp", "ftps", "scp", "webdav", "s3")
 
 
-class CloudAccountsDialog(QDialog):
+class CloudAccountsDialog(chrome.Dialog):
     """Manage saved cloud credentials. Secrets go straight to the keyring;
     this dialog only ever shows the account list, never the stored secret."""
 
@@ -93,7 +94,7 @@ class CloudAccountsDialog(QDialog):
         self._reload()
 
 
-class _AccountEditor(QDialog):
+class _AccountEditor(chrome.Dialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Cloud account")
@@ -142,7 +143,7 @@ class _AccountEditor(QDialog):
         return account, secret or None
 
 
-class CloudFolderDialog(QDialog):
+class CloudFolderDialog(chrome.Dialog):
     """Pick which files from a remote folder to download."""
 
     def __init__(

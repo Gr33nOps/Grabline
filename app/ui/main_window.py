@@ -55,6 +55,7 @@ from PySide6.QtWidgets import (
 from app import __version__
 from app.core import (
     archive,
+    convert,
     crawler,
     dupes,
     listio,
@@ -76,7 +77,7 @@ from app.core.settings import Settings
 from app.engines import cloud as cloud_engine
 from app.engines import torrent as torrent_engine
 from app.engines.smart import option_for_label
-from app.ui import components, design, icons, motion, theme
+from app.ui import chrome, components, design, icons, motion, theme
 from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.cloud_dialog import CloudFolderDialog, prompt_cloud_url
@@ -196,6 +197,9 @@ class MainWindow(QMainWindow):
         self.resize(1040, 600)
         self.setMinimumSize(760, 420)
         self.setAcceptDrops(True)  # drop URLs (or text with URLs) onto the window
+        # Custom chrome: no native title bar; ours draws the caption controls.
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        self._resizer = chrome.EdgeResizer(self)
 
         # State that per-row rendering + the theme toggle rely on.
         self._retintable: list[components.IconButton | components.SidebarButton] = []
@@ -203,6 +207,12 @@ class MainWindow(QMainWindow):
         self._progress_bars: dict[int, motion.SmoothProgressBar] = {}
         self._pills: dict[int, components.StatusPill] = {}
         self._speed_smoothers: dict[int, motion.SpeedSmoother] = {}
+        #: Force-removed jobs hidden immediately; cancelling a running worker
+        #: is asynchronous, so its row would otherwise linger for seconds.
+        self._removing: set[int] = set()
+        #: True while a right-click selects its row - selection then must not
+        #: pop the details drawer (that is a left-click affordance).
+        self._suppress_drawer = False
 
         # Shell: a 48px icon rail on the left, the stacked content on the right.
         self._pages = QStackedWidget()
@@ -220,7 +230,14 @@ class MainWindow(QMainWindow):
         row.setSpacing(0)
         row.addWidget(self._build_sidebar())
         row.addWidget(self._pages, 1)
-        self.setCentralWidget(shell)
+        central = QWidget()
+        column = QVBoxLayout(central)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        self._title_bar = chrome.TitleBar(self)
+        column.addWidget(self._title_bar)
+        column.addWidget(shell, 1)
+        self.setCentralWidget(central)
         self.statusBar().showMessage("Ready")
         self._status_info = components.role_label("", "muted", size=design.FONT["small"])
         self.statusBar().addPermanentWidget(self._status_info)
@@ -373,6 +390,7 @@ class MainWindow(QMainWindow):
 
     def _remove_from_drawer(self, view: JobView) -> None:
         self.manager.remove(view.id, force=True)
+        self._removing.add(view.id)
         self._drawer.hide()
         self.refresh()
 
@@ -383,22 +401,30 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(10, 6, 12, 6)
         lay.setSpacing(2)
 
-        def add_btn(icon_name: str, label: str, handler: object, *, danger: bool = False) -> None:
-            btn = components.IconButton(icon_name, label, danger=danger)
+        def add_btn(
+            icon_name: str, label: str, handler: object, *, danger: bool = False, tip: str = ""
+        ) -> None:
+            btn = components.IconButton(icon_name, label, danger=danger, tooltip=tip)
             btn.clicked.connect(handler)
             self._retintable.append(btn)
             lay.addWidget(btn)
 
-        add_btn("add", "Add URL", self._add_url)
-        add_btn("torrent", "Add Torrent", self._add_torrent_file)
-        add_btn("cloud", "Add Cloud", self._add_cloud)
+        add_btn("add", "Add URL", self._add_url, tip="Add a download from a URL")
+        add_btn("torrent", "Add Torrent", self._add_torrent_file, tip="Add a .torrent file")
+        add_btn("cloud", "Add Cloud", self._add_cloud, tip="Add a cloud/server download")
         lay.addWidget(self._sep())
-        add_btn("pause", "", self._pause_selected)
-        add_btn("resume", "", self._resume_selected)
-        add_btn("cancel", "", self._cancel_selected)
-        add_btn("trash", "", self._remove_selected, danger=True)
+        add_btn("pause", "", self._pause_selected, tip="Pause the selected downloads")
+        add_btn("resume", "", self._resume_selected, tip="Resume the selected downloads")
+        add_btn("cancel", "", self._cancel_selected, tip="Cancel the selected downloads")
+        add_btn(
+            "trash",
+            "",
+            self._remove_selected,
+            danger=True,
+            tip="Remove the selected downloads from the list (files stay on disk)",
+        )
         lay.addWidget(self._sep())
-        add_btn("folder", "", self._open_folder)
+        add_btn("folder", "", self._open_folder, tip="Open the download folder")
         lay.addStretch(1)
 
         self.search_box = QLineEdit()
@@ -479,11 +505,12 @@ class MainWindow(QMainWindow):
         header = self.table.horizontalHeader()
         header.setHighlightSections(False)
         self.table.setColumnWidth(_COL_ICON, 30)
-        self.table.setColumnWidth(_COL_SIZE, 90)
+        self.table.setColumnWidth(_COL_SIZE, 92)
         self.table.setColumnWidth(_COL_PROGRESS, 150)
-        self.table.setColumnWidth(_COL_SPEED, 90)
-        self.table.setColumnWidth(_COL_ETA, 78)
-        self.table.setColumnWidth(_COL_STATUS, 116)
+        self.table.setColumnWidth(_COL_SPEED, 100)
+        self.table.setColumnWidth(_COL_ETA, 84)
+        # Wide enough for "● Downloading" without clipping on Windows fonts.
+        self.table.setColumnWidth(_COL_STATUS, 136)
         header.setStretchLastSection(False)
         from PySide6.QtWidgets import QHeaderView
 
@@ -518,6 +545,7 @@ class MainWindow(QMainWindow):
 
     def _retint_all(self) -> None:
         p = theme.current()
+        self._title_bar.retint()
         for btn in self._retintable:
             btn.retint()
         self._theme_btn.set_active(False)
@@ -661,20 +689,70 @@ class MainWindow(QMainWindow):
         proxy = self.settings.proxy
 
         def done(result: object) -> None:
+            self.statusBar().showMessage("Ready")  # never leave "Checking…" stuck
             if result is not None:
-                tag, url = cast("tuple[str, str]", result)
-                answer = QMessageBox.question(
-                    self,
-                    "Grabline",
-                    f"Grabline {tag} is available (you have {__version__}).\n"
-                    "Open the download page?",
+                tag, name, url = cast("tuple[str, str, str]", result)
+                box = QMessageBox(self)
+                box.setWindowTitle("Grabline")
+                box.setText(
+                    f"Grabline {tag} is available (you have {__version__}).\n\n"
+                    "Update now downloads the installer and opens it."
                 )
-                if answer == QMessageBox.StandardButton.Yes:
-                    QDesktopServices.openUrl(QUrl(url))
+                update_btn = box.addButton("Update now", QMessageBox.ButtonRole.AcceptRole)
+                site_btn = box.addButton("Download page", QMessageBox.ButtonRole.ActionRole)
+                box.addButton(QMessageBox.StandardButton.Cancel)
+                box.exec()
+                if box.clickedButton() is update_btn:
+                    self._download_and_run_installer(name, url)
+                elif box.clickedButton() is site_btn:
+                    QDesktopServices.openUrl(QUrl(update.WEBSITE_DOWNLOAD_URL))
             elif not quiet:
                 QMessageBox.information(self, "Grabline", "You have the latest version.")
 
-        self._run_file_op(partial(update.check_for_update, proxy), done)
+        def failed(_error: object) -> None:
+            self.statusBar().showMessage("Ready")
+            if not quiet:
+                QMessageBox.information(self, "Grabline", "Could not check for updates right now.")
+
+        self._run_file_op(partial(update.installer_update, proxy), done, failed)
+
+    def _download_and_run_installer(self, name: str, url: str) -> None:
+        """Fetch the new installer to the download folder and open it - the
+        closest we get to auto-update without a signed self-updater."""
+        from PySide6.QtWidgets import QProgressDialog
+
+        progress = QProgressDialog(f"Downloading {name}…", "Cancel", 0, 100, self)
+        progress.setWindowTitle("Grabline update")
+        progress.setMinimumDuration(0)
+        proxy = self.settings.proxy
+        dest = str(self.settings.download_dir)
+
+        def report(received: int, total: object) -> None:
+            if isinstance(total, int) and total > 0:
+                QTimer.singleShot(0, lambda: progress.setValue(int(received / total * 100)))
+
+        def done(result: object) -> None:
+            progress.close()
+            path = str(result)
+            self.statusBar().showMessage(f"Update downloaded: {path}", 8000)
+            # Open the installer; the user finishes the (unsigned) wizard.
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+        def failed(error: object) -> None:
+            progress.close()
+            answer = QMessageBox.question(
+                self,
+                "Grabline",
+                f"Could not download the update ({error}).\nOpen the download page instead?",
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                QDesktopServices.openUrl(QUrl(update.WEBSITE_DOWNLOAD_URL))
+
+        self._run_file_op(
+            lambda: update.download_installer(url, dest, name, proxy=proxy, progress=report),
+            done,
+            failed,
+        )
 
     def _run_batch(self, urls: list[str]) -> None:
         """Queue many URLs through the resolver at sensible defaults."""
@@ -939,6 +1017,8 @@ class MainWindow(QMainWindow):
         self._selected_ids = {
             self._row_job_ids[i.row()] for i in rows if 0 <= i.row() < len(self._row_job_ids)
         }
+        if self._suppress_drawer:
+            return  # right-click: keep the drawer exactly as it was
         # A single selection opens the detail drawer; multi/empty closes it.
         if len(self._selected_ids) == 1:
             (job_id,) = tuple(self._selected_ids)
@@ -967,6 +1047,7 @@ class MainWindow(QMainWindow):
         job_ids = self._selected_job_ids()
         for job_id in job_ids:
             self.manager.remove(job_id, force=True)
+            self._removing.add(job_id)
         if job_ids:
             self.refresh()
 
@@ -998,7 +1079,13 @@ class MainWindow(QMainWindow):
         view = self._view_for_row(row)
         if view is None:
             return
-        self.table.selectRow(row)
+        # Select the row for the actions below, but never pop the details
+        # drawer from a right-click - that is a left-click affordance.
+        self._suppress_drawer = True
+        try:
+            self.table.selectRow(row)
+        finally:
+            self._suppress_drawer = False
         menu = QMenu(self)
         file_path = Path(view.dest_dir) / view.filename
         open_file = menu.addAction("Open file")
@@ -1008,14 +1095,31 @@ class MainWindow(QMainWindow):
         copy_magnet = menu.addAction("Copy magnet link")
         copy_magnet.setVisible(view.kind is JobKind.TORRENT)
         redownload = menu.addAction("Download again")
-        to_gif = menu.addAction("Convert to GIF…")
+        # Convert to… - every FFmpeg target that makes sense for this file,
+        # grouped Video / Audio / Image, plus the tuned GIF dialog.
         ffmpeg_path = find_ffmpeg(self.settings)
-        to_gif.setEnabled(
-            view.status is JobStatus.COMPLETED
-            and file_path.exists()
-            and file_path.suffix.lower() in _VIDEO_SUFFIXES
-            and ffmpeg_path is not None
+        convert_menu = menu.addMenu("Convert to")
+        convertible = (
+            view.status is JobStatus.COMPLETED and file_path.exists() and ffmpeg_path is not None
         )
+        sections = convert.targets_for(file_path) if convertible else {}
+        convert_menu.setEnabled(bool(sections))
+        if ffmpeg_path is None:
+            convert_menu.setToolTip("Install FFmpeg in Settings → Video Downloader")
+        convert_actions: dict[QAction, str] = {}
+        to_gif: QAction | None = None
+        if file_path.suffix.lower() in _VIDEO_SUFFIXES:
+            to_gif = convert_menu.addAction("GIF…")
+            convert_menu.addSeparator()
+        for section, formats in sections.items():
+            section_action = convert_menu.addAction(section)
+            section_action.setEnabled(False)  # a small group heading
+            for fmt in formats:
+                if f".{fmt}" == file_path.suffix.lower():
+                    continue  # converting to itself is pointless
+                action = convert_menu.addAction(fmt.upper())
+                convert_actions[action] = fmt
+            convert_menu.addSeparator()
         limit_speed = menu.addAction("Limit speed…")
         limit_speed.setEnabled(view.status is not JobStatus.COMPLETED)
         set_connections = menu.addAction("Connections…")
@@ -1082,8 +1186,10 @@ class MainWindow(QMainWindow):
             self._copy_magnet(view)
         elif chosen is redownload:
             self.begin_add_url(view.url, allow_duplicate=True)
-        elif chosen is to_gif and ffmpeg_path is not None:
+        elif to_gif is not None and chosen is to_gif and ffmpeg_path is not None:
             GifDialog(ffmpeg_path, file_path, self).exec()
+        elif chosen in convert_actions and ffmpeg_path is not None:
+            self._convert_file(file_path, convert_actions[chosen], ffmpeg_path)
         elif chosen is limit_speed:
             self._limit_speed(view)
         elif chosen is set_connections:
@@ -1122,6 +1228,7 @@ class MainWindow(QMainWindow):
             self.manager.move_to_bottom(view.id)
         elif chosen is remove:
             self.manager.remove(view.id, force=True)
+            self._removing.add(view.id)
             self.refresh()
 
     def _run_file_op(
@@ -1145,6 +1252,15 @@ class MainWindow(QMainWindow):
 
         thread.done.connect(finished)
         thread.start()
+
+    def _convert_file(self, path: Path, target_format: str, ffmpeg_path: str) -> None:
+        """Convert a finished file with FFmpeg, silently in the background."""
+        self.statusBar().showMessage(f"Converting {path.name} to {target_format.upper()} …")
+
+        def done(result: object) -> None:
+            self.statusBar().showMessage(f"Converted: {Path(str(result)).name}", 8000)
+
+        self._run_file_op(lambda: convert.convert(ffmpeg_path, path, target_format), done)
 
     def _copy_hash(self, path: Path) -> None:
         self.statusBar().showMessage(f"Hashing {path.name} …")
@@ -1674,6 +1790,12 @@ class MainWindow(QMainWindow):
 
     def refresh(self) -> None:
         views = self.manager.snapshot()
+        # Optimistic removal: a force-removed running job stays in the DB until
+        # its worker actually stops - hide it from the list right away.
+        present = {view.id for view in views}
+        self._removing &= present
+        if self._removing:
+            views = [view for view in views if view.id not in self._removing]
         self._detect_transitions(views)
         self._measure_speeds(views)
         self._update_speed_line(views)
@@ -1851,8 +1973,20 @@ class MainWindow(QMainWindow):
         self._cell(row, _COL_ICON).setIcon(icons.svg_icon(name, self._type_color(view)))
 
         name_item = self._cell(row, _COL_NAME)
-        name_item.setText(view.display_name)
-        name_item.setToolTip(view.url)
+        # No URL tooltip - hover text was clutter; the details drawer has it.
+        # Small suffix markers surface tags and notes at a glance.
+        markers = ""
+        if view.tags:
+            markers += "  🏷"
+        if view.notes:
+            markers += "  📝"
+        name_item.setText(view.display_name + markers)
+        if markers:
+            name_item.setToolTip(
+                (f"Tags: {view.tags}\n" if view.tags else "") + ("Has notes" if view.notes else "")
+            )
+        else:
+            name_item.setToolTip("")
 
         self._cell(row, _COL_SIZE).setText(human_bytes(view.total_size) if view.total_size else "—")
 

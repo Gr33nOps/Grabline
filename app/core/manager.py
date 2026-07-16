@@ -590,6 +590,10 @@ class DownloadManager:
             "trim": list(trim) if trim else None,
             "use_session": use_session,
             "session_browser": session_browser,
+            # Quality-first (Settings → Video Downloader): use the JS runtime
+            # from the first attempt for the full format ladder, trading the
+            # fast jsless start.
+            "hq_first": self.settings.video_hq_first,
         }
         if extras:
             options.update(extras)

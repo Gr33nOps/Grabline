@@ -26,7 +26,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.core import naming
+from app.core import naming, proc
 from app.core.errors import DownloadError
 
 _ZIP_SUFFIXES = (".zip",)
@@ -299,7 +299,12 @@ def _run_tool(command: list[str]) -> subprocess.CompletedProcess[str]:
     # stdin closed so a tool that wants to prompt for a password fails fast
     # instead of hanging. Arg list only, never a shell string (S1).
     return subprocess.run(
-        command, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=600
+        command,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        timeout=600,
+        **proc.hidden(),
     )
 
 

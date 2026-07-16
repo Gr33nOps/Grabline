@@ -28,7 +28,7 @@ from pathlib import Path, PurePosixPath
 
 import httpx
 
-from app.core import net, paths
+from app.core import net, paths, proc
 from app.core.errors import DownloadError
 from app.core.ffmpeg import platform_key
 from app.core.ffmpeg_pins import PinnedArchive
@@ -161,6 +161,7 @@ def ensure_deno(
             capture_output=True,
             text=True,
             timeout=30,
+            **proc.hidden(),
         )
         if result.returncode != 0:
             raise DownloadError("the installed Deno binary failed to run")

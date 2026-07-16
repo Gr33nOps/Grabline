@@ -13,7 +13,6 @@ from pathlib import Path
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QLabel,
     QPlainTextEdit,
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from app.core.security import Risk, SecurityReport, check_file
 from app.core.settings import Settings
+from app.ui import chrome, motion
 
 _COLORS = {Risk.OK: "#2ea043", Risk.CAUTION: "#d29922", Risk.WARNING: "#cf222e"}
 
@@ -62,7 +62,7 @@ def _render(report: SecurityReport) -> str:
     return "\n".join(lines)
 
 
-class SecurityDialog(QDialog):
+class SecurityDialog(chrome.Dialog):
     def __init__(
         self,
         path: Path,
@@ -86,17 +86,26 @@ class SecurityDialog(QDialog):
         note.setStyleSheet("color: gray;")
         layout.addWidget(note)
 
+        self._loading_bar = motion.SmoothProgressBar()
+        self._loading_bar.set_indeterminate(True)
+        layout.addWidget(self._loading_bar)
+        self._loading_note = QLabel("Gathering information… (checksums, local scan, VirusTotal)")
+        layout.addWidget(self._loading_note)
         self._text = QPlainTextEdit()
         self._text.setReadOnly(True)
         self._text.setStyleSheet("font-family: monospace;")
+        self._text.hide()  # shown when the report lands
         layout.addWidget(self._text)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        copy = buttons.addButton("Copy", QDialogButtonBox.ButtonRole.ActionRole)
-        copy.clicked.connect(lambda: QGuiApplication.clipboard().setText(self._text.toPlainText()))
+        self._copy = buttons.addButton("Copy SHA-256", QDialogButtonBox.ButtonRole.ActionRole)
+        self._copy.setEnabled(False)  # until the report (and its checksums) lands
+        self._copy.setToolTip("Copy just the SHA-256 checksum")
+        self._copy.clicked.connect(self._copy_checksum)
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)
+        self._report: SecurityReport | None = None
 
         self._thread = _CheckThread(
             lambda: check_file(
@@ -112,10 +121,23 @@ class SecurityDialog(QDialog):
 
     def _show(self, report: object) -> None:
         assert isinstance(report, SecurityReport)
+        self._report = report
+        self._loading_bar.set_indeterminate(False)
+        self._loading_bar.hide()
+        self._loading_note.hide()
+        self._text.show()
         color = _COLORS[report.level]
         self._verdict.setText(report.level.label)
         self._verdict.setStyleSheet(f"font-size: 15px; font-weight: 600; color: {color};")
         self._text.setPlainText(_render(report))
+        self._copy.setEnabled(bool(report.checksums))
+
+    def _copy_checksum(self) -> None:
+        """Copy only the checksum - not the whole report."""
+        if self._report is None or not self._report.checksums:
+            return
+        digest = self._report.checksums.get("sha256") or next(iter(self._report.checksums.values()))
+        QGuiApplication.clipboard().setText(digest)
 
     def done(self, result: int) -> None:
         if self._thread.isRunning():

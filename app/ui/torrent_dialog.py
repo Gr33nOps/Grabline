@@ -10,7 +10,6 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
-    QDialog,
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
@@ -26,10 +25,11 @@ from PySide6.QtWidgets import (
 )
 
 from app.engines.torrent import TorrentMeta
+from app.ui import chrome
 from app.ui.format import human_bytes
 
 
-class AddTorrentDialog(QDialog):
+class AddTorrentDialog(chrome.Dialog):
     """Where to save, which files to take, and how to download them - shown
     for .torrent files immediately, and for magnets before metadata (no file
     list yet; libtorrent learns it from the swarm)."""
@@ -120,7 +120,7 @@ class AddTorrentDialog(QDialog):
         return options
 
 
-class CreateTorrentDialog(QDialog):
+class CreateTorrentDialog(chrome.Dialog):
     """Torrent creation: share a file or folder; trackers, web seeds, comment
     and the private flag are optional."""
 

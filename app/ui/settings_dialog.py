@@ -15,7 +15,6 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
     QFileDialog,
@@ -40,7 +39,7 @@ from app.core import launcher, paths
 from app.core.errors import DownloadError
 from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
 from app.core.settings import SESSION_BROWSERS, Settings
-from app.ui import components
+from app.ui import chrome, components
 from app.ui.format import human_bytes
 
 _PROJECT_URL = "https://github.com/Gr33nOps/Grabline"
@@ -99,7 +98,7 @@ class _FfmpegInstaller(QThread):
             self.failed.emit(f"unexpected error: {exc}")
 
 
-class SettingsDialog(QDialog):
+class SettingsDialog(chrome.Dialog):
     def __init__(self, settings: Settings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.settings = settings
@@ -260,6 +259,18 @@ class SettingsDialog(QDialog):
         )
         playlist_form.addRow("Preselect playlist entries:", self.playlist_cap_spin)
         video_layout.addLayout(playlist_form)
+        self.hq_first_check = QCheckBox(
+            "Prefer highest quality over a fast start (solves YouTube's JS "
+            "challenge up front; can add minutes before a download begins)"
+        )
+        self.hq_first_check.setChecked(settings.video_hq_first)
+        self.hq_first_check.setToolTip(
+            "Off: downloads start in seconds using YouTube's runtime-free "
+            "clients, which can top out at 1080p. On: every video download "
+            "pays the challenge-solver cost first and gets the complete "
+            "format ladder (4K/8K where available)."
+        )
+        video_layout.addWidget(self.hq_first_check)
         video_layout.addWidget(_note(self._js_runtime_text()))
         video_layout.addWidget(
             _note(
@@ -908,6 +919,7 @@ class SettingsDialog(QDialog):
         self.settings.favorite_folders = self.favorites_edit.toPlainText().splitlines()
         self.settings.rename_rules = _parse_rename_rules(self.rename_edit.toPlainText())
         self.settings.playlist_batch_cap = self.playlist_cap_spin.value()
+        self.settings.video_hq_first = self.hq_first_check.isChecked()
         self.settings.ffmpeg_path = self.ffmpeg_override_edit.text().strip() or None
         self.settings.torrent_port = self.torrent_port_spin.value()
         self.settings.torrent_dht = self.dht_check.isChecked()

@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from app.core.manager import DownloadManager
 from app.core.models import Queue
+from app.ui import chrome
 
 _CATEGORIES = (
     "",
@@ -58,7 +59,7 @@ def _would_cycle(queues: dict[int, Queue], queue_id: int, depends_on: int | None
     return False
 
 
-class QueueManagerDialog(QDialog):
+class QueueManagerDialog(chrome.Dialog):
     def __init__(self, manager: DownloadManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.manager = manager
@@ -180,7 +181,7 @@ class QueueManagerDialog(QDialog):
             self._reload()
 
 
-class _QueueEditor(QDialog):
+class _QueueEditor(chrome.Dialog):
     def __init__(self, queue: Queue, queues: list[Queue], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.queue = queue

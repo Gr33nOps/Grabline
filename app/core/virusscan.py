@@ -13,6 +13,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.core import proc
 from app.core.errors import DownloadError
 
 #: Defender exits 2 when threats were found; ClamAV exits 1.
@@ -63,6 +64,7 @@ def scan(path: Path) -> ScanResult:
             text=True,
             stdin=subprocess.DEVNULL,
             timeout=600,
+            **proc.hidden(),
         )
     except subprocess.TimeoutExpired as exc:
         raise DownloadError(f"the {name} scan timed out") from exc

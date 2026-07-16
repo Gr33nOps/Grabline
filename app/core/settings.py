@@ -673,6 +673,18 @@ class Settings:
         self._db.set_setting("playlist_batch_cap", str(max(1, min(500, value))))
 
     @property
+    def video_hq_first(self) -> bool:
+        """Quality-first video downloads: solve YouTube's JS challenge from
+        the first attempt for the complete format ladder (up to 4K/8K), at the
+        cost of a much slower start. Off = start fast with the jsless clients
+        (which can top out at 1080p)."""
+        return self._get_bool("video_hq_first", False)
+
+    @video_hq_first.setter
+    def video_hq_first(self, value: bool) -> None:
+        self._set_bool("video_hq_first", value)
+
+    @property
     def ffmpeg_path(self) -> str | None:
         """Manual override; normally FFmpeg is found automatically."""
         return self._db.get_setting("ffmpeg_path") or None

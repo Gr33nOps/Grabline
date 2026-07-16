@@ -9,7 +9,6 @@ from urllib.parse import unquote, urlsplit
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
@@ -20,6 +19,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from app.ui import chrome
 
 #: Quick filters: label -> file extensions it selects.
 _TYPE_FILTERS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -36,7 +37,7 @@ def _short(url: str) -> str:
     return name if len(name) <= 60 else name[:57] + "…"
 
 
-class LinkPanel(QDialog):
+class LinkPanel(chrome.Dialog):
     def __init__(
         self, urls: list[str], *, page_title: str | None = None, parent: QWidget | None = None
     ) -> None:

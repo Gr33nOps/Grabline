@@ -169,30 +169,42 @@ function onStatusReply(reply) {
 
 // ----------------------------------------------------- context menu (F1.6)
 
-api.runtime.onInstalled.addListener(() => {
-  api.contextMenus.create({
-    id: MENU_ID,
-    title: "Download with Grabline",
-    contexts: ["link", "image", "video", "audio", "page", "selection"],
+function registerMenus() {
+  // removeAll first so re-registration never trips "duplicate id" errors.
+  api.contextMenus.removeAll(() => {
+    void api.runtime.lastError; // ignore - removeAll on empty is fine
+    api.contextMenus.create({
+      id: MENU_ID,
+      title: "Download with Grabline",
+      contexts: ["link", "image", "video", "audio", "page", "selection"],
+    });
+    api.contextMenus.create({
+      id: GALLERY_MENU_ID,
+      title: "Download all images with Grabline",
+      contexts: ["page", "image"],
+    });
+    api.contextMenus.create({
+      id: LINKS_MENU_ID,
+      title: "Download all links with Grabline",
+      contexts: ["page"],
+    });
+    // Highlight part of a page, right-click: every link, image, and playing
+    // media inside the selection goes to the app's checkable picker.
+    api.contextMenus.create({
+      id: SELECTION_MENU_ID,
+      title: "Download selected links & media with Grabline",
+      contexts: ["selection"],
+    });
   });
-  api.contextMenus.create({
-    id: GALLERY_MENU_ID,
-    title: "Download all images with Grabline",
-    contexts: ["page", "image"],
-  });
-  api.contextMenus.create({
-    id: LINKS_MENU_ID,
-    title: "Download all links with Grabline",
-    contexts: ["page"],
-  });
-  // Highlight part of a page, right-click: every link, image, and playing
-  // media inside the selection goes to the app's checkable picker.
-  api.contextMenus.create({
-    id: SELECTION_MENU_ID,
-    title: "Download selected links & media with Grabline",
-    contexts: ["selection"],
-  });
-});
+}
+
+// MV3 backgrounds restart often, and Firefox event pages drop menus with
+// them - registering only on onInstalled made "Download with Grabline"
+// vanish until a reinstall. Register on install, on browser startup, AND on
+// every background evaluation.
+api.runtime.onInstalled.addListener(registerMenus);
+api.runtime.onStartup.addListener(registerMenus);
+registerMenus();
 
 // -------------------------------------------- collect images / links grab
 

@@ -8,7 +8,6 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QLabel,
     QTreeWidget,
@@ -17,10 +16,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.ui import chrome
 from app.ui.format import human_bytes
 
 
-class DupesDialog(QDialog):
+class DupesDialog(chrome.Dialog):
     def __init__(self, groups: list[list[Path]], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Grabline - duplicate files")

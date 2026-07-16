@@ -346,6 +346,7 @@ def stylesheet(p: Palette) -> str:
     QLabel {{ background: transparent; }}
 
     /* --- app chrome (object names so a theme swap re-applies them) --- */
+    QFrame#TitleBar {{ background: {p.sidebar}; border-bottom: 1px solid {p.border}; }}
     QFrame#Sidebar {{ background: {p.sidebar}; border-right: 1px solid {p.border}; }}
     QFrame#Toolbar {{ background: {p.toolbar}; border-bottom: 1px solid {p.border}; }}
     QFrame#FilterBar {{ background: {p.surface}; border-bottom: 1px solid {p.border}; }}

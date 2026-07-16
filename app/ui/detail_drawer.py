@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QScrollArea,
@@ -42,7 +43,7 @@ class DetailDrawer(QFrame):
         self._view: JobView | None = None
         self._callbacks = (on_open_folder, on_copy_url, on_copy_hash, on_remove)
         self.setObjectName("Drawer")
-        self.setFixedWidth(300)
+        self.setFixedWidth(324)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -129,6 +130,8 @@ class DetailDrawer(QFrame):
         self._meta_eta = self._meta_block("ETA")
         self._meta_dest = self._meta_block("Destination")
         self._meta_url = self._meta_block("URL")
+        self._meta_error = self._meta_block("Error")
+        self._meta_notes = self._meta_block("Notes")
 
         # tags (the only variable-count part - rebuilt in place)
         self._tags_box = QWidget()
@@ -138,22 +141,34 @@ class DetailDrawer(QFrame):
         self._body.addWidget(self._tags_box)
         self._body.addStretch(1)
 
-        # ---- actions footer -------------------------------------------------
+        # ---- actions footer: a 2x2 grid so no label ever clips --------------
         footer = QFrame()
         footer.setObjectName("DrawerFooter")
-        flay = QHBoxLayout(footer)
-        flay.setContentsMargins(8, 7, 8, 7)
-        flay.setSpacing(2)
-        self._act_folder = components.IconButton("folder", "Folder")
-        self._act_url = components.IconButton("copy", "URL")
-        self._act_hash = components.IconButton("copy", "Hash")
-        self._act_remove = components.IconButton("trash", "Remove", danger=True)
+        flay = QGridLayout(footer)
+        flay.setContentsMargins(10, 8, 10, 8)
+        flay.setHorizontalSpacing(6)
+        flay.setVerticalSpacing(6)
+        self._act_folder = components.IconButton(
+            "folder", "Open folder", tooltip="Open this download's folder"
+        )
+        self._act_url = components.IconButton("copy", "Copy URL", tooltip="Copy the download URL")
+        self._act_hash = components.IconButton(
+            "copy", "Copy hash", tooltip="Copy the file's SHA-256 checksum"
+        )
+        self._act_remove = components.IconButton(
+            "trash",
+            "Remove",
+            danger=True,
+            tooltip="Remove from the list (the file stays on disk)",
+        )
         self._act_folder.clicked.connect(lambda: self._fire(0))
         self._act_url.clicked.connect(lambda: self._fire(1))
         self._act_hash.clicked.connect(lambda: self._fire(2))
         self._act_remove.clicked.connect(lambda: self._fire(3))
-        for b in (self._act_folder, self._act_url, self._act_hash, self._act_remove):
-            flay.addWidget(b)
+        flay.addWidget(self._act_folder, 0, 0)
+        flay.addWidget(self._act_url, 0, 1)
+        flay.addWidget(self._act_hash, 1, 0)
+        flay.addWidget(self._act_remove, 1, 1)
         root.addWidget(footer)
 
         self.hide()
@@ -200,6 +215,15 @@ class DetailDrawer(QFrame):
             self._meta_dest.setText(view.dest_dir)
             self._meta_url.setText(view.url)
             self._rebuild_tags(view)
+        # Notes and errors live here, not in row tooltips.
+        self._meta_notes.setText(view.notes or "")
+        notes_box = self._meta_notes.parentWidget()
+        if notes_box is not None:
+            notes_box.setVisible(bool(view.notes))
+        self._meta_error.setText(view.error or "")
+        error_box = self._meta_error.parentWidget()
+        if error_box is not None:
+            error_box.setVisible(bool(view.error))
 
         self._pill.set_status(view.status.value)
         self._progress.set_color(design.status_color(p, view.status.value))

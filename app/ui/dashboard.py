@@ -8,7 +8,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QDialog,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -22,6 +21,7 @@ from PySide6.QtWidgets import (
 from app.core.manager import DownloadManager
 from app.core.models import JobStatus
 from app.core.stats import SpeedTracker, SystemSampler
+from app.ui import chrome
 from app.ui.format import duration_text, human_bytes
 from app.ui.graph import Series, TimeGraph
 
@@ -53,7 +53,7 @@ class _Stat(QWidget):
         self.value.setText(text)
 
 
-class DashboardDialog(QDialog):
+class DashboardDialog(chrome.Dialog):
     def __init__(self, manager: DownloadManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.manager = manager

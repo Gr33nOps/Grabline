@@ -24,7 +24,7 @@ from typing import IO
 
 import httpx
 
-from app.core import naming
+from app.core import naming, proc
 from app.core.models import Job, JobStatus
 from app.db.database import Database
 from app.engines.manifest import playlist_duration
@@ -145,6 +145,7 @@ class HlsDownload:
                 stderr=subprocess.PIPE,
                 text=True,
                 env=env,
+                **proc.hidden(),
             )
         except OSError as exc:
             self._failure = f"could not start FFmpeg: {exc}"

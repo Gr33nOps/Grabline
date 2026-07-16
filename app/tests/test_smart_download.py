@@ -127,12 +127,13 @@ def test_normal_video_takes_the_fast_path(
     assert calls == [(False, False)]  # no runtime, no cookies, no retry
 
 
-def test_installed_runtime_is_used_from_the_start(
+def test_first_attempt_is_jsless_even_with_a_runtime_installed(
     db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    # The 'every YouTube video is slow' fix: an already-installed runtime is
-    # used on attempt one (solver cached -> seconds), not after a doomed
-    # jsless attempt plus a fresh escalation per video.
+    # Fast starts: the challenge solver costs 26-87s per extraction (measured)
+    # while the jsless clients deliver working formats in seconds - so an
+    # installed runtime must NOT be used on attempt one. (Using it up front is
+    # exactly what produced the '2-3 minutes of Preparing' report.)
     monkeypatch.setattr(
         "app.core.jsruntime.detect_js_runtime", lambda *a, **k: ("node", "/usr/bin/node")
     )
@@ -146,7 +147,29 @@ def test_installed_runtime_is_used_from_the_start(
 
     monkeypatch.setattr(task, "_download", fake_download)
     assert task._download_smart() == {"title": "ok"}
-    assert calls == [(False, True)]  # runtime on, still no cookies, one attempt
+    assert calls == [(False, False)]  # jsless, cookie-free, one attempt
+
+
+def test_quality_first_uses_the_runtime_up_front(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # The Settings opt-in trades startup time for the full format ladder.
+    monkeypatch.setattr(
+        "app.core.jsruntime.detect_js_runtime", lambda *a, **k: ("node", "/usr/bin/node")
+    )
+    job = _smart_job(
+        db, "https://youtu.be/x", dest, "v.mp4", session_browser="firefox", hq_first=True
+    )
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    calls: list[tuple[bool, bool]] = []
+
+    def fake_download(*, with_cookies: bool, with_runtime: bool) -> dict[str, Any]:
+        calls.append((with_cookies, with_runtime))
+        return {"title": "ok"}
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    assert task._download_smart() == {"title": "ok"}
+    assert calls == [(False, True)]  # runtime on from the start
 
 
 def test_age_wall_escalates_to_runtime_and_login(

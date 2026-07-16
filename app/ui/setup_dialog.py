@@ -8,7 +8,6 @@ from pathlib import Path
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
@@ -20,9 +19,10 @@ from PySide6.QtWidgets import (
 
 from app.core import browser_setup
 from app.native_host import install as host_install
+from app.ui import chrome
 
 
-class SetupDialog(QDialog):
+class SetupDialog(chrome.Dialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Grabline - Browser Setup")

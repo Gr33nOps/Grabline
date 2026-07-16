@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QLabel,
     QTreeWidget,
@@ -16,10 +15,11 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.archive import ArchiveEntry
+from app.ui import chrome
 from app.ui.format import human_bytes
 
 
-class ArchiveDialog(QDialog):
+class ArchiveDialog(chrome.Dialog):
     def __init__(
         self, archive_name: str, entries: tuple[ArchiveEntry, ...], parent: QWidget | None = None
     ) -> None:

@@ -22,7 +22,7 @@ from pathlib import Path, PurePosixPath
 
 import httpx
 
-from app.core import net, paths
+from app.core import net, paths, proc
 from app.core.errors import DownloadError
 from app.core.ffmpeg_pins import PINS, PinnedArchive
 from app.core.settings import Settings
@@ -102,6 +102,7 @@ def ensure_ffmpeg(
             capture_output=True,
             text=True,
             timeout=30,
+            **proc.hidden(),
         )
         if result.returncode != 0:
             raise DownloadError("the installed FFmpeg binary failed to run")

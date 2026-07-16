@@ -129,6 +129,7 @@ class IconButton(QPushButton):
         label: str = "",
         *,
         danger: bool = False,
+        tooltip: str = "",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -140,6 +141,9 @@ class IconButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         if label:
             self.setText("  " + label)
+        # Every button explains itself on hover - icon-only ones especially.
+        if tooltip or label:
+            self.setToolTip(tooltip or label)
         self.setIconSize(QSize(16, 16))
         self.retint()
 
@@ -182,7 +186,8 @@ class SidebarButton(QPushButton):
 
 class GraphCard(QFrame):
     """A titled area-chart card (dashboard). Feed samples with :meth:`push`;
-    draws one or two series over a shared auto-scaled axis."""
+    draws one or two series over a shared auto-scaled axis. Between pushes the
+    plot scrolls smoothly (60fps via the shared ticker) instead of stepping."""
 
     def __init__(
         self,
@@ -199,13 +204,52 @@ class GraphCard(QFrame):
         self._fmt = fmt
         self._fixed_max = fixed_max
         self._series: list[deque[float]] = [deque(maxlen=_GRAPH_HISTORY) for _ in colors]
+        self._last_push = 0.0
+        self._push_interval = 0.5
+        self._animating = False
         self.setProperty("card", "true")
         self.setMinimumHeight(118)
 
     def push(self, values: list[float]) -> None:
+        import time
+
+        now = time.monotonic()
+        if self._last_push:
+            gap = min(2.0, max(0.05, now - self._last_push))
+            self._push_interval = self._push_interval * 0.7 + gap * 0.3
+        self._last_push = now
         for serie, v in zip(self._series, values, strict=False):
             serie.append(max(0.0, v))
         self.update()
+
+    def _scroll_frac(self) -> float:
+        """0..1 progress toward the next data point, for smooth scrolling."""
+        import time
+
+        if not self._last_push:
+            return 1.0
+        return min(1.0, (time.monotonic() - self._last_push) / self._push_interval)
+
+    def showEvent(self, event: object) -> None:
+        super().showEvent(event)  # type: ignore[arg-type]
+        if not self._animating:
+            from app.ui import motion
+
+            motion.ticker().tick.connect(self.update)
+            motion.ticker().subscribe()
+            self._animating = True
+
+    def hideEvent(self, event: object) -> None:
+        super().hideEvent(event)  # type: ignore[arg-type]
+        if self._animating:
+            self._animating = False
+            import contextlib
+
+            from app.ui import motion
+
+            with contextlib.suppress(RuntimeError, TypeError):  # app teardown
+                motion.ticker().tick.disconnect(self.update)
+                motion.ticker().unsubscribe()
 
     def _scale(self) -> float:
         if self._fixed_max is not None:
@@ -235,6 +279,10 @@ class GraphCard(QFrame):
             y = plot.bottom() - f * plot.height()
             painter.drawLine(plot.left(), int(y), plot.right(), int(y))
         scale = self._scale()
+        # Slide the whole plot leftward between pushes so the graph glides at
+        # the ticker's frame rate instead of jumping once per sample.
+        shift = (1.0 - self._scroll_frac()) * (plot.width() / (_GRAPH_HISTORY - 1))
+        painter.setClipRect(plot)
         for serie, hexc in zip(self._series, self._colors, strict=False):
             if len(serie) < 2:
                 continue
@@ -244,7 +292,7 @@ class GraphCard(QFrame):
             base = plot.bottom()
             pts = [
                 QPointF(
-                    plot.left() + (off + i) * step,
+                    plot.left() + (off + i) * step + shift,
                     base - min(1.0, v / scale) * plot.height(),
                 )
                 for i, v in enumerate(serie)

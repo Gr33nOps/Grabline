@@ -249,26 +249,56 @@ class SmoothProgressBar(QWidget):
 
 
 class Sparkline(QWidget):
-    """The toolbar's recent-speed sparkline — restyled to the accent, fed a
-    smoothed series so the line is calm."""
+    """A recent-speed sparkline. Between data pushes the line scrolls smoothly
+    (driven by the shared ticker while visible) instead of stepping."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         from collections import deque
 
         self._samples: deque[float] = deque(maxlen=_SPARK_HISTORY)
+        self._last_push = 0.0
+        self._push_interval = 0.5
+        self._animating = False
         self.setMinimumSize(72, 24)
         self.setToolTip("Recent total speed")
 
     def push(self, bytes_per_second: float) -> None:
+        import time
+
+        now = time.monotonic()
+        if self._last_push:
+            gap = min(2.0, max(0.05, now - self._last_push))
+            self._push_interval = self._push_interval * 0.7 + gap * 0.3
+        self._last_push = now
         self._samples.append(max(0.0, bytes_per_second))
         self.update()
 
     def clear(self) -> None:
         self._samples.clear()
+        self._last_push = 0.0
         self.update()
 
+    def showEvent(self, event: object) -> None:
+        super().showEvent(event)  # type: ignore[arg-type]
+        if not self._animating:
+            ticker().tick.connect(self.update)
+            ticker().subscribe()
+            self._animating = True
+
+    def hideEvent(self, event: object) -> None:
+        super().hideEvent(event)  # type: ignore[arg-type]
+        if self._animating:
+            self._animating = False
+            import contextlib
+
+            with contextlib.suppress(RuntimeError, TypeError):  # app teardown
+                ticker().tick.disconnect(self.update)
+                ticker().unsubscribe()
+
     def paintEvent(self, _event: object) -> None:
+        import time
+
         from PySide6.QtCore import QPointF
         from PySide6.QtGui import QPen, QPolygonF
 
@@ -281,8 +311,13 @@ class Sparkline(QWidget):
             accent = QColor(p.accent)
             step = rect.width() / (_SPARK_HISTORY - 1)
             base = rect.bottom()
+            frac = 1.0
+            if self._last_push:
+                frac = min(1.0, (time.monotonic() - self._last_push) / self._push_interval)
+            shift = (1.0 - frac) * step
+            painter.setClipRect(rect)
             pts = [
-                QPointF(rect.left() + i * step, base - (v / peak) * rect.height())
+                QPointF(rect.left() + i * step + shift, base - (v / peak) * rect.height())
                 for i, v in enumerate(self._samples)
             ]
             fill = QColor(accent)

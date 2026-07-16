@@ -6,7 +6,6 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QFormLayout,
     QLabel,
@@ -18,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from app.core import gif
 from app.core.errors import DownloadError
+from app.ui import chrome
 from app.ui.quality_panel import parse_timestamp
 
 #: Running conversions stay referenced until finished (QThread lifetime rule).
@@ -49,7 +49,7 @@ class _GifThread(QThread):
         self.done.emit(target, None)
 
 
-class GifDialog(QDialog):
+class GifDialog(chrome.Dialog):
     """Pick a clip range/size, convert in the background, report the result."""
 
     def __init__(self, ffmpeg_path: str, source: Path, parent: QWidget | None = None) -> None:
@@ -70,7 +70,7 @@ class GifDialog(QDialog):
         form.addRow("Start:", self.start_edit)
         form.addRow("End:", self.end_edit)
         self.fps_spin = QSpinBox()
-        self.fps_spin.setRange(5, 30)
+        self.fps_spin.setRange(1, 120)
         self.fps_spin.setValue(gif.DEFAULT_FPS)
         form.addRow("Frames/s:", self.fps_spin)
         self.width_spin = QSpinBox()

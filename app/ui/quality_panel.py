@@ -13,7 +13,6 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
@@ -25,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.engines.smart import MediaInfo, QualityOption
+from app.ui import chrome
 from app.ui.format import duration_text, human_bytes
 
 
@@ -58,7 +58,7 @@ class _ThumbnailFetcher(QThread):
             pass  # a missing thumbnail is cosmetic
 
 
-class QualityPanel(QDialog):
+class QualityPanel(chrome.Dialog):
     def __init__(self, media: MediaInfo, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.media = media

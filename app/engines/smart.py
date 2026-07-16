@@ -870,29 +870,37 @@ class SmartDownload:
         return info
 
     def _download_smart(self) -> dict[str, Any]:
-        """Best cheap setup first, one escalation on failure.
+        """Fast path first, one escalation on failure.
 
-        A JS runtime that is already on the machine (Node/Deno/Bun on PATH, or
-        our managed Deno from a past escalation) is used from the FIRST attempt:
-        with yt-dlp's solver cached it costs a second or two and buys complete,
-        full-speed formats. Without it, every video used to pay a doomed jsless
-        attempt and then a fresh escalation - the 'every YouTube download is
-        slow' report. What never happens up front is the expensive part:
-        downloading Deno (~40 MB) or reading browser cookies. Those are added
-        only when the failure says they would help (auth wall -> cookies,
-        format collapse -> provision a runtime)."""
+        The first attempt runs WITHOUT a JS runtime: yt-dlp's jsless clients
+        deliver working, unthrottled formats for the normal case, and skipping
+        the challenge solver is the difference between a download that starts
+        in seconds and one that spends minutes 'preparing' (measured 26-87s
+        per runtime extraction; a report of 2-3 minutes on Windows). Cookies
+        and the runtime are added only when the failure says they would help
+        (auth wall -> cookies, format collapse -> provision a runtime), or
+        when the user opted into quality-first in Settings - the jsless
+        clients can top out at 1080p, so 4K purists can trade startup time
+        for the full ladder."""
         import yt_dlp
 
         from app.core import jsruntime
 
-        if self._js_runtime is None:
-            self._js_runtime = jsruntime.detect_js_runtime()
         prefer_cookies = (
             bool(self.job.options.get("use_session")) and self._cookie_browser() is not None
         )
+        runtime_first = prefer_cookies or bool(self.job.options.get("hq_first"))
+        if runtime_first:
+            # Cookies push yt-dlp onto JS-dependent clients; quality-first
+            # wants the complete ladder. Both need the runtime up front.
+            if self._js_runtime is None:
+                self._js_runtime = jsruntime.detect_js_runtime()
+            if self._js_runtime is None:
+                self._ensure_js_runtime()  # may download Deno once; no-op off YouTube
         try:
             return self._download(
-                with_cookies=prefer_cookies, with_runtime=self._js_runtime is not None
+                with_cookies=prefer_cookies,
+                with_runtime=runtime_first and self._js_runtime is not None,
             )
         except yt_dlp.utils.DownloadError as exc:
             if self._stop_event.is_set():
@@ -902,15 +910,17 @@ class SmartDownload:
             add_login = (
                 browser is not None and not prefer_cookies and _looks_like_auth_wall(message)
             )
-            add_runtime = self._js_runtime is None and _runtime_might_help(message)
+            add_runtime = not runtime_first and _runtime_might_help(message)
             if not (add_login or add_runtime):
                 raise  # unrecoverable (removed, geo-blocked, ...) - fail fast, no slow retry
             log.info(
                 "job %s: retrying with%s%s",
                 self.job.id,
-                " a JS runtime" if add_runtime or self._js_runtime is None else "",
+                " a JS runtime" if add_runtime else "",
                 f" + {browser} login" if add_login else "",
             )
+            if self._js_runtime is None:
+                self._js_runtime = jsruntime.detect_js_runtime()
             if self._js_runtime is None:
                 self._ensure_js_runtime()  # may download Deno once; no-op off YouTube
             return self._download(

@@ -8,7 +8,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
-    QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
@@ -25,10 +24,11 @@ from app.engines.smart import (
     QualityOption,
     generic_quality_options,
 )
+from app.ui import chrome
 from app.ui.format import duration_text
 
 
-class PlaylistPanel(QDialog):
+class PlaylistPanel(chrome.Dialog):
     def __init__(
         self,
         playlist: PlaylistInfo,

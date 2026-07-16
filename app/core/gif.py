@@ -10,7 +10,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from app.core import naming
+from app.core import naming, proc
 from app.core.errors import DownloadError
 
 DEFAULT_FPS = 12
@@ -60,7 +60,7 @@ def make_gif(
         str(target),
     ]
     result = subprocess.run(  # argument list only - no shell (S1)
-        command, capture_output=True, text=True
+        command, capture_output=True, text=True, **proc.hidden()
     )
     if result.returncode != 0 or not target.exists() or target.stat().st_size == 0:
         target.unlink(missing_ok=True)

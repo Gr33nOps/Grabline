@@ -13,7 +13,6 @@ import httpx
 from PySide6.QtCore import QSize, Qt, QThread, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
@@ -23,6 +22,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from app.ui import chrome
 
 _THUMB_SIZE = 128
 _MAX_THUMB_BYTES = 10 * 1024 * 1024
@@ -61,7 +62,7 @@ class _ThumbnailThread(QThread):
                     continue
 
 
-class GalleryPanel(QDialog):
+class GalleryPanel(chrome.Dialog):
     def __init__(
         self,
         urls: list[str],

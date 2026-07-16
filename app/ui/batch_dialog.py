@@ -8,7 +8,6 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
@@ -25,6 +24,7 @@ from app.core.manager import DownloadManager
 from app.core.models import JobKind
 from app.core.resolver import Resolver
 from app.core.settings import Settings
+from app.ui import chrome
 
 #: Import threads stay referenced until finished (QThread lifetime rule).
 _ACTIVE_THREADS: set[BatchImportThread] = set()
@@ -101,7 +101,7 @@ class BatchImportThread(QThread):
         return None
 
 
-class BatchImportDialog(QDialog):
+class BatchImportDialog(chrome.Dialog):
     """Collects URLs; the import itself runs after accept, via the thread."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
