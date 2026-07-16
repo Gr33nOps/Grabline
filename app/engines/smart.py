@@ -374,12 +374,59 @@ def curate_formats(info: dict[str, Any]) -> tuple[QualityOption, ...]:
     return tuple(options)
 
 
+def needs_js_runtime(url: str, *, use_session: bool = False) -> bool:
+    """Does this URL need a JavaScript runtime to extract properly?
+
+    YouTube expects one to solve its 'n challenge'. Without it yt-dlp falls
+    back to solving the challenge in pure Python - slow - and formats can come
+    back throttled or unusable ("Requested format is not available"), so it is
+    needed for every YouTube URL, not only signed-in ones. Other sites only
+    need it when a browser session pushes yt-dlp onto a JS-dependent client.
+    """
+    if use_session:
+        return True
+    host = (urlsplit(url).hostname or "").lower()
+    return host in ("youtu.be", "youtube.com", "youtube-nocookie.com") or host.endswith(
+        (".youtube.com", ".youtube-nocookie.com")
+    )
+
+
+def provision_js_runtime(
+    url: str, *, use_session: bool = False, proxy: str | None = None
+) -> tuple[str, str] | None:
+    """The (name, path) of a JS runtime for a yt-dlp run: one already
+    installed, else Deno fetched once for a URL that needs it.
+
+    Best-effort - on failure the caller carries on without one.
+    """
+    from app.core import jsruntime
+
+    found = jsruntime.detect_js_runtime()
+    if found is not None:
+        return found
+    if not needs_js_runtime(url, use_session=use_session):
+        return None
+    try:
+        log.info("no JavaScript runtime found - fetching Deno (one-time ~40 MB)")
+        return ("deno", str(jsruntime.ensure_deno(proxy=proxy)))
+    except DownloadError as exc:
+        log.warning("could not provision a JS runtime: %s", exc)
+    except Exception:  # never let runtime setup break the caller
+        log.exception("unexpected error provisioning a JS runtime")
+    return None
+
+
 class SmartEngine:
     """Extractor matching and metadata inspection."""
+
+    #: How long an analysis stays reusable. Only ever feeds the quality panel -
+    #: the download re-extracts the URL itself - so a short window is safe.
+    INSPECT_TTL = 300.0
 
     def __init__(self) -> None:
         self._extractors: list[Any] | None = None
         self._lock = threading.Lock()
+        self._inspected: dict[tuple[Any, ...], tuple[float, MediaInfo | PlaylistInfo]] = {}
 
     def _extractor_classes(self) -> list[Any]:
         with self._lock:
@@ -394,6 +441,46 @@ class SmartEngine:
         return any(ie.suitable(url) for ie in self._extractor_classes())
 
     def inspect(
+        self,
+        url: str,
+        *,
+        use_session: bool = False,
+        session_browser: str = "chrome",
+        proxy: str | None = None,
+        force_generic: bool = False,
+    ) -> MediaInfo | PlaylistInfo:
+        """Metadata for a URL, reusing a recent analysis of the same URL.
+
+        Analysis is the slow part of adding a video (yt-dlp fetches the page,
+        solves the site's JS challenge and lists every format), and we redo it
+        verbatim whenever a URL is added twice - 'Download again', answering
+        yes to the duplicate prompt, or the extension resending. The result
+        only fills in the quality panel; the download re-extracts the URL when
+        it runs, so nothing is ever fetched from a stale address.
+        """
+        key = (url, use_session, session_browser, proxy or "", force_generic)
+        now = time.monotonic()
+        with self._lock:
+            hit = self._inspected.get(key)
+            if hit is not None and now - hit[0] < self.INSPECT_TTL:
+                return hit[1]
+        result = self._inspect_uncached(
+            url,
+            use_session=use_session,
+            session_browser=session_browser,
+            proxy=proxy,
+            force_generic=force_generic,
+        )
+        log.info("analyzed %s in %.1fs", url, time.monotonic() - now)
+        with self._lock:
+            # Drop anything stale so a long session can't grow this unbounded.
+            self._inspected = {
+                k: v for k, v in self._inspected.items() if now - v[0] < self.INSPECT_TTL
+            }
+            self._inspected[key] = (now, result)
+        return result
+
+    def _inspect_uncached(
         self,
         url: str,
         *,
@@ -424,13 +511,13 @@ class SmartEngine:
         if force_generic:
             # Scrape the page itself for <video>/og:video/JSON-LD/m3u8 links.
             opts["force_generic_extractor"] = True
-        from app.core import jsruntime
-
-        runtime = jsruntime.detect_js_runtime()
+        # Exactly the setup the download will use. This used to only *detect* a
+        # runtime while the download provisioned one, so on a machine without
+        # Node/Deno every analysis solved YouTube's challenge in pure Python -
+        # slow, and prone to a degraded format list - even though the download
+        # would fetch Deno moments later anyway.
+        runtime = provision_js_runtime(url, use_session=use_session, proxy=proxy)
         if runtime is not None:
-            # Same setup the download will use: an already-installed runtime
-            # (solver cached -> ~1s) yields the full format list instead of a
-            # degraded jsless set, and keeps analyze/download consistent.
             name, path = runtime
             opts["js_runtimes"] = {name: {"path": path}}
             opts["remote_components"] = ["ejs:github"]
@@ -667,17 +754,7 @@ class SmartDownload:
         return ydl_opts
 
     def _needs_js_runtime(self) -> bool:
-        """YouTube now expects a JavaScript runtime to solve its 'n challenge';
-        without one, formats can come back throttled/unusable ("Requested
-        format is not available") - so provision it for every YouTube job, not
-        only signed-in ones. Other sites only need it when a browser session
-        pushes yt-dlp onto a JS-dependent client."""
-        if self.job.options.get("use_session"):
-            return True
-        host = (urlsplit(self.job.url).hostname or "").lower()
-        return host in ("youtu.be", "youtube.com", "youtube-nocookie.com") or host.endswith(
-            (".youtube.com", ".youtube-nocookie.com")
-        )
+        return needs_js_runtime(self.job.url, use_session=bool(self.job.options.get("use_session")))
 
     def _ensure_js_runtime(self) -> None:
         """Make a JS runtime available before yt-dlp runs: prefer one already

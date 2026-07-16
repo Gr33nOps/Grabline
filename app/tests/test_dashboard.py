@@ -41,6 +41,14 @@ def test_record_and_rollups(db: Database):
     assert cats["Video"] == 150 and cats["Music"] == 30
 
 
+def test_clear_stats_wipes_rollups_but_not_jobs(db: Database, tmp_path: Path):
+    db.record_download("Video", "cdn.example.com", 100)
+    job = db.create_job("https://x.test/a.bin", str(tmp_path), "a.bin")
+    db.clear_stats()
+    assert db.lifetime_bytes() == (0, 0)
+    assert db.get_job(job.id) is not None  # the download list is untouched
+
+
 def test_bytes_since_respects_the_cutoff(db: Database):
     with db._lock, db._conn:  # seed an old row directly (a past day)
         old = (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d")

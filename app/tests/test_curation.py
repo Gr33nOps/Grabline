@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
+from app.core.errors import DownloadError
 from app.engines.smart import (
+    MediaInfo,
+    SmartEngine,
     curate_formats,
     friendly_error,
     generic_quality_options,
+    needs_js_runtime,
     option_for_label,
     parse_playlist,
 )
@@ -193,3 +199,92 @@ def test_friendly_errors():
     assert "browse" in friendly_error(browse_404)
     # unknown errors: first line, ERROR: prefix stripped, no traceback
     assert friendly_error("ERROR: something odd\nTraceback...") == "something odd"
+
+
+def test_inspect_reuses_a_recent_analysis(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Analysis is the slow part of adding a video; adding the same URL twice
+    ('Download again', or answering yes to the duplicate prompt) must reuse it
+    rather than redo the whole extraction."""
+    engine = SmartEngine()
+    calls: list[str] = []
+
+    def fake(url: str, **kwargs: Any) -> MediaInfo:
+        calls.append(url)
+        return MediaInfo(
+            url=url,
+            id="v",
+            title="Video",
+            uploader=None,
+            duration=None,
+            thumbnail_url=None,
+            options=(),
+        )
+
+    monkeypatch.setattr(engine, "_inspect_uncached", fake)
+
+    first = engine.inspect("https://youtu.be/abc")
+    second = engine.inspect("https://youtu.be/abc")
+    assert calls == ["https://youtu.be/abc"]  # analysed once, then reused
+    assert second is first
+
+    # A different URL - and different options for the same URL - analyse afresh.
+    engine.inspect("https://youtu.be/xyz")
+    engine.inspect("https://youtu.be/abc", use_session=True)
+    assert len(calls) == 3
+
+    # A stale entry is re-analysed rather than served forever.
+    monkeypatch.setattr(SmartEngine, "INSPECT_TTL", -1.0)
+    engine.inspect("https://youtu.be/abc")
+    assert len(calls) == 4
+
+
+def test_needs_js_runtime_only_for_youtube_or_a_session() -> None:
+    assert needs_js_runtime("https://www.youtube.com/watch?v=a")
+    assert needs_js_runtime("https://youtu.be/a")
+    assert needs_js_runtime("https://music.youtube.com/watch?v=a")
+    assert not needs_js_runtime("https://example.com/clip.mp4")
+    # A browser session can push yt-dlp onto a JS-dependent client anywhere.
+    assert needs_js_runtime("https://example.com/clip.mp4", use_session=True)
+
+
+def test_analysis_provisions_a_js_runtime_like_the_download(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Analysis must get the same JS runtime the download provisions.
+
+    Detecting but never provisioning left a runtime-less machine solving
+    YouTube's challenge in pure Python on every analyse - slow, and prone to a
+    degraded format list.
+    """
+    from app.core import jsruntime
+    from app.engines import smart
+
+    monkeypatch.setattr(jsruntime, "detect_js_runtime", lambda *a, **k: None)
+    fetched: list[str] = []
+
+    def fake_ensure_deno(**kwargs: Any) -> str:
+        fetched.append("deno")
+        return "/managed/deno"
+
+    monkeypatch.setattr(jsruntime, "ensure_deno", fake_ensure_deno)
+
+    assert smart.provision_js_runtime("https://youtu.be/abc") == ("deno", "/managed/deno")
+    assert fetched == ["deno"]  # YouTube gets one fetched on demand
+
+    fetched.clear()
+    assert smart.provision_js_runtime("https://example.com/clip.mp4") is None
+    assert fetched == []  # an ordinary file never triggers a 40 MB download
+
+
+def test_provisioning_failure_never_breaks_analysis(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core import jsruntime
+    from app.engines import smart
+
+    monkeypatch.setattr(jsruntime, "detect_js_runtime", lambda *a, **k: None)
+
+    def boom(**kwargs: Any) -> str:
+        raise DownloadError("no network")
+
+    monkeypatch.setattr(jsruntime, "ensure_deno", boom)
+    # Best effort: analysis carries on without a runtime rather than failing.
+    assert smart.provision_js_runtime("https://youtu.be/abc") is None

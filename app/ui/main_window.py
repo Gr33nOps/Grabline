@@ -227,13 +227,12 @@ class MainWindow(QMainWindow):
 
         self._row_job_ids: list[int] = []
         self._last_views: dict[int, JobView] = {}
-        self._rates: dict[int, tuple[float, int]] = {}
+        #: Speed measured once per poll, shared by the rows, drawer and toolbar.
+        self._speeds: dict[int, float] = {}
         self._selected_ids: set[int] = set()
         self.clipboard_suppressor: Callable[[str], None] | None = None
         self._prev_status: dict[int, JobStatus] = {}
         self._was_active = False
-        self._agg: tuple[float, int] | None = None  # (monotonic time, total bytes)
-        self._agg_ema: float | None = None
         self._resolve_threads: list[_ResolveThread] = []
         self._file_ops: set[_FileOpThread] = set()
         self._auto_extracted: set[int] = set()
@@ -373,7 +372,7 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
 
     def _remove_from_drawer(self, view: JobView) -> None:
-        self.manager.remove(view.id)
+        self.manager.remove(view.id, force=True)
         self._drawer.hide()
         self.refresh()
 
@@ -730,7 +729,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
-                if answer is not QMessageBox.StandardButton.Yes:
+                if answer != QMessageBox.StandardButton.Yes:
                     self.statusBar().showMessage("Ready")
                     return
 
@@ -756,7 +755,7 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
-        return answer is QMessageBox.StandardButton.Yes
+        return answer == QMessageBox.StandardButton.Yes
 
     def _safebrowsing_then_resolve(
         self, url: str, args: tuple[str | None, str | None, tuple[str, ...], dict[str, str] | None]
@@ -775,7 +774,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
-                if answer is not QMessageBox.StandardButton.Yes:
+                if answer != QMessageBox.StandardButton.Yes:
                     self.statusBar().showMessage("Ready")
                     return
             self._resolve_and_queue(url, *args)
@@ -962,16 +961,13 @@ class MainWindow(QMainWindow):
             self.manager.cancel(job_id)
 
     def _remove_selected(self) -> None:
-        """Remove the selected downloads from the list (files stay on disk).
-        A download that is still running is skipped - cancel it first."""
-        removed = 0
-        for job_id in self._selected_job_ids():
-            view = self._last_views.get(job_id)
-            if view is not None and view.status is JobStatus.DOWNLOADING:
-                continue
-            self.manager.remove(job_id)
-            removed += 1
-        if removed:
+        """Remove the selected downloads from the list, whatever state they are
+        in - a running one is cancelled and dropped. Completed files stay on
+        disk; a partial file is discarded with the job."""
+        job_ids = self._selected_job_ids()
+        for job_id in job_ids:
+            self.manager.remove(job_id, force=True)
+        if job_ids:
             self.refresh()
 
     def _clear_completed(self) -> None:
@@ -1071,8 +1067,8 @@ class MainWindow(QMainWindow):
         move_bottom = queue_menu.addAction("To bottom")
 
         menu.addSeparator()
+        # Force remove: works whatever the state, mid-download included.
         remove = menu.addAction("Remove from list")
-        remove.setEnabled(view.status is not JobStatus.DOWNLOADING)
         chosen = menu.exec(self.table.viewport().mapToGlobal(position))
         if chosen is open_file:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path)))
@@ -1125,7 +1121,7 @@ class MainWindow(QMainWindow):
         elif chosen is move_bottom:
             self.manager.move_to_bottom(view.id)
         elif chosen is remove:
-            self.manager.remove(view.id)
+            self.manager.remove(view.id, force=True)
             self.refresh()
 
     def _run_file_op(
@@ -1231,7 +1227,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
-                if answer is QMessageBox.StandardButton.Yes:
+                if answer == QMessageBox.StandardButton.Yes:
                     self._extract(path, members, new_password, scan=False)
                 return
             if isinstance(error, archive.PasswordRequired):
@@ -1322,7 +1318,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
-            if answer is not QMessageBox.StandardButton.Yes:
+            if answer != QMessageBox.StandardButton.Yes:
                 return
             for path in doomed:
                 try:
@@ -1370,7 +1366,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
-                if answer is QMessageBox.StandardButton.Yes:
+                if answer == QMessageBox.StandardButton.Yes:
                     SecurityDialog(file_path, view.url, self.settings, self).exec()
             elif report.level is security.Risk.CAUTION:
                 self.statusBar().showMessage(f"{view.display_name}: {report.findings[0]}", 8000)
@@ -1604,7 +1600,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Grabline",
-                "Set a search URL first (Settings → Torrents), e.g.\n"
+                "Set a search URL first (Settings → Torrent), e.g.\n"
                 "https://example.com/search?q=%s",
             )
             return
@@ -1679,6 +1675,7 @@ class MainWindow(QMainWindow):
     def refresh(self) -> None:
         views = self.manager.snapshot()
         self._detect_transitions(views)
+        self._measure_speeds(views)
         self._update_speed_line(views)
         self._last_views = {view.id: view for view in views}
         ids = [view.id for view in views]
@@ -1740,19 +1737,12 @@ class MainWindow(QMainWindow):
         self.table.blockSignals(False)
 
     def _update_speed_line(self, views: list[JobView]) -> None:
-        total = sum(v.downloaded for v in views if v.status is JobStatus.DOWNLOADING)
-        now = time.monotonic()
-        if self._agg is not None:
-            elapsed = now - self._agg[0]
-            if elapsed > 0:
-                # Clamp: a finishing job leaves the sum and would read negative.
-                instant = max(0, total - self._agg[1]) / elapsed
-                self._agg_ema = (
-                    instant if self._agg_ema is None else self._agg_ema * 0.6 + instant * 0.4
-                )
-                self.speed_line.push(self._agg_ema)
-                self._total_speed.setText(motion.fmt_speed(self._agg_ema))
-        self._agg = (now, total)
+        """The toolbar total: the sum of the per-download speeds already
+        measured this poll. Summing settled rates (rather than differencing a
+        total that drops every time a download finishes) keeps it steady."""
+        total = sum(self._speeds.get(v.id, 0.0) for v in views if v.status is JobStatus.DOWNLOADING)
+        self.speed_line.push(total)
+        self._total_speed.setText(motion.fmt_speed(total))
 
     def _detect_transitions(self, views: list[JobView]) -> None:
         """Notify on newly finished downloads and when the queue drains."""
@@ -1901,22 +1891,32 @@ class MainWindow(QMainWindow):
             JobKind.HLS: p.g_ndown,
         }.get(view.kind, p.text2)
 
-    def _smoothed_speed(self, view: JobView) -> float:
-        """Per-download speed, EMA-smoothed so the readout drifts rather than
-        strobing to 0 between checkpointed bursts."""
-        if view.status is not JobStatus.DOWNLOADING:
-            self._rates.pop(view.id, None)
-            self._speed_smoothers.pop(view.id, None)
-            return 0.0
+    def _measure_speeds(self, views: list[JobView]) -> None:
+        """Measure every running download's speed once per poll.
+
+        Exactly once: the rows, the drawer and the toolbar total all read the
+        cached numbers afterwards. Measuring per caller used to feed a second,
+        zero-elapsed sample into the selected download's smoother every poll,
+        which dragged its readout to zero.
+        """
         now = time.monotonic()
-        previous = self._rates.get(view.id)
-        self._rates[view.id] = (now, view.downloaded)
-        smoother = self._speed_smoothers.setdefault(view.id, motion.SpeedSmoother())
-        if previous is None:
-            return 0.0
-        elapsed = now - previous[0]
-        instant = max(0, view.downloaded - previous[1]) / elapsed if elapsed > 0 else 0.0
-        return smoother.push(instant)
+        running = {v.id for v in views if v.status is JobStatus.DOWNLOADING}
+        for job_id in list(self._speed_smoothers):
+            if job_id not in running:
+                self._speed_smoothers.pop(job_id, None)  # a finished job starts fresh
+        speeds: dict[int, float] = {}
+        for view in views:
+            if view.id in running:
+                smoother = self._speed_smoothers.setdefault(view.id, motion.SpeedSmoother())
+                speeds[view.id] = smoother.push_total(now, view.downloaded)
+            else:
+                speeds[view.id] = 0.0
+        self._speeds = speeds
+
+    def _smoothed_speed(self, view: JobView) -> float:
+        """This download's speed as measured by :meth:`_measure_speeds` for the
+        current poll."""
+        return self._speeds.get(view.id, 0.0)
 
     # ---------------------------------------------------------- drag & drop
 

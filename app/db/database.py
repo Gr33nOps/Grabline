@@ -464,6 +464,12 @@ class Database:
             ).fetchall()
         return [(row[0] or "Other", int(row[1]), int(row[2])) for row in rows]
 
+    def clear_stats(self) -> None:
+        """Wipe the dashboard statistics (Settings → Statistics). Download
+        history (the jobs list) is untouched."""
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM download_stats")
+
     def update_job_downloaded(self, job_id: int, downloaded: int) -> None:
         """Progress mirror for smart/hls jobs (direct jobs checkpoint segments)."""
         with self._lock, self._conn:

@@ -55,6 +55,44 @@ def test_add_url_threads_headers_into_a_gated_download(
     assert server.received_headers("/gated.bin")["cookie"] == "session=abc"
 
 
+def test_force_remove_drops_a_running_download(server: MediaServer, db: Database, dest: Path):
+    # Remove must mean remove, whatever the state. Cancelling is asynchronous,
+    # so a mid-flight force remove has to survive the round trip: the worker
+    # stops, then the row and its partial file go.
+    data = payload(4 * MB, 17)
+    url = server.add("/live.bin", data, chunk_size=32 * 1024, delay_per_chunk=0.03)
+    manager = DownloadManager(db, max_concurrent=1)
+    try:
+        job = manager.add_url(url, dest)
+        wait_for(lambda: db.job_downloaded(job.id) > 256 * 1024, timeout=60)
+        assert _status(db, job.id) is JobStatus.DOWNLOADING
+        part_path = job.part_path
+
+        manager.remove(job.id, force=True)
+
+        wait_for(lambda: db.get_job(job.id) is None, timeout=30)
+        assert not part_path.exists()  # the partial file goes with the job
+    finally:
+        manager.shutdown()
+
+
+def test_plain_remove_leaves_a_running_download_in_the_list(
+    server: MediaServer, db: Database, dest: Path
+):
+    # Without force the old contract holds: a running job is only cancelled.
+    data = payload(4 * MB, 18)
+    url = server.add("/keep.bin", data, chunk_size=32 * 1024, delay_per_chunk=0.03)
+    manager = DownloadManager(db, max_concurrent=1)
+    try:
+        job = manager.add_url(url, dest)
+        wait_for(lambda: db.job_downloaded(job.id) > 256 * 1024, timeout=60)
+        manager.remove(job.id)
+        wait_for(lambda: _status(db, job.id) is JobStatus.CANCELLED, timeout=30)
+        assert db.get_job(job.id) is not None  # row survives
+    finally:
+        manager.shutdown()
+
+
 def test_manager_pause_and_resume(server: MediaServer, db: Database, dest: Path):
     data = payload(4 * MB, 9)
     url = server.add("/s.bin", data, chunk_size=32 * 1024, delay_per_chunk=0.03)

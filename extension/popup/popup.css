@@ -44,7 +44,7 @@ li.empty { color: #6b7280; border: none; }
   padding: 2px 6px;
   border-radius: 8px;
   background: rgba(37, 99, 235, 0.15);
-  color: #2563eb;
+  color: #0170fd;
 }
 .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .size { flex: none; font-size: 11px; color: #6b7280; }
@@ -53,7 +53,7 @@ button {
   border: none;
   border-radius: 12px;
   padding: 4px 10px;
-  background: #2563eb;
+  background: #0170fd;
   color: #fff;
   cursor: pointer;
 }

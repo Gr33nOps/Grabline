@@ -87,7 +87,7 @@
     "height: 34px",
     "border: none",
     "border-radius: 17px",
-    "background: #2563eb",
+    "background: #0170fd",
     "color: #fff",
     "font: 700 16px/1 system-ui, sans-serif",
     "cursor: pointer",
@@ -147,7 +147,7 @@
     currentTarget = element;
     placeButton(rect);
     button.style.display = "block";
-    button.style.background = "#2563eb";
+    button.style.background = "#0170fd";
     button.textContent = "⬇";
     startFollowing();
   }

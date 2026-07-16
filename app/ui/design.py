@@ -1,7 +1,7 @@
 """The Grabline design system: one source of truth for colors, spacing, radius,
 type, and the global Qt stylesheet.
 
-The accent is the blue from the app logo (`#2563eb`), a touch brighter in dark
+The accent is the blue from the app logo (`#0170fd`), a touch brighter in dark
 mode so it pops. Every screen and dialog reads its look from here — change a
 token and the whole app follows. ``stylesheet(theme)`` returns a QSS string
 that restyles the standard Qt widgets (buttons, inputs, tabs, tables, menus,
@@ -75,11 +75,11 @@ LIGHT = Palette(
     text="#161b24",
     text2="#5a6473",
     text3="#98a1b2",
-    accent="#2563eb",
-    accent_h="#1d4ed8",
-    accent_dim="rgba(37,99,235,0.12)",
+    accent="#0170fd",
+    accent_h="#015bd3",
+    accent_dim="rgba(1,112,253,0.12)",
     accent_on="#ffffff",
-    st_downloading="#2563eb",
+    st_downloading="#0170fd",
     st_queued="#4b6bb0",
     st_paused="#8a8a8a",
     st_done="#1f9d55",
@@ -88,7 +88,7 @@ LIGHT = Palette(
     ok="#1f9d55",
     caution="#d29922",
     warn="#cf222e",
-    g_dl="#2563eb",
+    g_dl="#0170fd",
     g_ul="#db6d28",
     g_ndown="#0ea5e9",
     g_nup="#a371f7",
@@ -111,11 +111,11 @@ DARK = Palette(
     text="#dfe3ea",
     text2="#9aa3b2",
     text3="#6b7280",
-    accent="#3b82f6",
-    accent_h="#60a5fa",
-    accent_dim="rgba(59,130,246,0.18)",
+    accent="#3d8dfd",
+    accent_h="#66a6ff",
+    accent_dim="rgba(61,141,253,0.18)",
     accent_on="#ffffff",
-    st_downloading="#3b82f6",
+    st_downloading="#3d8dfd",
     st_queued="#6b93e8",
     st_paused="#6b7280",
     st_done="#3fb950",
@@ -124,7 +124,7 @@ DARK = Palette(
     ok="#3fb950",
     caution="#d29922",
     warn="#f85149",
-    g_dl="#3b82f6",
+    g_dl="#3d8dfd",
     g_ul="#db6d28",
     g_ndown="#38bdf8",
     g_nup="#bc8cff",

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="extension/icons/icon128.png" width="104" height="104" alt="Grabline logo" />
+<img src="website/assets/logo.png" width="104" height="104" alt="Grabline logo" />
 
 # Grabline
 
@@ -9,60 +9,76 @@
 Accelerated multi-connection downloads · a real browser button · a full quality picker for video & audio.
 
 [![Download][download-badge]][releases]
+[![Firefox Add-on][amo-badge]][amo]
 [![License: AGPL-3.0][license-badge]][license]
 ![Platforms][platform-badge]
-![Python][python-badge]
 [![Tests][ci-badge]][ci]
 
 ### [⬇&nbsp; Download for Windows · macOS · Linux][releases]
 
-[Website](https://gr33nops.github.io/Grabline/) · [Features](#-why-grabline) · [Install](#-download--install) · [Everyday use](#-everyday-use) · [Browser extension](extension/README.md)
+**Browser extension:** [Firefox Add-ons][amo] (official) · Chrome/Edge/Brave pair from inside the app
+
+[Website](https://gr33nops.github.io/Grabline/) · [Features](#-what-you-get) · [Install](#%EF%B8%8F-download--install) · [Everyday use](#-everyday-use) · [Extension docs](extension/README.md)
 
 <!-- Tip: drop a screenshot at docs/screenshots/queue.png and uncomment the line below -->
-<!-- <img src="docs/screenshots/queue.png" width="840" alt="Grabline queue window" /> -->
+<!-- <img src="docs/screenshots/queue.png" width="840" alt="Grabline main window" /> -->
 
 </div>
 
 [releases]: https://github.com/Gr33nOps/Grabline/releases/latest
+[amo]: https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/
 [license]: LICENSE
 [ci]: https://github.com/Gr33nOps/Grabline/actions/workflows/ci.yml
-[download-badge]: https://img.shields.io/github/v/release/Gr33nOps/Grabline?label=Download&color=2ea44f&sort=semver
+[download-badge]: https://img.shields.io/github/v/release/Gr33nOps/Grabline?label=Download&color=0170fd&sort=semver
+[amo-badge]: https://img.shields.io/amo/v/grabline-connect?label=Firefox%20Add-on&color=ff7139
 [license-badge]: https://img.shields.io/badge/License-AGPL--3.0-blue
 [platform-badge]: https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
-[python-badge]: https://img.shields.io/badge/Python-3.12%2B-3776ab
 [ci-badge]: https://img.shields.io/github/actions/workflow/status/Gr33nOps/Grabline/ci.yml?branch=main&label=tests
 
 ---
 
 Grabline downloads everything: a plain file, a 4K video, a whole folder of
 links, a streaming lecture, a torrent, a file off your SFTP box. Point it at a
-URL - paste it, drop it on the window, or click the ⬇ button in your browser -
+URL — paste it, drop it on the window, or click the ⬇ button in your browser —
 and it downloads fast with accelerated connections, crash-proof resume, and a
 queue you actually control. On the 1000+ sites it knows (YouTube, SoundCloud
 and friends) you also get a quality panel: 4K → 144p, MP3/M4A/FLAC with tags
 and cover art, subtitles, and clip trimming. Magnets, .torrent files, and
 cloud (SFTP/FTP/S3/WebDAV + Drive/Dropbox share links) all open right in the
-app. A fast, modern interface — sidebar navigation, a live dashboard, a
-details drawer, and smooth light/dark themes. Windows, macOS, and Linux. No
-ads, no telemetry, no paid tier. AGPL-3.0.
+app — all behind a fast, modern interface with sidebar navigation, a live
+dashboard, a details drawer, and polished light & dark themes.
 
-## ✨ Why Grabline
+Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 
-A real download-accelerator core, a browser button that just works, and the
-video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
+## ✨ What you get
 
-**Accelerated engine**
+- **A real accelerator** — up to 128 connections per file, dynamic segmentation, HTTP/2, crash-proof resume, retry-forever reconnect, mirror failover
+- **A browser button that just works** — hover ⬇ on videos, quality picked on the page, everything over Native Messaging (no open ports)
+- **Video & audio without the terminal** — yt-dlp inside: 4K → 144p, MP3/M4A/FLAC with cover art, subtitles, playlists, SponsorBlock
+- **A full torrent client** — libtorrent (the qBittorrent engine): magnets, DHT, sequential streaming, seeding ratios, RSS auto-queue
+- **Cloud & file servers** — SFTP/FTP/S3/WebDAV with resume, public Drive/Dropbox share links at full speed
+- **A queue *manager*** — named queues with schedules, priorities, dependencies, category auto-assign
+- **Scheduling, bandwidth, and power control** — download windows, per-host caps, polite-mode auto-throttle, battery pause, shutdown-when-done
+- **Everything advisory, nothing patronizing** — security checks warn, never block; a flagged file is still your file
+
+<details>
+<summary><b>⚡ Accelerated engine</b></summary>
+
 - Up to **128 parallel connections** per file (default 8), with **dynamic
-  segmentation** - free connections steal work from the slowest one so no
+  segmentation** — free connections steal work from the slowest one so no
   thread sits idle. Pin connections per download from its right-click menu.
 - **HTTP/2** where the server offers it; IPv6 out of the box.
 - **Crash-proof resume**: checkpointed to survive kill -9, power loss, and
   reboots; downloads keep retrying through internet drops and VPN reconnects.
-- Smart reconnect: exponential backoff (or **retry forever**), error-aware -
+- Smart reconnect: exponential backoff (or **retry forever**), error-aware —
   rate limits back off and retry, dead links (404) don't spin. If a page
   offered alternate streams, a failed URL **fails over to its mirrors**.
 
-**Network & bandwidth**
+</details>
+
+<details>
+<summary><b>🌐 Network & bandwidth</b></summary>
+
 - **Proxy** for everything (downloads *and* torrents): **HTTP, HTTPS, SOCKS5,
   and SOCKS4**, with `user:pass@` auth.
 - **Speed limits**: global, per-download, **per-host** (cap a greedy server
@@ -70,43 +86,57 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
   full-speed window).
 - **Automatic throttle** ("polite mode"): slow downloads when other apps are
   using the network, and speed back up when they stop.
-- **VPN detection** - the dashboard shows when a tunnel (WireGuard, OpenVPN,
+- **VPN detection** — the dashboard shows when a tunnel (WireGuard, OpenVPN,
   …) is up.
 
-**A queue manager, not just a queue**
+</details>
+
+<details>
+<summary><b>📋 A queue manager, not just a queue</b></summary>
+
 - **Unlimited named queues / download groups**, each with its own rules:
   **sequential mode** (one at a time, in order), **parallel mode** with a
   per-queue cap, pause, its own **schedule window**, and a place in the
   running order (queue priorities).
-- **Queue dependencies**: make queue B wait until queue A has finished - and
-  per-download *Start after…* holds one file until another completes
-  ("download B only after A finishes"). Cycles are detected and refused.
+- **Queue dependencies**: make queue B wait until queue A has finished — and
+  per-download *Start after…* holds one file until another completes.
+  Cycles are detected and refused.
 - **Category queues**: tie a queue to Video / Music / Documents / … and new
   downloads of that type join it automatically.
-- Reorder and prioritize, pause/resume/cancel, dashboard tabs
-  (Active / Completed / Failed), search, a live speed graph.
+- Reorder and prioritize, pause/resume/cancel, filter tabs
+  (All / Active / Completed / Failed), search, and a live speed graph.
 - **Scheduler**: only download between the hours you choose, on the days you
   choose (weekend-only works), *Start at…* a specific date and time per
   download, and a nightly full-speed window. **Battery mode** pauses on
   battery and resumes on AC; **wait-for-internet** resumes the instant the
   connection returns.
 - **When it finishes**: notification, a completion sound, run your own
-  command (the file's path is passed to it), and when the queue empties -
+  command (the file's path is passed to it), and when the queue empties —
   quit / sleep / **hibernate** / shut down / **lock** the computer.
 - Auto-sort into Video / Music / Images / Documents / Archives / Programs /
   Games / Torrents.
 - Import/export your download list; back it up or move it to another machine.
 
-**One button in the browser** (Chrome / Firefox / Edge / Brave / Vivaldi / Opera / Arc)
+</details>
+
+<details>
+<summary><b>🧩 One button in the browser</b> (Firefox · Chrome · Edge · Brave · Vivaldi · Opera · Arc)</summary>
+
+- **Firefox users install it from [Firefox Add-ons][amo]** — reviewed and
+  signed by Mozilla. Other browsers pair from inside the app (Browser Setup).
 - Hover ⬇ on videos and thumbnails (YouTube, YouTube Music, SoundCloud,
   Vimeo, X), pick the quality right on the page, watch a live progress pill.
 - Right-click → *Download with Grabline* on anything. **Grab all links**,
-  **all images**, or just the **links & media inside your text selection** -
+  **all images**, or just the **links & media inside your text selection** —
   or crawl a whole site a few levels deep.
-- A per-tab sniffer catches the streams a page loads. Native Messaging only -
+- A per-tab sniffer catches the streams a page loads. Native Messaging only —
   no open ports, no localhost server.
 
-**Video & audio done right** (1000+ sites, powered by yt-dlp, no terminal)
+</details>
+
+<details>
+<summary><b>🎬 Video & audio done right</b> (1000+ sites, powered by yt-dlp)</summary>
+
 - Quality picker 4K → 144p with size estimates, **MP3/M4A/FLAC** with tags and
   cover art, subtitles (manual or auto, .srt or embedded), clip trimming,
   and playlists with checkbox selection.
@@ -119,17 +149,13 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - HLS/DASH streams reassembled into a clean .mp4 by FFmpeg, with quality
   picking and automatic retry.
 
-**Archive manager** (ZIP / TAR / GZIP / BZIP2 / XZ built in; RAR / 7Z via 7-Zip)
-- Preview an archive's contents and extract only the files you pick.
-- Extract automatically after download, with saved passwords tried in
-  order - a password you type once is remembered for next time.
-- Optional virus scan before extraction, using a scanner already on the
-  machine (Windows Defender or ClamAV) - Grabline never pretends to scan
-  when none is installed.
+</details>
 
-**Torrent client** (powered by libtorrent - the engine behind qBittorrent)
+<details>
+<summary><b>🧲 Torrent client</b> (powered by libtorrent — the engine behind qBittorrent)</summary>
+
 - Magnet links and .torrent files: paste them, click them on websites,
-  double-click a downloaded .torrent, or drag one onto the window - all of
+  double-click a downloaded .torrent, or drag one onto the window — all of
   it opens in Grabline (no need for a separate torrent app).
 - DHT, Peer Exchange, and UPnP/NAT-PMP port mapping out of the box; web
   seeds honored automatically.
@@ -142,12 +168,16 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
   to RSS feeds that auto-queue matching releases, and search from the app
   via your preferred search site.
 
-**Cloud & file servers**
+</details>
+
+<details>
+<summary><b>☁️ Cloud & file servers</b></summary>
+
 - Paste an **sftp://, ftp://, ftps://, scp://, s3:// or webdav://** address
-  (File → Add Cloud Download) and it downloads with resume - FTP `REST`,
+  (**Add Cloud** in the toolbar) and it downloads with resume — FTP `REST`,
   an SFTP seek, or an HTTP `Range`, whichever the protocol offers.
 - Public **Google Drive / Dropbox / OneDrive / Nextcloud** share links,
-  pasted into Add URL, are turned into direct downloads - full speed, no
+  pasted into Add URL, are turned into direct downloads — full speed, no
   account needed.
 - **Saved logins** for the credentialed protocols, kept in your OS keychain
   (Windows Credential Manager / macOS Keychain / Linux Secret Service);
@@ -157,28 +187,52 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - Honest about the rest: Mega and Proton Drive are end-to-end encrypted and
   iCloud has no public API, so Grabline says so instead of failing cryptically.
 
-**File management**
+</details>
+
+<details>
+<summary><b>📦 Archive manager</b> (ZIP / TAR / GZIP / BZIP2 / XZ built in; RAR / 7Z via 7-Zip)</summary>
+
+- Preview an archive's contents and extract only the files you pick.
+- Extract automatically after download, with saved passwords tried in
+  order — a password you type once is remembered for next time.
+- Optional virus scan before extraction, using a scanner already on the
+  machine (Windows Defender or ClamAV) — Grabline never pretends to scan
+  when none is installed.
+
+</details>
+
+<details>
+<summary><b>🗂️ File management</b></summary>
+
 - Smart filenames (junk like `videoplayback.mp4` becomes the page title),
   illegal characters stripped, and `file (1).bin` version numbering instead
   of silent overwrites.
 - Your own rename rules (`find -> replace`) applied to every new download.
-- Duplicate detection - adding a URL twice asks first, and *Find Duplicate
+- Duplicate detection — adding a URL twice asks first, and *Find Duplicate
   Files* hash-compares finished downloads and deletes the extra copies
   (always keeping one).
 - Favorite folders in the right-click *Move to* menu, plus per-download
-  tags/labels and notes - both searchable from the search box.
+  tags/labels and notes — both searchable from the search box.
 
-**Download Inspector** (right-click → *Inspect…*, or File → *Inspect URL…*)
+</details>
+
+<details>
+<summary><b>🔍 Download Inspector</b> (right-click → <i>Inspect…</i>)</summary>
+
 - Everything about a link from one live probe: the resolved **IP** and
   reverse DNS, the **CDN** (Cloudflare, CloudFront, Fastly, Akamai, …), the
   **server**, **MIME type**, **response time**, the full **HTTP headers** and
   **Set-Cookie**s, the **redirect chain**, the **TLS certificate** (issuer,
   validity, protocol, cipher), the job's **mirrors**, and the finished file's
   **SHA-256**.
-- No telemetry: IP/DNS/CDN come from your own lookup - the address is never
+- No telemetry: IP/DNS/CDN come from your own lookup — the address is never
   sent to a geo-location service.
 
-**Live dashboard** (File → *Dashboard…*)
+</details>
+
+<details>
+<summary><b>📊 Live dashboard</b> (in the sidebar)</summary>
+
 - **Current / average / peak** download speed, live **ETA**, and how many
   downloads are active.
 - **Downloaded today / this week / this month / lifetime**, total files, and
@@ -186,25 +240,41 @@ video/audio tooling of yt-dlp - without the terminal, the ads, or the price.
 - Scrolling **graphs**: download speed, torrent upload, whole-machine network,
   CPU, and disk throughput.
 
-**Security** (advisory - it warns, it never blocks or deletes)
+</details>
+
+<details>
+<summary><b>🛡️ Security</b> (advisory — it warns, it never blocks or deletes)</summary>
+
 - **Checksums** in MD5, SHA-1, SHA-256, SHA-512, and CRC32. Paste any of
   them into *Verify checksum* and Grabline figures out which and confirms it;
   *Security check* shows all five at once.
 - **Virus scanning** using a scanner already on the machine (Windows Defender
   or ClamAV), plus optional **VirusTotal** (opt-in, your own API key, and only
-  the file's hash is sent - never its contents).
+  the file's hash is sent — never its contents).
 - **HTTPS enforcement** (warn before an unencrypted-HTTP download) and
   optional **Safe Browsing** URL checks (opt-in, your own Google key).
-  **TLS certificates are always validated** - a bad-cert HTTPS download fails
+  **TLS certificates are always validated** — a bad-cert HTTPS download fails
   on its own.
 - Executables and installers get an extra heads-up. Everything here is a
-  *heads-up*: a flagged file stays saved and usable, and **you decide** -
+  *heads-up*: a flagged file stays saved and usable, and **you decide** —
   because antivirus false positives are common and shouldn't cost you a file.
 
-**Nice touches**
+</details>
+
+<details>
+<summary><b>🧭 The interface</b></summary>
+
+- Sidebar navigation: **Downloads**, a live **Dashboard**, the **Queue
+  Manager**, and **Settings** — all embedded pages, no dialog mazes.
+- Settings organized into 18 searchable sections, from General to About.
+- A **details drawer** with a live speed graph for the selected download.
+- Speed readouts and progress bars that glide instead of strobing, a shared
+  60 fps animation clock that idles when nothing moves, and instant
+  light/dark switching from the sidebar.
 - URL patterns like `file[1-100].jpg`, drag-and-drop URLs, video → GIF,
-  a dark/light theme, start-minimized-in-the-tray on login, and an update
-  check.
+  start-minimized-in-the-tray on login, and an update check.
+
+</details>
 
 **Honest by design**: no DRM circumvention, no login bypass, no telemetry
 (the VirusTotal/Safe Browsing checks are opt-in and use *your* API keys).
@@ -217,13 +287,20 @@ Grab the installer for your system from the
 [**latest release**](https://github.com/Gr33nOps/Grabline/releases/latest)
 — no Python needed. After installing, Grabline shows up in your
 Start Menu / Spotlight / app grid like any other program, and pairs itself
-with your browsers on first launch (then install the extension below).
+with your browsers on first launch.
 
 | System | File | How |
 |---|---|---|
 | **Windows** | `Grabline-Setup-*.exe` | Run it → Grabline installs and appears in the Start Menu |
 | **macOS** | `Grabline-*.dmg` | Open it, drag **Grabline** to Applications |
 | **Linux** | `Grabline-*-x86_64.AppImage` | `chmod +x` it and run; it adds itself to your app grid. No FUSE? Use the `.tar.gz` — extract and run `./grabline/grabline` |
+
+Then add the browser extension:
+
+| Browser | How |
+|---|---|
+| **Firefox** | Install **[Grabline Connect from Firefox Add-ons][amo]** — one click, reviewed and signed by Mozilla |
+| **Chrome / Edge / Brave / others** | Open **Browser Setup** in the app (sidebar → ⋯ menu) and click **Add Grabline to \<your browser\>** — the extension ships inside the app |
 
 > The installers are **not code-signed yet**, so the OS warns on first launch:
 > - **Windows:** SmartScreen → *More info* → *Run anyway*.
@@ -237,43 +314,44 @@ with your browsers on first launch (then install the extension below).
 Grabline sets itself up — no config files, no terminal:
 
 1. **It pairs with your browsers automatically** on first launch.
-2. The **Browser Setup** window (also under **File → Browser Setup**) shows a
-   one-click **Add Grabline to \<your browser\>** button — click it, then click
-   **Add** in the browser. Done. (The extension ships inside the app, so
-   there's nothing to download separately.)
-3. For MP3 and streams, open **Settings → Tools** and click **Install FFmpeg**
-   if it says *Not found* — Grabline fetches an official build over HTTPS and
-   verifies a pinned checksum.
+2. Install the extension: **Firefox** from [Firefox Add-ons][amo];
+   other browsers via **Browser Setup** (sidebar → ⋯ menu) — one click there,
+   then **Add** in the browser.
+3. For MP3 and streams, open **Settings → Video Downloader** and click
+   **Install FFmpeg** if it says *Not found* — Grabline fetches an official
+   build over HTTPS and verifies a pinned checksum.
 
-The toolbar button's popup should say **connected**. Optional: in **Settings**,
-tick **Start Grabline when I log in** so it waits in the tray, always ready —
-like IDM.
+The extension button's popup should say **connected**. Optional: in
+**Settings → General**, tick **Start Grabline when I log in** so it waits in
+the tray, always ready — like IDM.
 
 ## 🎯 Everyday use
 
 | You do | Grabline does |
 |---|---|
-| Hover a video or thumbnail → click **⬇** | In-page panel: Best / 1080p / 720p / 480p / MP3 / M4A / FLAC - downloading starts immediately, a progress pill tracks it in the corner |
-| Right-click anything → *Download with Grabline* | Link, image, video, audio, or the page itself - routed to the best engine |
+| Hover a video or thumbnail → click **⬇** | In-page panel: Best / 1080p / 720p / 480p / MP3 / M4A / FLAC — downloading starts immediately, a progress pill tracks it in the corner |
+| Right-click anything → *Download with Grabline* | Link, image, video, audio, or the page itself — routed to the best engine |
 | Right-click a page → *Download all images / all links* | Every image or file link on the page, in a checkable, filterable picker |
-| Click the toolbar icon | Everything the page's network traffic loaded - streams (.m3u8/.mpd) and media files, one click each |
+| Click the toolbar icon | Everything the page's network traffic loaded — streams (.m3u8/.mpd) and media files, one click each |
 | Paste a playlist URL | Fast listing → checkboxes → one quality for the batch |
-| **File → Grab Site…** | Crawl a page a few levels deep and pick from every file it finds |
-| **File → Import / Export List** | Save your whole queue to a file, or restore it on another machine |
-| **Import Links** in the app | Paste anything with URLs (or `file[1-100].jpg` patterns) - all of it queues |
+| ⋯ menu → **Grab Site…** | Crawl a page a few levels deep and pick from every file it finds |
+| ⋯ menu → **Import / Export List** | Save your whole queue to a file, or restore it on another machine |
+| ⋯ menu → **Import Links** | Paste anything with URLs (or `file[1-100].jpg` patterns) — all of it queues |
 | Drag a URL onto the window | Queued instantly |
+| Select a download | A details drawer: live speed graph, ETA, server, destination, quick actions |
 | Right-click a finished row | Open it, open its folder, re-download, **verify checksum**, **extract**, or **Convert to GIF…** |
-| Copy a URL anywhere | An unobtrusive "Download with Grabline?" offer (can be turned off) |
+| Copy a URL anywhere | An unobtrusive "Download with Grabline?" offer (off by default) |
 
 Popup toggles: hover button on/off per site, hover button on images (off by
-default), button position (any corner), download takeover (on by default - it only takes over while the app is running).
+default), button position (any corner), download takeover (on by default —
+it only takes over while the app is running).
 
 ## 🎵 Music
 
 SoundCloud, Bandcamp, YouTube Music, Mixcloud, and every other non-DRM
 music site yt-dlp knows: hover ⬇ → MP3, tagged with cover art. Spotify
 tracks, Apple Music, TIDAL, Deezer, and Amazon Music are **DRM-protected
-and are refused with a clear message** - Grabline does not and will not
+and are refused with a clear message** — Grabline does not and will not
 bypass DRM. (Spotify *podcasts* are not DRM-protected and download fine.)
 
 ## ⌨️ The CLI
@@ -289,9 +367,9 @@ python -m app.cli "https://…/playlist" ~/Downloads --playlist --limit 10
 
 ## ⚖️ Honest limits
 
-- **No DRM circumvention** - Netflix, Prime Video, Disney+, Spotify tracks
+- **No DRM circumvention** — Netflix, Prime Video, Disney+, Spotify tracks
   and friends are refused with a clear message, not a workaround.
-- **No login bypass** - the optional *"Use my browser session"* setting uses
+- **No login bypass** — the optional *"Use my browser session"* setting uses
   *your* login for *your* content; cookies are read per download, kept in
   memory only, never stored or transmitted.
 - You are responsible for the terms of service of the sites you use and for
@@ -319,7 +397,7 @@ app/
 │               rate limiter, GIF tools, desktop integration, FFmpeg manager
 ├── engines/    smart.py (yt-dlp in-process) · hls.py (FFmpeg) · manifest.py
 ├── db/         SQLite: jobs, segment checkpoints, handoffs (WAL, crash-safe)
-├── ui/         PySide6: queue window, quality/playlist/gallery panels, tray
+├── ui/         PySide6: design system, sidebar shell, embedded pages, panels
 ├── native_host/ Native Messaging host + per-browser registration
 └── tests/      failure-simulating media server, engine tests, kill -9 milestone
 extension/      Grabline Connect (MV3, Chrome + Firefox, readable in a sitting)
@@ -328,20 +406,21 @@ scripts/        FFmpeg pin updater, extension store packaging
 ```
 
 Run what CI runs: `ruff check . && ruff format --check . && mypy app && pytest`
-(411 tests, including an 8-connection download killed with SIGKILL and
+(420+ tests, including an 8-connection download killed with SIGKILL and
 resumed to a verified checksum). Security ground rules: no `shell=True`
-anywhere (CI-enforced), Native Messaging only - never an open port, FFmpeg
+anywhere (CI-enforced), Native Messaging only — never an open port, FFmpeg
 fetched only against pinned checksums.
 
 Store packaging for the extension: `python scripts/package_extension.py`
-builds Chrome Web Store and Firefox (AMO) zips; the listing kit lives in
+builds Chrome Web Store and Firefox (AMO) zips — the Firefox one is
+[live on AMO][amo]; the listing kit lives in
 [docs/store-listing.md](docs/store-listing.md). Desktop installers for all
-three OSes are built by GitHub Actions on a version tag - see
+three OSes are built by GitHub Actions on a version tag — see
 [packaging/README.md](packaging/README.md).
 
 ## 📄 License
 
 [AGPL-3.0](LICENSE). yt-dlp (Unlicense) and PySide6 (LGPL) are compatible
 dependencies; FFmpeg is fetched by the user's machine on first run and never
-distributed with releases. Privacy: [PRIVACY.md](PRIVACY.md) - nothing is
+distributed with releases. Privacy: [PRIVACY.md](PRIVACY.md) — nothing is
 collected, ever.

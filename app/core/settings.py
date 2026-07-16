@@ -668,6 +668,10 @@ class Settings:
         """How many playlist entries get preselected (F1.7)."""
         return max(1, min(500, self._get_int("playlist_batch_cap", 30)))
 
+    @playlist_batch_cap.setter
+    def playlist_batch_cap(self, value: int) -> None:
+        self._db.set_setting("playlist_batch_cap", str(max(1, min(500, value))))
+
     @property
     def ffmpeg_path(self) -> str | None:
         """Manual override; normally FFmpeg is found automatically."""

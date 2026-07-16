@@ -11,10 +11,11 @@ stays cheap even with hundreds of rows.
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath
 from PySide6.QtWidgets import QWidget
 
 from app.ui import theme
@@ -113,23 +114,42 @@ class Animated:
 
 
 class SpeedSmoother:
-    """Exponential moving average of a reported speed (bytes/sec). Damps the
-    engine's chunk-boundary flicker so the readout drifts instead of strobing.
-    A run of zeros decays smoothly rather than snapping to 0."""
+    """A steady bytes/sec readout taken from a *cumulative* byte count.
 
-    def __init__(self, weight: float = 0.28) -> None:
+    Measuring between two consecutive polls doesn't work: the engine flushes
+    progress on its own interval, which doesn't line up with ours, so one poll
+    catches two flushes, the next catches none, and the readout strobes between
+    zero and double. Measuring across a whole window instead averages that
+    quantisation out - it only reads zero when genuinely nothing arrived for
+    the entire window. A light EMA on top settles the last wobble.
+
+    Feed it ``push_total(now, total_bytes)`` exactly once per poll.
+    """
+
+    def __init__(self, window: float = 3.0, weight: float = 0.35) -> None:
+        self._window = window
         self._weight = weight
+        self._samples: deque[tuple[float, float]] = deque()
         self._ema: float | None = None
 
-    def push(self, raw: float) -> float:
-        raw = max(0.0, raw)
-        if self._ema is None:
-            self._ema = raw
-        else:
-            self._ema = self._ema * (1 - self._weight) + raw * self._weight
+    def push_total(self, now: float, total: float) -> float:
+        self._samples.append((now, total))
+        # Keep one sample just outside the window so the span covers it fully.
+        cutoff = now - self._window
+        while len(self._samples) > 2 and self._samples[1][0] < cutoff:
+            self._samples.popleft()
+        oldest_at, oldest_total = self._samples[0]
+        span = now - oldest_at
+        if span <= 0:
+            return self._ema or 0.0
+        rate = max(0.0, total - oldest_total) / span
+        self._ema = (
+            rate if self._ema is None else self._ema * (1 - self._weight) + rate * self._weight
+        )
         return self._ema
 
     def reset(self) -> None:
+        self._samples.clear()
         self._ema = None
 
 
@@ -205,20 +225,26 @@ class SmoothProgressBar(QWidget):
         p = theme.current()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = self.width(), self.height()
+        w, h = float(self.width()), float(self.height())
+        if w <= 0 or h <= 0:  # pragma: no cover - not laid out yet
+            painter.end()
+            return
         r = h / 2
+        track = QPainterPath()
+        track.addRoundedRect(0, 0, w, h, r, r)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(p.border))
-        painter.drawRoundedRect(0, 0, w, h, r, r)
+        painter.fillPath(track, QColor(p.border))
+        # Clip to the track, then draw at true coordinates: the fill can never
+        # escape the rounded ends, and the marquee slides in and out smoothly
+        # instead of being clamped to the edges (which made it jump).
+        painter.setClipPath(track)
         color = self._color or QColor(p.accent)
         if self._indeterminate:
             seg = w * 0.3
-            x = (self._marquee * (w + seg)) - seg
-            painter.setBrush(color)
-            painter.drawRoundedRect(int(max(0, x)), 0, int(min(seg, w - max(0, x))), h, r, r)
+            x = self._marquee * (w + seg) - seg
+            painter.fillRect(QRectF(x, 0.0, seg, h), color)
         elif self._fill.value > 0:
-            painter.setBrush(color)
-            painter.drawRoundedRect(0, 0, max(int(h), int(w * self._fill.value)), h, r, r)
+            painter.fillRect(QRectF(0.0, 0.0, w * self._fill.value, h), color)
         painter.end()
 
 

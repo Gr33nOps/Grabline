@@ -167,6 +167,9 @@ class DownloadManager:
         self._cond = threading.Condition()
         self._active: dict[int, DownloadTask] = {}
         self._threads: dict[int, threading.Thread] = {}
+        #: Jobs force-removed while running: cancelling is asynchronous, so the
+        #: worker deletes the row once it has actually stopped.
+        self._pending_removal: set[int] = set()
         self._running = True
         self._scheduler = threading.Thread(target=self._loop, name="gl-scheduler", daemon=True)
         self._scheduler.start()
@@ -740,16 +743,27 @@ class DownloadManager:
             self.db.clear_segments(job_id)
             self.db.set_job_status(job_id, JobStatus.CANCELLED)
 
-    def remove(self, job_id: int) -> None:
-        """Drop a job from the list/history. Running jobs are cancelled first;
-        completed files stay on disk."""
+    def remove(self, job_id: int, *, force: bool = False) -> None:
+        """Drop a job from the list/history, whatever state it is in.
+
+        Completed files stay on disk. A running job has to be cancelled first
+        and that is asynchronous, so ``force`` marks it: the worker deletes the
+        row the moment it stops. Without ``force`` a running job is only
+        cancelled and its row survives (the old behaviour).
+        """
         self._retry_at.pop(job_id, None)
         self._job_limiters.pop(job_id, None)
         with self._cond:
             active = self._active.get(job_id)
+            if active is not None and force:
+                self._pending_removal.add(job_id)
         if active is not None:
             active.cancel()
-            return  # scheduler clears it; the row can be removed afterwards
+            return  # _run_job purges it once the worker actually stops
+        self._purge_job(job_id)
+
+    def _purge_job(self, job_id: int) -> None:
+        """Delete the row and any partial file. Completed files stay on disk."""
         job = self.db.get_job(job_id)
         if job is None:
             return
@@ -1066,7 +1080,11 @@ class DownloadManager:
             with self._cond:
                 self._active.pop(job.id, None)
                 self._threads.pop(job.id, None)
-                if status is JobStatus.COMPLETED:
+                if job.id in self._pending_removal:
+                    # Force-removed mid-flight: drop it, don't retry or record.
+                    self._pending_removal.discard(job.id)
+                    self._purge_job(job.id)
+                elif status is JobStatus.COMPLETED:
                     # Settle history back to insertion order and forget retries.
                     self.db.set_priority(job.id, 0)
                     self.db.set_retry_count(job.id, 0)

@@ -73,7 +73,7 @@
       "height: 30px",
       "border: none",
       "border-radius: 15px",
-      "background: #2563eb",
+      "background: #0170fd",
       "color: #fff",
       "font: 700 14px/1 system-ui, sans-serif",
       "cursor: pointer",
@@ -151,7 +151,7 @@
           "cursor: pointer",
           "text-align: left",
         ].join(";");
-        choice.addEventListener("mouseenter", () => (choice.style.background = "#2563eb"));
+        choice.addEventListener("mouseenter", () => (choice.style.background = "#0170fd"));
         choice.addEventListener("mouseleave", () => (choice.style.background = "transparent"));
         choice.addEventListener("click", async (event) => {
           event.preventDefault();
@@ -212,7 +212,7 @@
       button.style.left = `${position.left}px`;
       button.style.top = `${position.top}px`;
       button.style.display = "block";
-      button.style.background = "#2563eb";
+      button.style.background = "#0170fd";
       button.textContent = "⬇";
     }
 

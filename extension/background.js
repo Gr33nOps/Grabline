@@ -295,7 +295,7 @@ async function recordMedia(tabId, item) {
 
 function updateBadge(tabId, count) {
   api.action.setBadgeText({ tabId, text: count ? String(count) : "" });
-  api.action.setBadgeBackgroundColor({ tabId, color: "#2563eb" });
+  api.action.setBadgeBackgroundColor({ tabId, color: "#0170fd" });
 }
 
 api.webRequest.onHeadersReceived.addListener(

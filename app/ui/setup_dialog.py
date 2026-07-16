@@ -99,9 +99,9 @@ class SetupDialog(QDialog):
         layout.addLayout(chrome_row)
 
         firefox_hint = QLabel(
-            "Firefox: about:debugging → This Firefox → Load Temporary Add-on → "
-            "pick manifest.json in that folder (permanent install comes with the "
-            "free add-on signing)."
+            "Firefox: install Grabline Connect straight from Firefox Add-ons "
+            "(addons.mozilla.org — search “Grabline Connect”). It is reviewed "
+            "and signed by Mozilla, and survives restarts."
         )
         firefox_hint.setWordWrap(True)
         firefox_hint.setStyleSheet("color: gray; font-size: 11px;")

@@ -175,7 +175,7 @@ class QueueManagerDialog(QDialog):
             f"Delete queue '{queue.name}'? Its downloads go back to the "
             "default queue (nothing is removed).",
         )
-        if answer is QMessageBox.StandardButton.Yes:
+        if answer == QMessageBox.StandardButton.Yes:
             self.manager.delete_queue(queue.id)
             self._reload()
 

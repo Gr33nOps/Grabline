@@ -96,6 +96,99 @@ def test_main_window_lists_jobs(db: Database, tmp_path: Path):
         manager.shutdown()
 
 
+def test_settings_sections_and_new_fields(db: Database, monkeypatch):
+    """The Settings page shows the agreed 18 sections, in order, and the
+    fields new to the restructure (playlist cap, FFmpeg override) persist."""
+    from app.core import launcher
+    from app.ui.settings_dialog import SettingsDialog
+
+    _qapp()
+    settings = Settings(db)
+    dialog = SettingsDialog(settings)
+    titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
+    assert titles == [
+        "General",
+        "Downloads",
+        "Download Engine",
+        "Browser Integration",
+        "Video Downloader",
+        "Torrent",
+        "Cloud Downloads",
+        "Archive Manager",
+        "File Management",
+        "Queue Manager",
+        "Scheduler",
+        "Network",
+        "Security",
+        "Notifications",
+        "Statistics",
+        "Appearance",
+        "Advanced",
+        "About",
+    ]
+    monkeypatch.setattr(launcher, "set_autostart", lambda enabled: None)
+    dialog.playlist_cap_spin.setValue(55)
+    dialog.ffmpeg_override_edit.setText("/opt/ffmpeg/bin/ffmpeg")
+    assert dialog.apply()
+    assert settings.playlist_batch_cap == 55
+    assert settings.ffmpeg_path == "/opt/ffmpeg/bin/ffmpeg"
+
+
+def test_speed_smoother_is_steady_despite_checkpoint_aliasing():
+    """A constant download must read as a constant speed.
+
+    The engine flushes progress to SQLite every 0.3s but the UI polls every
+    0.5s, so the byte count the UI sees is quantised to flush boundaries.
+    Differencing two consecutive polls aliases that into a strobing readout;
+    measuring across a window must not.
+    """
+    from app.ui.motion import SpeedSmoother
+
+    rate = 10 * 1024 * 1024  # a steady 10 MB/s
+    flush, poll = 0.3, 0.5
+    smoother = SpeedSmoother()
+    reads = [
+        smoother.push_total(i * poll, int(rate * (int((i * poll) / flush) * flush)))
+        for i in range(1, 40)
+    ]
+    settled = reads[8:]
+    assert min(settled) > 0  # never strobes to zero
+    assert all(abs(r - rate) < rate * 0.1 for r in settled)  # within 10% of the truth
+
+
+def test_duplicate_prompt_yes_starts_a_new_download(db: Database, tmp_path: Path, monkeypatch):
+    """Answering Yes to 'Download it again?' must actually queue it.
+
+    PySide6's QMessageBox.question returns a plain int (16384), never the
+    StandardButton member - so an `is` comparison silently takes the No branch
+    and the click does nothing. Return what real Qt returns, so this test fails
+    if anyone reaches for `is` again.
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        url = "https://example.invalid/dup.bin"
+        db.create_job(url, str(tmp_path), "dup.bin")  # the existing duplicate
+        window = MainWindow(manager, settings)
+
+        monkeypatch.setattr(
+            QMessageBox,
+            "question",
+            staticmethod(lambda *a, **k: int(QMessageBox.StandardButton.Yes)),
+        )
+        resolved: list[str] = []
+        monkeypatch.setattr(window, "_resolve_and_queue", lambda u, *a, **k: resolved.append(u))
+
+        window.begin_add_url(url)
+        assert resolved == [url]  # Yes proceeded instead of silently returning
+    finally:
+        manager.shutdown()
+
+
 def test_playlist_panel_selection(db: Database):
     from PySide6.QtCore import Qt
 

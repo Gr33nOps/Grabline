@@ -48,7 +48,14 @@ hidden += boto_hidden
 # stage it (Load unpacked / temporary add-on) - an installed build has no repo
 # checkout to copy it from. browser_setup._source_extension_dir() reads it back
 # from sys._MEIPASS/extension.
-datas = ytdlp_datas + curl_datas + boto_datas + [(str(ROOT / "extension"), "extension")]
+datas = (
+    ytdlp_datas
+    + curl_datas
+    + boto_datas
+    + [(str(ROOT / "extension"), "extension")]
+    # The brand logo, read back from sys._MEIPASS/app/ui/assets (app.ui.icon).
+    + [(str(ROOT / "app" / "ui" / "assets"), "app/ui/assets")]
+)
 binaries = ytdlp_bins + curl_bins + boto_bins
 
 # Trim Qt modules the app never touches - keeps the bundle from ballooning.

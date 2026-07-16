@@ -254,7 +254,7 @@ class QueueView(QWidget):
             "Grabline",
             f"Delete queue '{queue.name}'? Its downloads move back to the default queue.",
         )
-        if answer is QMessageBox.StandardButton.Yes:
+        if answer == QMessageBox.StandardButton.Yes:
             self.manager.delete_queue(queue.id)
             if self._editing == queue.id:
                 self._editing = None

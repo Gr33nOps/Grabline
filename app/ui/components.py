@@ -284,10 +284,34 @@ def hline() -> QFrame:
 
 
 def app_logo(size: int = 28) -> QLabel:
-    """The rounded-square blue app mark with the white download glyph."""
+    """The brand logo as a rounded square. Uses the real logo asset; falls
+    back to the drawn blue-square-with-arrow mark if the asset is missing."""
+    from PySide6.QtGui import QPainterPath, QPixmap
+
+    from app.ui.icon import logo_pixmap
+
     label = QLabel()
-    label.setObjectName("AppLogo")
     label.setFixedSize(size, size)
-    label.setPixmap(svg_icon("download", "#ffffff").pixmap(int(size * 0.6), int(size * 0.6)))
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    source = logo_pixmap()
+    if source is None:
+        label.setObjectName("AppLogo")  # blue rounded square via the stylesheet
+        label.setPixmap(svg_icon("download", "#ffffff").pixmap(int(size * 0.6), int(size * 0.6)))
+        return label
+    ratio = label.devicePixelRatioF()
+    px = int(size * ratio)
+    scaled = source.scaled(
+        px, px, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+    )
+    rounded = QPixmap(px, px)
+    rounded.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(rounded)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    path = QPainterPath()
+    path.addRoundedRect(0, 0, px, px, px * 0.22, px * 0.22)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, scaled)
+    painter.end()
+    rounded.setDevicePixelRatio(ratio)
+    label.setPixmap(rounded)
     return label
