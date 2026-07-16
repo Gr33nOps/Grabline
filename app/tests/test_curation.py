@@ -247,15 +247,11 @@ def test_needs_js_runtime_only_for_youtube_or_a_session() -> None:
     assert needs_js_runtime("https://example.com/clip.mp4", use_session=True)
 
 
-def test_analysis_provisions_a_js_runtime_like_the_download(
+def test_provision_js_runtime_fetches_only_for_urls_that_need_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Analysis must get the same JS runtime the download provisions.
-
-    Detecting but never provisioning left a runtime-less machine solving
-    YouTube's challenge in pure Python on every analyse - slow, and prone to a
-    degraded format list.
-    """
+    """The download path (and the analysis *fallback*) provision a runtime for
+    YouTube URLs, fetching Deno on demand - and never for an ordinary file."""
     from app.core import jsruntime
     from app.engines import smart
 
@@ -288,3 +284,77 @@ def test_provisioning_failure_never_breaks_analysis(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(jsruntime, "ensure_deno", boom)
     # Best effort: analysis carries on without a runtime rather than failing.
     assert smart.provision_js_runtime("https://youtu.be/abc") is None
+
+
+def test_analysis_is_jsless_first_with_a_runtime_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Analysis must not pay for the JS runtime (measured 4s jsless vs 26-87s
+    with it, identical format lists) - the runtime belongs to the download.
+    Only a degraded jsless answer retries with the runtime."""
+    engine = SmartEngine()
+    calls: list[bool] = []
+
+    good = {
+        "id": "v",
+        "title": "T",
+        "formats": [
+            {
+                "format_id": "18",
+                "vcodec": "avc1",
+                "acodec": "mp4a",
+                "height": 360,
+                "tbr": 700,
+                "filesize": MB,
+                "ext": "mp4",
+            }
+        ],
+    }
+    degraded = {"id": "v", "title": "T", "formats": []}
+
+    def fake_extract(url: str, *, with_runtime: bool, **kwargs: Any) -> dict[str, Any]:
+        calls.append(with_runtime)
+        return good
+
+    monkeypatch.setattr(engine, "_extract_info", fake_extract)
+    info = engine.inspect("https://youtu.be/fast")
+    assert isinstance(info, MediaInfo) and info.options
+    assert calls == [False]  # jsless only - no runtime cost on the happy path
+
+    # A degraded jsless answer (no formats) retries once WITH the runtime.
+    calls.clear()
+    results = iter((degraded, good))
+
+    def flaky_extract(url: str, *, with_runtime: bool, **kwargs: Any) -> dict[str, Any]:
+        calls.append(with_runtime)
+        return next(results)
+
+    monkeypatch.setattr(engine, "_extract_info", flaky_extract)
+    info = engine.inspect("https://youtu.be/degraded")
+    assert isinstance(info, MediaInfo) and info.options
+    assert calls == [False, True]
+
+    # A runtime-marker error does the same; other errors don't retry.
+    calls.clear()
+
+    def erroring_extract(url: str, *, with_runtime: bool, **kwargs: Any) -> dict[str, Any]:
+        calls.append(with_runtime)
+        if not with_runtime:
+            raise DownloadError("Requested format is not available")
+        return good
+
+    monkeypatch.setattr(engine, "_extract_info", erroring_extract)
+    info = engine.inspect("https://youtu.be/marker")
+    assert isinstance(info, MediaInfo) and info.options
+    assert calls == [False, True]
+
+    calls.clear()
+
+    def hard_error(url: str, *, with_runtime: bool, **kwargs: Any) -> dict[str, Any]:
+        calls.append(with_runtime)
+        raise DownloadError("This video is private - its owner restricted access.")
+
+    monkeypatch.setattr(engine, "_extract_info", hard_error)
+    with pytest.raises(DownloadError):
+        engine.inspect("https://youtu.be/private")
+    assert calls == [False]  # no pointless runtime retry on a real failure

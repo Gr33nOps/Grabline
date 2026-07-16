@@ -491,14 +491,75 @@ class SmartEngine:
     ) -> MediaInfo | PlaylistInfo:
         """Metadata for a single video, or a fast flat listing for a playlist.
 
-        ``noplaylist`` keeps watch-URLs-with-a-list-param as single videos;
-        pure playlist URLs still come back as playlists. ``extract_flat``
-        makes the playlist case one cheap request instead of hundreds.
+        Analysis runs *without* a JavaScript runtime first: the quality panel
+        only needs the format list, which YouTube returns fine without solving
+        its challenge - measured ~4s JS-less vs 26-87s with the runtime, same
+        options either way. The runtime matters for the *download* (unthrottled
+        URLs), and SmartDownload provisions it there. Only when the JS-less
+        pass comes back degraded (a runtime-marker error, or a video with no
+        usable formats) does analysis retry once with the runtime. A browser
+        session is the exception: cookies push yt-dlp onto JS-dependent
+        clients, so a session analysis uses the runtime from the start.
 
         ``force_generic`` runs yt-dlp's page-scraping generic extractor even
         when no site extractor claims the URL - the last-resort path for media
         embedded in pages yt-dlp has no dedicated support for.
         """
+        try:
+            info = self._extract_info(
+                url,
+                with_runtime=use_session,  # cookies need JS-dependent clients
+                use_session=use_session,
+                session_browser=session_browser,
+                proxy=proxy,
+                force_generic=force_generic,
+            )
+        except DownloadError as exc:
+            if use_session or not _runtime_might_help(str(exc)):
+                raise
+            log.info("jsless analysis of %s failed (%s); retrying with a runtime", url, exc)
+            info = self._extract_info(
+                url,
+                with_runtime=True,
+                use_session=use_session,
+                session_browser=session_browser,
+                proxy=proxy,
+                force_generic=force_generic,
+            )
+        result = self._parse_inspected(
+            url, info, use_session=use_session, session_browser=session_browser, proxy=proxy
+        )
+        if isinstance(result, MediaInfo) and not result.options and not use_session:
+            # Degraded jsless answer (e.g. storyboard images only): one retry
+            # with the runtime before reporting there's nothing to download.
+            log.info("jsless analysis of %s found no formats; retrying with a runtime", url)
+            info = self._extract_info(
+                url,
+                with_runtime=True,
+                use_session=use_session,
+                session_browser=session_browser,
+                proxy=proxy,
+                force_generic=force_generic,
+            )
+            result = self._parse_inspected(
+                url, info, use_session=use_session, session_browser=session_browser, proxy=proxy
+            )
+        return result
+
+    def _extract_info(
+        self,
+        url: str,
+        *,
+        with_runtime: bool,
+        use_session: bool,
+        session_browser: str,
+        proxy: str | None,
+        force_generic: bool,
+    ) -> dict[str, Any]:
+        """One yt-dlp metadata extraction. ``noplaylist`` keeps watch-URLs-
+        with-a-list-param as single videos; pure playlist URLs still come back
+        as playlists, and ``extract_flat`` makes that one cheap request
+        instead of hundreds."""
         import yt_dlp
 
         opts: dict[str, Any] = {
@@ -511,16 +572,12 @@ class SmartEngine:
         if force_generic:
             # Scrape the page itself for <video>/og:video/JSON-LD/m3u8 links.
             opts["force_generic_extractor"] = True
-        # Exactly the setup the download will use. This used to only *detect* a
-        # runtime while the download provisioned one, so on a machine without
-        # Node/Deno every analysis solved YouTube's challenge in pure Python -
-        # slow, and prone to a degraded format list - even though the download
-        # would fetch Deno moments later anyway.
-        runtime = provision_js_runtime(url, use_session=use_session, proxy=proxy)
-        if runtime is not None:
-            name, path = runtime
-            opts["js_runtimes"] = {name: {"path": path}}
-            opts["remote_components"] = ["ejs:github"]
+        if with_runtime:
+            runtime = provision_js_runtime(url, use_session=use_session, proxy=proxy)
+            if runtime is not None:
+                name, path = runtime
+                opts["js_runtimes"] = {name: {"path": path}}
+                opts["remote_components"] = ["ejs:github"]
         if use_session:
             opts["cookiesfrombrowser"] = (session_browser,)
         if proxy:
@@ -532,6 +589,17 @@ class SmartEngine:
             raise DownloadError(friendly_error(str(exc))) from exc
         if not isinstance(info, dict):
             raise DownloadError("No downloadable media was found at this address.")
+        return info
+
+    def _parse_inspected(
+        self,
+        url: str,
+        info: dict[str, Any],
+        *,
+        use_session: bool,
+        session_browser: str,
+        proxy: str | None,
+    ) -> MediaInfo | PlaylistInfo:
         playlist = parse_playlist(info)
         if playlist is not None:
             if not playlist.entries:
