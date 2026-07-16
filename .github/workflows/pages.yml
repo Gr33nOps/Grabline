@@ -4,12 +4,13 @@ name: Pages
 # One-time setup: repo Settings -> Pages -> Build and deployment ->
 # Source: "GitHub Actions". The site then publishes on every push to main.
 
+# No paths filter: main is rebuilt as a single amended commit and
+# force-pushed on release, and GitHub can't diff a rewritten ref - a paths
+# filter silently skips the run (the site never updated after the first
+# deploy). Main only moves on release, so this is ~one deploy per release.
 on:
   push:
     branches: [main]
-    paths:
-      - "website/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
