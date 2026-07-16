@@ -31,3 +31,6 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Internal working document - never ships in the repo
+docs/ui-redesign-brief.md
