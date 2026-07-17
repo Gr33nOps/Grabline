@@ -18,6 +18,21 @@
   // time (same trick as playlist batches) - instant, no metadata fetch.
   const QUALITY_LABELS = ["Best", "1080p", "720p", "480p", "MP3", "M4A", "FLAC"];
 
+  // The app's line icons (currentColor, 1.5 stroke) so the hover button reads
+  // as part of Grabline, not an emoji.
+  const svg = (paths) =>
+    `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" ` +
+    `stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  const ICON = {
+    download: svg('<path d="M8 2v8"/><path d="M5 7l3 3 3-3"/><path d="M3 13h10"/>'),
+    check: svg('<path d="M3 8.5L6.5 12 13 4"/>'),
+    error: svg('<path d="M4 4l8 8"/><path d="M12 4l-8 8"/>'),
+  };
+  // Match the app's accent + status colors (design.py).
+  const ACCENT = "#0170fd";
+  const OK = "#1f9d55";
+  const WARN = "#cf222e";
+
   // Which corner of the hovered element the ⬇ sits in - user-settable in
   // the popup (some sites put their own controls exactly where we default).
   let corner = "top-right";
@@ -63,21 +78,22 @@
     const host = document.createElement("div");
     const shadow = host.attachShadow({ mode: "closed" });
     const button = document.createElement("button");
-    button.textContent = "⬇";
+    button.innerHTML = ICON.download;
     button.title = "Download with Grabline";
     button.style.cssText = [
       "position: fixed",
       "z-index: 2147483647",
       "display: none",
+      "align-items: center",
+      "justify-content: center",
       "width: 30px",
       "height: 30px",
       "border: none",
-      "border-radius: 15px",
-      "background: #0170fd",
+      "border-radius: 8px",
+      `background: ${ACCENT}`,
       "color: #fff",
-      "font: 700 14px/1 system-ui, sans-serif",
       "cursor: pointer",
-      "box-shadow: 0 2px 6px rgba(0,0,0,.4)",
+      "box-shadow: 0 2px 6px rgba(0,0,0,.35)",
     ].join(";");
     shadow.appendChild(button);
 
@@ -89,9 +105,9 @@
       "flex-direction: column",
       "gap: 2px",
       "padding: 6px",
-      "border-radius: 10px",
-      "background: rgba(17,24,39,.96)",
-      "box-shadow: 0 4px 14px rgba(0,0,0,.45)",
+      "border-radius: 8px",
+      "background: #1f2228",
+      "box-shadow: 0 6px 18px rgba(0,0,0,.4)",
     ].join(";");
     shadow.appendChild(panel);
     let panelOpen = false;
@@ -130,8 +146,9 @@
     }
 
     function feedback(reply) {
-      button.textContent = reply?.type === "error" ? "!" : "✓";
-      button.style.background = reply?.type === "error" ? "#b91c1c" : "#15803d";
+      const failed = reply?.type === "error";
+      button.innerHTML = failed ? ICON.error : ICON.check;
+      button.style.background = failed ? WARN : OK;
       setTimeout(hide, 900);
     }
 
@@ -151,7 +168,7 @@
           "cursor: pointer",
           "text-align: left",
         ].join(";");
-        choice.addEventListener("mouseenter", () => (choice.style.background = "#0170fd"));
+        choice.addEventListener("mouseenter", () => (choice.style.background = ACCENT));
         choice.addEventListener("mouseleave", () => (choice.style.background = "transparent"));
         choice.addEventListener("click", async (event) => {
           event.preventDefault();
@@ -211,9 +228,9 @@
       const position = buttonPosition(rect, BUTTON_SIZE);
       button.style.left = `${position.left}px`;
       button.style.top = `${position.top}px`;
-      button.style.display = "block";
-      button.style.background = "#0170fd";
-      button.textContent = "⬇";
+      button.style.display = "flex";
+      button.style.background = ACCENT;
+      button.innerHTML = ICON.download;
     }
 
     document.addEventListener(
@@ -264,7 +281,15 @@
         else openPanel();
         return;
       }
-      feedback(await api.runtime.sendMessage({ cmd: "grab", url: currentUrl }));
+      // No panel for this site: one click grabs at the popup's default quality.
+      const { defaultQuality = "best" } = await api.storage.local.get("defaultQuality");
+      feedback(
+        await api.runtime.sendMessage({
+          cmd: "grab",
+          url: currentUrl,
+          quality: defaultQuality || null,
+        }),
+      );
     });
   };
 })();

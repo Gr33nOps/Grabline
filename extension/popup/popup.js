@@ -1,5 +1,5 @@
-// Grabline Connect - toolbar popup (F1.4): pairing status, per-tab sniffed
-// media list, interception and per-site overlay toggles.
+// Grabline Connect - toolbar popup: pairing status, quick actions, the tab's
+// detected media, recent downloads, and the interception / hover preferences.
 
 const api = globalThis.browser ?? globalThis.chrome;
 
@@ -21,7 +21,6 @@ const UGLY_LEAF =
   /^(master|index|playlist|manifest|chunklist|videoplayback|video|audio|media|stream|init|segment|seg|frag|output|dash|hls|prog)\b/i;
 
 function cleanTitle(title) {
-  // Drop a trailing " - YouTube" / " • Instagram" / " | Site" suffix.
   return (title || "")
     .replace(
       /\s*[-|•·—–]\s*(YouTube|Instagram|Vimeo|TikTok|Twitter|X|Facebook|Dailymotion|Twitch|SoundCloud|Reddit)\s*$/i,
@@ -30,9 +29,6 @@ function cleanTitle(title) {
     .trim();
 }
 
-// A human name for a sniffed media item: the real filename when the URL has
-// one, otherwise the title captured when the media was sniffed (what was
-// playing then), otherwise the tab's title now. A stream URL is usually a hash.
 function mediaName(item, tab) {
   try {
     const leaf = decodeURIComponent(
@@ -53,6 +49,13 @@ async function activeTab() {
   return tab ?? null;
 }
 
+async function defaultQuality() {
+  const { defaultQuality = "best" } = await api.storage.local.get("defaultQuality");
+  return defaultQuality || null;
+}
+
+let paired = false;
+
 async function renderStatus() {
   const status = document.getElementById("status");
   const help = document.getElementById("pairing-help");
@@ -61,14 +64,76 @@ async function renderStatus() {
     status.textContent = "not paired";
     status.className = "status bad";
     help.hidden = false;
+    paired = false;
   } else if (reply.appRunning) {
     status.textContent = "connected";
     status.className = "status ok";
+    paired = true;
   } else {
     status.textContent = "app not running";
     status.className = "status warn";
-    status.title = "Downloads are queued and start when you open Grabline.";
+    status.title = "Downloads queue and start when you open Grabline.";
+    paired = true;
   }
+}
+
+const STATUS_LABEL = {
+  downloading: "Downloading",
+  queued: "Queued",
+  paused: "Paused",
+  completed: "Done",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  pending: "Pending",
+};
+const STATUS_COLOR = {
+  completed: "var(--ok)",
+  failed: "var(--warn)",
+  cancelled: "var(--text3)",
+  paused: "var(--text3)",
+};
+
+async function renderQuickActions(tab) {
+  document.getElementById("open-app").addEventListener("click", () => {
+    void api.runtime.sendMessage({ cmd: "focus" });
+    window.close();
+  });
+  const grabTab = document.getElementById("grab-tab");
+  grabTab.addEventListener("click", async () => {
+    if (!tab?.url) return;
+    grabTab.disabled = true;
+    grabTab.textContent = "Sent";
+    await api.runtime.sendMessage({
+      cmd: "grab",
+      url: tab.url,
+      tabId: tab.id,
+      quality: await defaultQuality(),
+    });
+  });
+
+  const input = document.getElementById("paste-url");
+  const send = document.getElementById("paste-send");
+  const submit = async () => {
+    const url = input.value.trim();
+    if (!/^https?:\/\//i.test(url)) return;
+    send.disabled = true;
+    send.textContent = "Sent";
+    await api.runtime.sendMessage({ cmd: "grab", url, quality: await defaultQuality() });
+    input.value = "";
+    setTimeout(() => {
+      send.disabled = false;
+      send.textContent = "Send";
+    }, 1200);
+  };
+  send.addEventListener("click", submit);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") void submit();
+  });
+
+  document.getElementById("open-settings").addEventListener("click", () => {
+    void api.runtime.sendMessage({ cmd: "focus", target: "settings" });
+    window.close();
+  });
 }
 
 async function renderMediaList(tab) {
@@ -77,8 +142,6 @@ async function renderMediaList(tab) {
   const stored = await api.storage.session.get(key);
   const all = stored[key] ?? [];
   if (!all.length) return;
-  // Most-recent first (what's playing now), and only a handful - not the last
-  // 20 reels you already scrolled past.
   const items = [...all].sort((a, b) => (b.seenAt ?? 0) - (a.seenAt ?? 0)).slice(0, 6);
   list.textContent = "";
   for (const item of items) {
@@ -97,15 +160,18 @@ async function renderMediaList(tab) {
     grab.textContent = "Download";
     grab.addEventListener("click", async () => {
       grab.disabled = true;
-      grab.textContent = "Sent ✓";
+      grab.textContent = "Sent";
+      grab.classList.add("done");
       const reply = await api.runtime.sendMessage({
         cmd: "grab",
         url: item.url,
         tabId: tab.id,
         title: mediaName(item, tab),
+        quality: await defaultQuality(),
       });
       if (reply?.type === "error") {
         grab.textContent = "Failed";
+        grab.classList.remove("done");
         grab.disabled = false;
       }
     });
@@ -114,7 +180,58 @@ async function renderMediaList(tab) {
   }
 }
 
+async function renderRecent() {
+  const reply = await api.runtime.sendMessage({ cmd: "recent" });
+  const jobs = reply?.jobs ?? [];
+  if (!jobs.length) return;
+  document.getElementById("recent-section").hidden = false;
+  const list = document.getElementById("recent-list");
+  list.textContent = "";
+  for (const job of jobs) {
+    const row = document.createElement("li");
+    row.className = "recent-row";
+    row.addEventListener("click", () => {
+      void api.runtime.sendMessage({ cmd: "focus" });
+      window.close();
+    });
+
+    const top = document.createElement("div");
+    top.className = "recent-top";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = job.name || job.url;
+    const state = document.createElement("span");
+    state.className = "recent-status";
+    state.textContent = STATUS_LABEL[job.status] ?? job.status;
+    state.style.color = STATUS_COLOR[job.status] ?? "var(--accent)";
+    top.append(name, state);
+
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    const fill = document.createElement("span");
+    const pct =
+      job.status === "completed"
+        ? 100
+        : job.total
+          ? Math.round((job.downloaded / job.total) * 100)
+          : 0;
+    fill.style.width = `${pct}%`;
+    if (STATUS_COLOR[job.status]) fill.style.background = STATUS_COLOR[job.status];
+    bar.appendChild(fill);
+
+    row.append(top, bar);
+    list.appendChild(row);
+  }
+}
+
 async function wireToggles(tab) {
+  const quality = document.getElementById("default-quality");
+  const { defaultQuality: dq = "best" } = await api.storage.local.get("defaultQuality");
+  quality.value = dq;
+  quality.addEventListener("change", () => {
+    void api.storage.local.set({ defaultQuality: quality.value });
+  });
+
   const intercept = document.getElementById("toggle-intercept");
   const hover = document.getElementById("toggle-hover");
   const overlay = document.getElementById("toggle-overlay");
@@ -125,8 +242,6 @@ async function wireToggles(tab) {
     void api.storage.local.set({ intercept: intercept.checked });
   });
 
-  // Master switch for all hover buttons; when off, the per-site and images
-  // toggles below it have nothing to act on, so grey them out.
   const { hoverButtons = true } = await api.storage.local.get("hoverButtons");
   hover.checked = hoverButtons;
   const reflectHover = () => {
@@ -169,6 +284,8 @@ async function wireToggles(tab) {
 (async () => {
   const tab = await activeTab();
   await renderStatus();
+  await renderQuickActions(tab);
   if (tab) await renderMediaList(tab);
+  if (paired) await renderRecent();
   await wireToggles(tab);
 })();

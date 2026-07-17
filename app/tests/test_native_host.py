@@ -348,3 +348,32 @@ def test_handoff_claims_are_exactly_once(db: Database):
     first = db.claim_handoffs()
     assert [h.url for h in first] == ["https://x.test/1", "https://x.test/2"]
     assert db.claim_handoffs() == []
+
+
+def test_recent_returns_newest_jobs_first(db: Database):
+    from app.core.models import JobKind
+
+    for i in range(3):
+        db.create_job(
+            f"https://example.com/{i}.mp4",
+            "/tmp",
+            f"{i}.mp4",
+            kind=JobKind.SMART,
+            title=f"clip {i}",
+        )
+    reply = handle_message(db, {"type": "recent", "limit": 2})
+    assert reply["type"] == "recent"
+    assert [j["name"] for j in reply["jobs"]] == ["clip 2", "clip 1"]  # newest first
+    assert all({"url", "status", "downloaded", "total", "name"} <= set(j) for j in reply["jobs"])
+
+
+def test_focus_drops_a_marker_handoff(db: Database):
+    reply = handle_message(db, {"type": "focus"})
+    assert reply["type"] == "ok"
+    handoffs = db.claim_handoffs()
+    assert len(handoffs) == 1 and handoffs[0].source == "focus"
+
+
+def test_unknown_type_still_rejected(db: Database):
+    reply = handle_message(db, {"type": "nonsense"})
+    assert reply["type"] == "error"

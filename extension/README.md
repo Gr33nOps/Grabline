@@ -1,38 +1,38 @@
 # Grabline Connect
 
-The thin, auditable browser extension (MV3, one codebase for Chrome / Edge /
-Brave / Firefox). It detects, decorates, and delivers - **every download,
-merge, and conversion happens in the desktop app.** The whole extension is
-readable in one sitting; that is a design goal.
+A thin, auditable browser extension (MV3, one codebase for Chrome / Edge /
+Brave / Firefox). It detects media, decorates the page, and hands URLs to the
+desktop app. Every download, merge, and conversion happens in the app; the
+whole extension is meant to be readable in one sitting.
 
 ## What it does
 
-- **In-page quality panel**: click the ⬇ on a site-module page and
-  pick Best / 1080p / 720p / 480p / MP3 / M4A right there - the download
-  starts without touching the app window ("More options…" opens the app's
-  full panel with subtitles and trimming)
-- **Live progress pill**: anything grabbed from a tab shows its
-  percentage bottom-right in that tab, streamed over Native Messaging from
-  the app's jobs table - still no sockets, no ports
+- **Toolbar popup** styled like the app: pairing status, quick actions (open
+  Grabline, grab this tab, paste a link), the media detected in this tab, a
+  live view of your recent downloads, and the interception and hover
+  preferences. A default-quality setting drives one-click grabs.
+- **In-page quality panel**: click the download button on a supported site
+  and pick Best / 1080p / 720p / 480p / MP3 / M4A right there. "More
+  options…" opens the app's full panel with subtitles and trimming.
+- **Live progress pill**: anything grabbed from a tab shows its percentage
+  bottom-right in that tab, streamed from the app over Native Messaging.
 - **Right-click → "Download with Grabline"** on any link, image, video,
   audio, selection, or page
 - **Right-click → "Download all images with Grabline"**: every
   big-enough image on the page lands in the app as a selectable thumbnail
   grid (a wrapping link to a full-size image wins over the thumbnail src)
-- **Hover ⬇ button** on videos and audio. Images are **opt-in** via
-  the popup - a button on every profile picture and chat thumbnail is
-  noise, and right-click + the gallery grabber already cover images.
-  Per-site off switch in the popup too.
-- **Toolbar popup** with everything the network sniffer saw in this tab -
-  streams (.m3u8/.mpd) and media files, one-click download each
+- **Hover download button** on videos and audio. Images are opt-in via the
+  popup, since a button on every avatar and thumbnail is noise and right-click
+  plus the gallery grabber already cover images. There is a per-site off
+  switch and a master switch in the popup.
 - **Optional download takeover** (off by default): browser downloads of
-  media/archive types are cancelled and re-dispatched to Grabline for
-  segmented downloading
+  media and archive types are cancelled and re-dispatched to Grabline for
+  segmented downloading.
 
-It talks to the desktop app over **Native Messaging only** - the browser
-launches Grabline's host process and pipes JSON over stdio. There is no
-localhost server and no open port, and the host manifests pin the extension
-IDs allowed to connect.
+It talks to the desktop app over Native Messaging only: the browser launches
+Grabline's host process and pipes JSON over stdio. There is no localhost
+server and no open port, and the host manifests pin the extension IDs allowed
+to connect.
 
 ## Pairing (two steps)
 
@@ -112,10 +112,10 @@ and Firefox (each store wants a slightly different manifest); the listing
 text, permission justifications, and reviewer notes are prewritten in
 [docs/store-listing.md](../docs/store-listing.md).
 
-## How the pill works (no sockets, still)
+## How the progress pill works
 
-The background script keeps a persistent Native Messaging port open while
-downloads it started are running, asks the host for status once a second,
-and the host answers straight from the app's SQLite jobs table. The open
-port also keeps the MV3 service worker alive for exactly as long as there
-is something to report.
+The background script keeps a persistent Native Messaging port open while the
+downloads it started are running, asks the host for status once a second, and
+the host answers from the app's SQLite jobs table. The open port also keeps
+the MV3 service worker alive for exactly as long as there is something to
+report.

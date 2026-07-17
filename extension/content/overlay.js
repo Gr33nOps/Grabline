@@ -9,6 +9,20 @@
   const api = globalThis.browser ?? globalThis.chrome;
   const MIN_IMAGE_SIZE = 200;
   const HIDE_DELAY_MS = 350;
+
+  // The app's line icons + accent/status colors (design.py) so the in-page UI
+  // reads as part of Grabline.
+  const svg = (paths) =>
+    `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" ` +
+    `stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  const ICON = {
+    download: svg('<path d="M8 2v8"/><path d="M5 7l3 3 3-3"/><path d="M3 13h10"/>'),
+    check: svg('<path d="M3 8.5L6.5 12 13 4"/>'),
+    error: svg('<path d="M4 4l8 8"/><path d="M12 4l-8 8"/>'),
+  };
+  const ACCENT = "#0170fd";
+  const OK = "#1f9d55";
+  const WARN = "#cf222e";
   // Hosts where a site module (content/sites/*.js) owns the media UI. On
   // those hosts the generic overlay stands back: browse pages run inline
   // preview <video>s whose blob src would fall back to the *page* URL (= the
@@ -77,19 +91,20 @@
   const host = document.createElement("div");
   const shadow = host.attachShadow({ mode: "closed" });
   const button = document.createElement("button");
-  button.textContent = "⬇";
+  button.innerHTML = ICON.download;
   button.title = "Download with Grabline";
   button.style.cssText = [
     "position: fixed",
     "z-index: 2147483647",
     "display: none",
+    "align-items: center",
+    "justify-content: center",
     "width: 34px",
     "height: 34px",
     "border: none",
-    "border-radius: 17px",
-    "background: #0170fd",
+    "border-radius: 8px",
+    `background: ${ACCENT}`,
     "color: #fff",
-    "font: 700 16px/1 system-ui, sans-serif",
     "cursor: pointer",
     "box-shadow: 0 2px 8px rgba(0,0,0,.35)",
     "opacity: .92",
@@ -146,9 +161,9 @@
     if (rect.width < 40 || rect.height < 40) return;
     currentTarget = element;
     placeButton(rect);
-    button.style.display = "block";
-    button.style.background = "#0170fd";
-    button.textContent = "⬇";
+    button.style.display = "flex";
+    button.style.background = ACCENT;
+    button.innerHTML = ICON.download;
     startFollowing();
   }
 
@@ -271,8 +286,8 @@
       row.style.cssText = [
         "max-width: 340px",
         "padding: 8px 14px",
-        "border-radius: 999px",
-        "background: rgba(17,24,39,.94)",
+        "border-radius: 8px",
+        "background: rgba(31,34,40,.96)",
         "color: #fff",
         "font: 500 12px/1.3 system-ui, sans-serif",
         "box-shadow: 0 2px 8px rgba(0,0,0,.35)",
@@ -300,13 +315,13 @@
 
   function pillText(job) {
     const name = job.name ?? "download";
-    if (job.status === "completed") return `✓ ${name}`;
-    if (job.status === "failed") return `✗ failed - ${name}`;
+    if (job.status === "completed") return `Done · ${name}`;
+    if (job.status === "failed") return `Failed · ${name}`;
     if (job.total && job.downloaded != null) {
-      return `⬇ ${Math.min(100, Math.round((job.downloaded / job.total) * 100))}% · ${name}`;
+      return `${Math.min(100, Math.round((job.downloaded / job.total) * 100))}% · ${name}`;
     }
-    if (job.downloaded) return `⬇ ${humanBytes(job.downloaded)} · ${name}`;
-    return `⬇ starting · ${name}`;
+    if (job.downloaded) return `${humanBytes(job.downloaded)} · ${name}`;
+    return `Starting · ${name}`;
   }
 
   function renderProgress(items) {
@@ -432,14 +447,17 @@
     event.stopPropagation();
     if (!currentTarget) return;
     const media = mediaUrlFor(currentTarget);
+    const { defaultQuality = "best" } = await api.storage.local.get("defaultQuality");
     const reply = await api.runtime.sendMessage({
       cmd: "grab",
       url: media.url,
       sniff: media.fromPage,
+      quality: defaultQuality || null,
     });
     // Quick inline feedback, then fade away.
-    button.textContent = reply?.type === "error" ? "!" : "✓";
-    button.style.background = reply?.type === "error" ? "#b91c1c" : "#15803d";
+    const failed = reply?.type === "error";
+    button.innerHTML = failed ? ICON.error : ICON.check;
+    button.style.background = failed ? WARN : OK;
     setTimeout(hideButton, 900);
   });
 })();

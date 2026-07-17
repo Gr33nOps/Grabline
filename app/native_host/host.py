@@ -16,7 +16,7 @@ from app.native_host.protocol import ProtocolError, read_message, write_message
 
 log = logging.getLogger(__name__)
 
-PROTOCOL_VERSION = 4
+PROTOCOL_VERSION = 5
 
 _MAX_URL_LENGTH = 8192
 _MAX_TEXT_LENGTH = 512
@@ -137,6 +137,29 @@ def handle_message(db: Database, message: dict[str, Any]) -> dict[str, Any]:
                     }
                 )
         return {"type": "status", "jobs": jobs, "appRunning": instance.app_is_running()}
+    if kind == "recent":
+        # The extension's recent-downloads view: the newest few jobs, whatever
+        # their source, straight from the jobs table.
+        limit = message.get("limit")
+        limit = limit if isinstance(limit, int) and 0 < limit <= 20 else 5
+        jobs = [
+            {
+                "url": job.url,
+                "status": job.status.value,
+                "downloaded": db.stored_progress(job),
+                "total": job.total_size,
+                "name": job.title or job.filename,
+            }
+            for job in db.recent_jobs(limit)
+        ]
+        return {"type": "recent", "jobs": jobs, "appRunning": instance.app_is_running()}
+    if kind == "focus":
+        # "Open Grabline": drop a marker the running app picks up on its next
+        # handoff poll and raises its window. An optional target ("settings")
+        # tells it which page to open. Harmless if the app is closed.
+        target = _clean_text(message.get("target"), limit=32)
+        db.add_handoff("about:focus", source="focus", page_title=target)
+        return {"type": "ok", "appRunning": instance.app_is_running()}
     if kind == "gallery":
         # F2.2: every image URL the content script collected on one page.
         return _collection_handoff(db, message, "gallery", "no downloadable image URLs found")

@@ -581,7 +581,15 @@ class MainWindow(QMainWindow):
 
     def _drain_handoffs(self) -> None:
         for handoff in self.manager.db.claim_handoffs():
-            if handoff.source == "gallery" and handoff.payload:
+            if handoff.source == "focus":
+                # "Open Grabline" from the extension: raise the window, and jump
+                # to a named page (e.g. settings) when one was requested.
+                self.show()
+                self.raise_()
+                self.activateWindow()
+                if handoff.page_title in self._page_index:
+                    self._switch_view(handoff.page_title)
+            elif handoff.source == "gallery" and handoff.payload:
                 self._open_gallery(list(handoff.payload), handoff.page_title)
             elif handoff.source == "links" and handoff.payload:
                 self._open_links(list(handoff.payload), handoff.page_title)

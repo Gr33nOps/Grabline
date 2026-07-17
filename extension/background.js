@@ -452,5 +452,25 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     pingGrabline().then(sendResponse);
     return true;
   }
+  if (message?.cmd === "recent") {
+    askGrabline({ type: "recent", limit: 5 }).then(sendResponse);
+    return true;
+  }
+  if (message?.cmd === "focus") {
+    askGrabline({ type: "focus", target: message.target ?? null }).then(sendResponse);
+    return true;
+  }
   return false;
 });
+
+// A one-shot native request that never throws: returns the reply, or null if
+// the host isn't reachable (older app, not paired). Callers degrade quietly.
+async function askGrabline(payload) {
+  try {
+    const reply = await api.runtime.sendNativeMessage(HOST_NAME, payload);
+    if (typeof reply?.appRunning === "boolean") noteAppRunning(reply.appRunning);
+    return reply ?? null;
+  } catch {
+    return null;
+  }
+}

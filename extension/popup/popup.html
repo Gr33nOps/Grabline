@@ -12,19 +12,45 @@
     </header>
 
     <section id="pairing-help" class="help" hidden>
-      Not paired with the desktop app yet. Run
-      <code>python -m app.native_host.install</code>
-      and reload this extension.
+      Not paired with the desktop app. Run
+      <code>python -m app.native_host.install</code>, then reload this
+      extension.
+    </section>
+
+    <section>
+      <div class="actions">
+        <button id="open-app" class="primary">Open Grabline</button>
+        <button id="grab-tab">Grab this tab</button>
+      </div>
+      <div class="paste-row">
+        <input id="paste-url" type="url" placeholder="Paste a link to download" />
+        <button id="paste-send">Send</button>
+      </div>
     </section>
 
     <section>
       <h2>Media in this tab</h2>
       <ul id="media-list">
-        <li class="empty">Nothing sniffed yet - play the media, then reopen.</li>
+        <li class="empty">No media detected in this tab yet.</li>
       </ul>
     </section>
 
+    <section id="recent-section" hidden>
+      <h2>Recent downloads</h2>
+      <ul id="recent-list"></ul>
+    </section>
+
     <footer>
+      <label class="field">
+        Default quality
+        <select id="default-quality">
+          <option value="best">Best</option>
+          <option value="1080p">1080p</option>
+          <option value="720p">720p</option>
+          <option value="480p">480p</option>
+          <option value="mp3">Audio (MP3)</option>
+        </select>
+      </label>
       <label>
         <input type="checkbox" id="toggle-intercept" checked />
         Take over browser downloads
@@ -39,9 +65,9 @@
       </label>
       <label>
         <input type="checkbox" id="toggle-images" />
-        Hover button on images too (all sites)
+        Hover button on images too
       </label>
-      <label>
+      <label class="field">
         Button position
         <select id="button-corner">
           <option value="top-right">Top right</option>
@@ -51,6 +77,10 @@
         </select>
       </label>
     </footer>
+
+    <div class="settings-link">
+      <a id="open-settings">Open Grabline settings</a>
+    </div>
 
     <script src="popup.js"></script>
   </body>

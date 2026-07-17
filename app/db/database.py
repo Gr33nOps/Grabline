@@ -254,6 +254,15 @@ class Database:
             ).fetchall()
         return [_job_from_row(row) for row in rows]
 
+    def recent_jobs(self, limit: int = 5) -> list[Job]:
+        """The most recently added jobs, newest first - for the extension's
+        recent-downloads view."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM jobs ORDER BY id DESC LIMIT ?", (max(0, limit),)
+            ).fetchall()
+        return [_job_from_row(row) for row in rows]
+
     def set_priority(self, job_id: int, priority: int) -> None:
         with self._lock, self._conn:
             self._conn.execute("UPDATE jobs SET priority = ? WHERE id = ?", (priority, job_id))
