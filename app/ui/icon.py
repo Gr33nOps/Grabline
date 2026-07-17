@@ -29,7 +29,21 @@ def logo_pixmap() -> QPixmap | None:
 def make_app_icon(size: int = 64) -> QIcon:
     logo = logo_pixmap()
     if logo is not None:
-        return QIcon(logo)
+        # Pre-scale every size the OS may ask for (taskbar 16-32, alt-tab 48,
+        # desktop 64-256…) with smooth filtering. A single-size QIcon leaves
+        # the scaling to the platform at draw time, which is what made the
+        # icon look blurred on the desktop and in the taskbar.
+        icon = QIcon()
+        for edge in (16, 20, 24, 32, 40, 48, 64, 96, 128, 256, 512):
+            icon.addPixmap(
+                logo.scaled(
+                    edge,
+                    edge,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+        return icon
     return _painted_icon(size)
 
 

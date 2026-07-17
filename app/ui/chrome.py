@@ -65,12 +65,11 @@ class TitleBar(QFrame):
         self.setObjectName("TitleBar")
         self.setFixedHeight(_BAR_HEIGHT)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(10, 0, 6, 0)
+        lay.setContentsMargins(12, 0, 6, 0)
         lay.setSpacing(8)
 
         from app.ui import components
 
-        lay.addWidget(components.app_logo(20))
         self._title = components.role_label(window.windowTitle() or "Grabline", "strong")
         window.windowTitleChanged.connect(self._title.setText)
         lay.addWidget(self._title)

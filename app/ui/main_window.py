@@ -290,19 +290,14 @@ class MainWindow(QMainWindow):
         bar.setObjectName("Sidebar")
         bar.setFixedWidth(48)
         lay = QVBoxLayout(bar)
-        lay.setContentsMargins(5, 8, 5, 8)
+        lay.setContentsMargins(5, 10, 5, 10)
         lay.setSpacing(2)
         lay.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-
-        logo = components.app_logo(28)
-        lay.addWidget(logo, 0, Qt.AlignmentFlag.AlignHCenter)
-        lay.addSpacing(10)
 
         nav = (
             ("downloads", "download", "Downloads", lambda: self._switch_view("downloads")),
             ("dashboard", "dashboard", "Dashboard", lambda: self._switch_view("dashboard")),
             ("queue", "queue", "Queue Manager", lambda: self._switch_view("queue")),
-            ("settings", "settings", "Settings", lambda: self._switch_view("settings")),
         )
         for key, icon_name, tip, handler in nav:
             btn = components.SidebarButton(icon_name, tip)
@@ -312,32 +307,31 @@ class MainWindow(QMainWindow):
             lay.addWidget(btn, 0, Qt.AlignmentFlag.AlignHCenter)
         self._nav["downloads"].set_active(True)
 
-        lay.addStretch(1)
-
+        # More actions sits with the navigation, right under Queue.
         more = components.SidebarButton("more", "More actions")
-        more.clicked.connect(self._show_overflow_menu)
         more.setCheckable(False)  # a menu trigger, not a nav destination
+        more.clicked.connect(self._show_overflow_menu)
         self._more_btn = more
         self._retintable.append(more)
         lay.addWidget(more, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self._theme_btn = components.SidebarButton(
-            "sun" if theme.current().dark else "moon", "Toggle light / dark"
-        )
-        self._theme_btn.setCheckable(False)
-        self._theme_btn.clicked.connect(self._toggle_theme)
-        lay.addWidget(self._theme_btn, 0, Qt.AlignmentFlag.AlignHCenter)
+        lay.addStretch(1)
+
+        # Settings anchors the bottom of the rail. Theme switching lives in
+        # Settings → Appearance - no quick toggle here.
+        settings_btn = components.SidebarButton("settings", "Settings")
+        settings_btn.clicked.connect(lambda: self._switch_view("settings"))
+        self._nav["settings"] = settings_btn
+        self._retintable.append(settings_btn)
+        lay.addWidget(settings_btn, 0, Qt.AlignmentFlag.AlignHCenter)
         return bar
 
     def _show_overflow_menu(self) -> None:
-        """Pop the overflow menu just to the right of the rail. It's a tall
-        menu anchored to a button near the bottom, so align its lower edge with
-        the button and let Qt nudge it onto the screen."""
+        """Pop the overflow menu just to the right of its button, opening
+        downward (the button lives with the top navigation now)."""
         menu = self._overflow_menu()
         button = self._more_btn
-        size = menu.sizeHint()
-        top_left = button.mapToGlobal(QPoint(button.width() + 6, button.height() - size.height()))
-        menu.exec(top_left)
+        menu.exec(button.mapToGlobal(QPoint(button.width() + 6, 0)))
 
     def _overflow_menu(self) -> QMenu:
         menu = QMenu(self)
@@ -566,22 +560,10 @@ class MainWindow(QMainWindow):
         self._retint_all()
         self.statusBar().showMessage("Settings saved", 4000)
 
-    def _toggle_theme(self) -> None:
-        new = "light" if theme.current().dark else "dark"
-        self.settings.theme = new
-        app = QApplication.instance()
-        if isinstance(app, QApplication):
-            theme.apply_theme(app, new, accent=self.settings.accent_color or None)
-        self._retint_all()
-
     def _retint_all(self) -> None:
-        p = theme.current()
         self._title_bar.retint()
         for btn in self._retintable:
             btn.retint()
-        self._theme_btn.set_active(False)
-        self._theme_btn._icon_name = "sun" if p.dark else "moon"
-        self._theme_btn.retint()
         self._style_filter_buttons()
         # Rebuild rows so per-row widgets (pills, bars) repaint in the new theme.
         self._row_job_ids = []
@@ -1121,8 +1103,12 @@ class MainWindow(QMainWindow):
         self._selected_ids = {
             self._row_job_ids[i.row()] for i in rows if 0 <= i.row() < len(self._row_job_ids)
         }
-        if self._suppress_drawer:
-            return  # right-click: keep the drawer exactly as it was
+        # Right-click must never pop the drawer. Qt updates the selection on
+        # the right-button PRESS itself - before customContextMenuRequested
+        # runs - so the suppress flag alone missed it; also gate on the live
+        # mouse state.
+        if self._suppress_drawer or (QApplication.mouseButtons() & Qt.MouseButton.RightButton):
+            return
         # A single selection opens the detail drawer; multi/empty closes it.
         if len(self._selected_ids) == 1:
             (job_id,) = tuple(self._selected_ids)
