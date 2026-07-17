@@ -47,6 +47,13 @@ _PATHS: dict[str, str] = {
     "inspect": "M6.5 11a4.5 4.5 0 100-9 4.5 4.5 0 000 9z|M10.5 10.5L14 14|M6.5 4.5v4M4.5 6.5h4",
     "chevron-right": "M6 4l4 4-4 4",
     "check": "M3 8.5L6.5 12 13 4",
+    "tools": "M3 3h4v4H3z|M9 3h4v4H9z|M3 9h4v4H3z|M9 9h4v4H9z",
+    "globe": (
+        "M8 2a6 6 0 100 12A6 6 0 008 2z|M2 8h12"
+        "|M8 2c-1.8 1.6-1.8 10.4 0 12M8 2c1.8 1.6 1.8 10.4 0 12"
+    ),
+    "import": "M8 2v7|M5 6l3 3 3-3|M2 10v2a1 1 0 001 1h10a1 1 0 001-1v-2",
+    "export": "M8 9V2|M5 5l3-3 3 3|M2 10v2a1 1 0 001 1h10a1 1 0 001-1v-2",
     # type icons
     "t-video": "M2 5a1 1 0 011-1h7a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V5z|M11 7l3-2v6l-3-2",
     "t-audio": "M9 4v8|M6 6v4|M3 7v2|M12 5v6",

@@ -267,20 +267,23 @@ def test_remove_selected_and_clear_completed(db: Database, tmp_path: Path):
         manager.shutdown()
 
 
-def test_main_window_sidebar_and_overflow(db: Database, tmp_path: Path):
+def test_main_window_sidebar_and_tools_page(db: Database, tmp_path: Path):
     _qapp()
     settings = Settings(db)
     settings.download_dir = tmp_path
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
-        # The redesigned shell has a sidebar (Downloads/Dashboard/Queue/Settings)
-        # and an overflow menu holding the less-common File actions.
-        assert set(window._nav) == {"downloads", "dashboard", "queue", "settings"}
-        labels = {a.text() for a in window._overflow_menu().actions() if a.text()}
-        assert "Create Torrent…" in labels
-        assert "Inspect URL…" in labels
-        assert "Quit" in labels
+        # The shell is pure navigation: the old "More actions" overflow menu
+        # became the Tools page (a card per power feature).
+        assert set(window._nav) == {"downloads", "dashboard", "queue", "tools", "settings"}
+        assert not hasattr(window, "_overflow_menu")
+        window._switch_view("tools")
+        assert window._pages.currentWidget() is window._tools_view
+        from app.ui.tools_view import ToolCard
+
+        cards = window._tools_view.findChildren(ToolCard)
+        assert len(cards) == 8  # five tools + import links/list + export list
     finally:
         manager.shutdown()
 

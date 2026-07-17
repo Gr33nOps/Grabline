@@ -258,6 +258,10 @@ class SettingsDialog(chrome.Dialog):
         pair_button = QPushButton("Pair browsers")
         pair_button.clicked.connect(self._pair_browsers)
         pairing_layout.addWidget(pair_button)
+        setup_button = QPushButton("Setup wizard…")
+        setup_button.setToolTip("The step-by-step browser setup from the first launch.")
+        setup_button.clicked.connect(self._open_setup_wizard)
+        pairing_layout.addWidget(setup_button)
         browser_layout.addWidget(pairing)
 
         session = QGroupBox("Browser session (advanced)")
@@ -1022,6 +1026,9 @@ class SettingsDialog(chrome.Dialog):
             )
         )
         links_row = QHBoxLayout()
+        update_btn = QPushButton("Check for updates")
+        update_btn.clicked.connect(self._check_updates_now)
+        links_row.addWidget(update_btn)
         project_btn = QPushButton("Project page")
         project_btn.clicked.connect(lambda: self._open_url(_PROJECT_URL))
         releases_btn = QPushButton("Changelog && releases")
@@ -1251,6 +1258,27 @@ class SettingsDialog(chrome.Dialog):
         )
         if chosen:
             self.folder_edit.setText(chosen)
+
+    def _open_setup_wizard(self) -> None:
+        """The step-by-step browser wizard from the first launch. Parent it to
+        the button's window: these tab pages are re-hosted inside the embedded
+        Settings view, so ``self`` is not in the visible widget tree."""
+        from app.ui.setup_dialog import SetupDialog
+
+        sender = self.sender()
+        parent = sender.window() if isinstance(sender, QWidget) else self
+        SetupDialog(parent).exec()
+
+    def _check_updates_now(self) -> None:
+        """Manual update check. The main window owns the checker; reach it via
+        the button's window (see ``_open_setup_wizard`` for why not ``self``)."""
+        sender = self.sender()
+        window = sender.window() if isinstance(sender, QWidget) else None
+        check = getattr(window, "check_for_updates", None)
+        if callable(check):
+            check(quiet=False)
+        else:  # standalone dialog (tests): fall back to the releases page
+            self._open_url(f"{_PROJECT_URL}/releases")
 
     def _pair_browsers(self) -> None:
         from app.native_host.install import install as install_host

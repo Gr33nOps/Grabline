@@ -100,6 +100,7 @@ from app.ui.security_dialog import SecurityDialog
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.settings_view import SettingsView
 from app.ui.setup_dialog import SetupDialog
+from app.ui.tools_view import ToolsView
 from app.ui.torrent_dialog import AddTorrentDialog, CreateTorrentDialog
 
 #: Table columns: an icon, name, size, progress, speed, ETA, status.
@@ -234,9 +235,22 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self._dashboard_view)  # index 1
         self._queue_view = QueueView(self.manager)
         self._pages.addWidget(self._queue_view)  # index 2
+        self._tools_view = ToolsView(
+            {
+                "grab_site": self._grab_site,
+                "inspect_url": self._inspect_url_prompt,
+                "search_torrents": self._search_torrents,
+                "create_torrent": self._create_torrent,
+                "find_duplicates": self._find_duplicates,
+                "import_links": self._import_links,
+                "import_list": self._import_list,
+                "export_list": self._export_list,
+            }
+        )
+        self._pages.addWidget(self._tools_view)  # index 3
         self._settings_view = SettingsView(self.settings, self._on_settings_applied)
-        self._pages.addWidget(self._settings_view)  # index 3
-        self._page_index = {"downloads": 0, "dashboard": 1, "queue": 2, "settings": 3}
+        self._pages.addWidget(self._settings_view)  # index 4
+        self._page_index = {"downloads": 0, "dashboard": 1, "queue": 2, "tools": 3, "settings": 4}
         shell = QWidget()
         row = QHBoxLayout(shell)
         row.setContentsMargins(0, 0, 0, 0)
@@ -309,6 +323,7 @@ class MainWindow(QMainWindow):
             ("downloads", "download", "Downloads", lambda: self._switch_view("downloads")),
             ("dashboard", "dashboard", "Dashboard", lambda: self._switch_view("dashboard")),
             ("queue", "queue", "Queue Manager", lambda: self._switch_view("queue")),
+            ("tools", "tools", "Tools", lambda: self._switch_view("tools")),
         )
         for key, icon_name, tip, handler in nav:
             btn = components.SidebarButton(icon_name, tip)
@@ -317,14 +332,6 @@ class MainWindow(QMainWindow):
             self._retintable.append(btn)
             lay.addWidget(btn, 0, Qt.AlignmentFlag.AlignHCenter)
         self._nav["downloads"].set_active(True)
-
-        # More actions sits with the navigation, right under Queue.
-        more = components.SidebarButton("more", "More actions")
-        more.setCheckable(False)  # a menu trigger, not a nav destination
-        more.clicked.connect(self._show_overflow_menu)
-        self._more_btn = more
-        self._retintable.append(more)
-        lay.addWidget(more, 0, Qt.AlignmentFlag.AlignHCenter)
 
         lay.addStretch(1)
 
@@ -336,43 +343,6 @@ class MainWindow(QMainWindow):
         self._retintable.append(settings_btn)
         lay.addWidget(settings_btn, 0, Qt.AlignmentFlag.AlignHCenter)
         return bar
-
-    def _show_overflow_menu(self) -> None:
-        """Pop the overflow menu just to the right of its button, opening
-        downward (the button lives with the top navigation now)."""
-        menu = self._overflow_menu()
-        button = self._more_btn
-        menu.exec(button.mapToGlobal(QPoint(button.width() + 6, 0)))
-
-    def _overflow_menu(self) -> QMenu:
-        menu = QMenu(self)
-        actions: tuple[tuple[str, object], ...] = (
-            ("Add Torrent File…", self._add_torrent_file),
-            ("Add Cloud Download…", self._add_cloud),
-            ("Grab Site…", self._grab_site),
-            ("__sep__", None),
-            ("Create Torrent…", self._create_torrent),
-            ("Search Torrents…", self._search_torrents),
-            ("Inspect URL…", self._inspect_url_prompt),
-            ("Find Duplicate Files…", self._find_duplicates),
-            ("__sep__", None),
-            ("Import Links…", self._import_links),
-            ("Import List…", self._import_list),
-            ("Export List…", self._export_list),
-            ("Clear Completed", self._clear_completed),
-            ("__sep__", None),
-            ("Browser Setup…", self.open_setup),
-            ("Check for Updates…", lambda: self.check_for_updates(quiet=False)),
-            ("__sep__", None),
-            ("Quit", self._quit),
-        )
-        for label, handler in actions:
-            if label == "__sep__":
-                menu.addSeparator()
-                continue
-            act = menu.addAction(label)
-            act.triggered.connect(handler)
-        return menu
 
     def _build_downloads_page(self) -> QWidget:
         page = QWidget()
@@ -487,6 +457,15 @@ class MainWindow(QMainWindow):
             self._filter_buttons[key] = btn
             lay.addWidget(btn)
         lay.addStretch(1)
+        # Housekeeping lives with the list it acts on: visible only while
+        # there is something completed to clear.
+        clear = QPushButton("Clear completed")
+        clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        clear.setToolTip("Remove the completed downloads from the list (files stay on disk)")
+        clear.clicked.connect(self._clear_completed)
+        clear.hide()
+        self._clear_completed_btn = clear
+        lay.addWidget(clear)
         self._style_filter_buttons()
         return bar
 
@@ -503,6 +482,11 @@ class MainWindow(QMainWindow):
                 f" border-bottom: 2px solid {border}; }}"
                 f" QPushButton:hover {{ color: {p.text}; }}"
             )
+        self._clear_completed_btn.setStyleSheet(
+            f"QPushButton {{ border: none; background: transparent; padding: 8px 12px;"
+            f" color: {p.text3}; border-bottom: 2px solid transparent; }}"
+            f" QPushButton:hover {{ color: {p.text}; }}"
+        )
 
     def _set_filter(self, key: str) -> None:
         self._filter = key
@@ -575,17 +559,13 @@ class MainWindow(QMainWindow):
         self._title_bar.retint()
         for btn in self._retintable:
             btn.retint()
+        self._tools_view.retint()
         self._style_filter_buttons()
         # Rebuild rows so per-row widgets (pills, bars) repaint in the new theme.
         self._row_job_ids = []
         self._progress_bars.clear()
         self._pills.clear()
         self.refresh()
-
-    def _quit(self) -> None:
-        app = QApplication.instance()
-        if isinstance(app, QApplication):
-            app.quit()
 
     def open_setup(self) -> None:
         SetupDialog(self).exec()
@@ -2005,6 +1985,7 @@ class MainWindow(QMainWindow):
         labels = {"all": "All", "active": "Active", "completed": "Completed", "failed": "Failed"}
         for key, btn in self._filter_buttons.items():
             btn.setText(f"{labels[key]}  {counts[key]}")
+        self._clear_completed_btn.setVisible(counts["completed"] > 0)
 
     def _update_status_info(self, views: list[JobView]) -> None:
         active = sum(1 for v in views if v.status is JobStatus.DOWNLOADING)
