@@ -18,12 +18,33 @@ closing dialog cannot destroy it out from under this registry.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QThread
+from collections.abc import Callable
+
+from PySide6.QtCore import QThread, Signal
 
 #: Threads currently running on someone's behalf. A module-level strong
 #: reference is what keeps the QThread's C++ object alive past the death of
 #: whatever UI started it.
 _RUNNING: set[QThread] = set()
+
+
+class CallableThread(QThread):
+    """Run a callable off the GUI thread and emit its result on ``done``.
+
+    For work that returns a result object and does not raise - a report whose
+    failure is encoded in the object itself (``reachable=False``), not a
+    thrown exception. There is no error channel by design; pair with
+    :func:`retain` so a closing dialog never destroys it mid-run.
+    """
+
+    done = Signal(object)
+
+    def __init__(self, work: Callable[[], object]) -> None:
+        super().__init__()
+        self._work = work
+
+    def run(self) -> None:
+        self.done.emit(self._work())
 
 
 def retain(thread: QThread) -> None:
@@ -53,4 +74,12 @@ def shutdown(timeout_ms: int = 6000) -> None:
         thread.requestInterruption()
     for thread in list(_RUNNING):
         remaining = max(0, int((deadline - time.monotonic()) * 1000))
-        thread.wait(remaining)
+        if thread.wait(remaining):
+            continue
+        # Still blocked past the budget - a worker stuck in a synchronous
+        # network call it can't check interruption during. The process is
+        # exiting; forcibly stop it rather than let the interpreter destroy a
+        # running QThread (which aborts). terminate() is unsafe mid-operation
+        # in general, but at shutdown there is nothing left to corrupt.
+        thread.terminate()
+        thread.wait(1000)

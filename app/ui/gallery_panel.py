@@ -23,14 +23,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.ui import chrome
+from app.ui import chrome, threads
 
 _THUMB_SIZE = 128
 _MAX_THUMB_BYTES = 10 * 1024 * 1024
-
-#: Loader threads stay referenced here until they finish, so closing the
-#: dialog mid-fetch can never destroy a QThread that is still running.
-_ACTIVE_THREADS: set[_ThumbnailThread] = set()
 
 
 def _short_name(url: str) -> str:
@@ -52,7 +48,7 @@ class _ThumbnailThread(QThread):
     def run(self) -> None:
         with httpx.Client(follow_redirects=True, timeout=10) as client:
             for row, url in enumerate(self._urls):
-                if self._stopping:
+                if self._stopping or self.isInterruptionRequested():
                     return
                 try:
                     response = client.get(url)
@@ -118,8 +114,7 @@ class GalleryPanel(chrome.Dialog):
         self._update_count()
 
         self._thumbs = _ThumbnailThread(urls)
-        _ACTIVE_THREADS.add(self._thumbs)
-        self._thumbs.finished.connect(lambda t=self._thumbs: _ACTIVE_THREADS.discard(t))
+        threads.retain(self._thumbs)  # owned until finished; see app/ui/threads
         self._thumbs.loaded.connect(self._on_thumbnail)
         self._thumbs.start()
 

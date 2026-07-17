@@ -24,10 +24,7 @@ from app.core.manager import DownloadManager
 from app.core.models import JobKind
 from app.core.resolver import Resolver
 from app.core.settings import Settings
-from app.ui import chrome
-
-#: Import threads stay referenced until finished (QThread lifetime rule).
-_ACTIVE_THREADS: set[BatchImportThread] = set()
+from app.ui import chrome, threads
 
 
 class BatchImportThread(QThread):
@@ -44,13 +41,7 @@ class BatchImportThread(QThread):
         self._urls = urls
 
     def start_tracked(self) -> None:
-        _ACTIVE_THREADS.add(self)
-
-        def _cleanup() -> None:
-            _ACTIVE_THREADS.discard(self)
-            self.deleteLater()  # deferred - never destroys a live thread
-
-        self.finished.connect(_cleanup)
+        threads.retain(self)  # owned until finished; see app/ui/threads
         self.start()
 
     def run(self) -> None:
@@ -58,6 +49,8 @@ class BatchImportThread(QThread):
         queued = 0
         skipped: list[tuple[str, str]] = []
         for index, url in enumerate(self._urls, start=1):
+            if self.isInterruptionRequested():  # app quit mid-import: stop now
+                break
             reason = self._queue_one(resolver, url)
             if reason is None:
                 queued += 1

@@ -7,10 +7,8 @@ Nothing here blocks or deletes. It informs; the user decides.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QDialogButtonBox,
@@ -25,17 +23,6 @@ from app.core.settings import Settings
 from app.ui import chrome, motion, threads
 
 _COLORS = {Risk.OK: "#2ea043", Risk.CAUTION: "#d29922", Risk.WARNING: "#cf222e"}
-
-
-class _CheckThread(QThread):
-    done = Signal(object)
-
-    def __init__(self, work: Callable[[], SecurityReport]) -> None:
-        super().__init__()
-        self._work = work
-
-    def run(self) -> None:
-        self.done.emit(self._work())
 
 
 def _render(report: SecurityReport) -> str:
@@ -107,7 +94,7 @@ class SecurityDialog(chrome.Dialog):
         layout.addWidget(buttons)
         self._report: SecurityReport | None = None
 
-        self._thread = _CheckThread(
+        self._thread = threads.CallableThread(
             lambda: check_file(
                 path,
                 url=url,

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QDialogButtonBox,
@@ -20,17 +19,6 @@ from PySide6.QtWidgets import (
 from app.core.inspector import InspectionReport, inspect_url
 from app.ui import chrome, motion, threads
 from app.ui.format import human_bytes
-
-
-class _InspectThread(QThread):
-    done = Signal(object)
-
-    def __init__(self, work: Callable[[], InspectionReport]) -> None:
-        super().__init__()
-        self._work = work
-
-    def run(self) -> None:
-        self.done.emit(self._work())
 
 
 def _render(report: InspectionReport) -> str:
@@ -144,7 +132,7 @@ class InspectorDialog(chrome.Dialog):
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)
 
-        self._thread = _InspectThread(lambda: self._gather(url, headers, proxy))
+        self._thread = threads.CallableThread(lambda: self._gather(url, headers, proxy))
         self._thread.done.connect(self._show)
         threads.retain(self._thread)  # survives dialog close; see app/ui/threads
         self._thread.start()
