@@ -82,6 +82,15 @@ def _configure_logging(settings: Settings) -> None:
 
 
 def main() -> int:
+    # A native-crash trace (faulthandler) to the data folder: if anything
+    # segfaults, crash.log says where instead of a silent vanish.
+    import faulthandler
+
+    try:
+        _crash_log = open(paths.data_dir() / "crash.log", "a")  # noqa: SIM115 - lives for the process
+        faulthandler.enable(_crash_log)
+    except OSError:
+        pass
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
@@ -220,6 +229,24 @@ def main() -> int:
         # First launch: show the Browser Setup wizard once.
         settings.setup_seen = True
         QTimer.singleShot(400, window.open_setup)
+
+    # Warm up yt-dlp off the UI thread: its first import loads 1700+ extractor
+    # classes (seconds on Windows, worse under antivirus). Paying that at
+    # launch instead of on the first video add is why the first YouTube
+    # download used to feel slow.
+    def _warm_up() -> None:
+        try:
+            import yt_dlp  # noqa: F401
+            from yt_dlp.extractor import gen_extractor_classes
+
+            gen_extractor_classes()
+            from app.core import jsruntime
+
+            jsruntime.detect_js_runtime()
+        except Exception:  # never let warm-up break startup
+            log.debug("yt-dlp warm-up failed", exc_info=True)
+
+    threading.Thread(target=_warm_up, name="gl-warmup", daemon=True).start()
 
     if settings.check_updates:
         # A few seconds after launch so it never delays the window appearing.

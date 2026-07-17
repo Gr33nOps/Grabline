@@ -62,8 +62,17 @@ def main() -> int:
 
         sizes = (16, 32, 48, 64, 128, 256)
         images = [Image.open(io.BytesIO(_png(s))) for s in sizes]
-        images[0].save(OUT / "grabline.ico", format="ICO", sizes=[(s, s) for s in sizes])
-        print(f"wrote {OUT / 'grabline.ico'}")
+        # Save from the LARGEST frame and append the pre-rendered smaller
+        # ones. Saving from images[0] (16px) let Pillow write a single
+        # 16x16 frame - Windows then upscaled it for the desktop, which is
+        # exactly the blurred icon people saw.
+        images[-1].save(
+            OUT / "grabline.ico",
+            format="ICO",
+            sizes=[(s, s) for s in sizes],
+            append_images=images[:-1],
+        )
+        print(f"wrote {OUT / 'grabline.ico'} ({len(sizes)} sizes)")
     except Exception as exc:  # Pillow absent or ICO unsupported - non-fatal
         print(f"skipped grabline.ico: {exc}")
 

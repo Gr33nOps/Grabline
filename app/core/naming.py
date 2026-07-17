@@ -104,3 +104,23 @@ def unique_path(path: Path) -> Path:
         if not candidate.exists():
             return candidate
         counter += 1
+
+
+def clean_page_title(title: str | None) -> str | None:
+    """A page title minus the site-name boilerplate ("Video - YouTube" ->
+    "Video"); None when nothing meaningful is left (e.g. just "YouTube")."""
+    if not title:
+        return None
+    cleaned = title.strip()
+    for suffix in (
+        " - YouTube",
+        " - YouTube Music",
+        " | Vimeo",
+        " on Vimeo",
+        " / X",
+        " | Instagram",
+    ):
+        if cleaned.lower().endswith(suffix.lower()):
+            cleaned = cleaned[: -len(suffix)].strip()
+    junk = {"youtube", "youtube music", "vimeo", "instagram", "x", "twitter", ""}
+    return None if cleaned.lower() in junk else cleaned

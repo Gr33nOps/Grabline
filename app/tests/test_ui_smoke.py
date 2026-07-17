@@ -647,11 +647,16 @@ def test_quality_label_add_skips_analysis(db: Database, tmp_path: Path, monkeypa
     try:
         window = MainWindow(manager, settings)
         queued: list[tuple[str, str, str, dict[str, object]]] = []
-        monkeypatch.setattr(
-            manager,
-            "add_smart_entry",
-            lambda url, title, option, **kw: queued.append((url, title, option.label, kw)),
-        )
+
+        class _JobStub:
+            id = 1
+
+        def fake_add(url, title, option, **kw):
+            queued.append((url, title, option.label, kw))
+            return _JobStub()
+
+        monkeypatch.setattr(manager, "add_smart_entry", fake_add)
+        monkeypatch.setattr(window, "_fetch_quick_title", lambda *a, **k: None)
         resolved: list[str] = []
         monkeypatch.setattr(window, "_on_resolved", lambda *a, **k: resolved.append("x"))
 

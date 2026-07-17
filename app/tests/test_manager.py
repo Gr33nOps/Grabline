@@ -249,7 +249,12 @@ def test_connection_budget_is_shared_across_active_jobs(db: Database, dest: Path
     from app.core.downloader import SegmentedDownload
 
     def segmented(url: str, name: str) -> SegmentedDownload:
-        task = manager._create_task(db.create_job(url, str(dest), name))
+        job = db.create_job(url, str(dest), name)
+        # Park it: the manager's live scheduler thread must never claim these
+        # queued rows itself and mutate _active mid-assertion (that raced in
+        # CI). The budget math only needs the task objects.
+        db.set_job_status(job.id, JobStatus.PAUSED)
+        task = manager._create_task(job)
         assert isinstance(task, SegmentedDownload)
         return task
 

@@ -45,7 +45,12 @@ class BatchImportThread(QThread):
 
     def start_tracked(self) -> None:
         _ACTIVE_THREADS.add(self)
-        self.finished.connect(lambda: _ACTIVE_THREADS.discard(self))
+
+        def _cleanup() -> None:
+            _ACTIVE_THREADS.discard(self)
+            self.deleteLater()  # deferred - never destroys a live thread
+
+        self.finished.connect(_cleanup)
         self.start()
 
     def run(self) -> None:

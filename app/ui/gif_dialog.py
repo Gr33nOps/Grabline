@@ -121,7 +121,12 @@ class GifDialog(chrome.Dialog):
             self.width_spin.value(),
         )
         _ACTIVE_THREADS.add(thread)
-        thread.finished.connect(lambda t=thread: _ACTIVE_THREADS.discard(t))
+
+        def _cleanup(t: _GifThread = thread) -> None:
+            _ACTIVE_THREADS.discard(t)
+            t.deleteLater()
+
+        thread.finished.connect(_cleanup)
         thread.done.connect(self._on_done)
         thread.start()
 

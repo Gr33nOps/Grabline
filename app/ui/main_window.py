@@ -15,6 +15,7 @@ from PySide6.QtCore import (
     QEvent,
     QItemSelection,
     QItemSelectionModel,
+    QObject,
     QPoint,
     Qt,
     QThread,
@@ -129,8 +130,9 @@ class _ResolveThread(QThread):
         quality: str | None = None,
         fallbacks: tuple[str, ...] = (),
         headers: dict[str, str] | None = None,
+        parent: QObject | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(parent)
         self._resolver = resolver
         self._url = url
         self._page_title = page_title
@@ -169,8 +171,11 @@ class _FileOpThread(QThread):
 
     done = Signal(object, object)  # result, error Exception | None
 
-    def __init__(self, work: Callable[[], object]) -> None:
-        super().__init__()
+    def __init__(self, work: Callable[[], object], parent: QObject | None = None) -> None:
+        # Parented: the C++ thread object's lifetime is owned by Qt, so a
+        # dropped Python reference can never destroy a still-running QThread
+        # (the classic hard crash).
+        super().__init__(parent)
         self._work = work
 
     def run(self) -> None:
@@ -180,6 +185,12 @@ class _FileOpThread(QThread):
             # The exception object itself, so handlers can distinguish
             # PasswordRequired from a plain failure; str(error) still works.
             self.done.emit(None, exc)
+
+
+class _ProgressRelay(QObject):
+    """Marshals worker-thread progress onto the GUI thread via a signal."""
+
+    tick = Signal(int)
 
 
 class MainWindow(QMainWindow):
@@ -740,9 +751,14 @@ class MainWindow(QMainWindow):
         proxy = self.settings.proxy
         dest = str(self.settings.download_dir)
 
+        relay = _ProgressRelay(self)
+        relay.tick.connect(progress.setValue)
+
         def report(received: int, total: object) -> None:
+            # Called on the worker thread: emitting a signal is thread-safe
+            # (queued to the GUI thread); starting a QTimer here is not.
             if isinstance(total, int) and total > 0:
-                QTimer.singleShot(0, lambda: progress.setValue(int(received / total * 100)))
+                relay.tick.emit(int(received / total * 100))
 
         def done(result: object) -> None:
             progress.close()
@@ -916,9 +932,13 @@ class MainWindow(QMainWindow):
         if quality and self.resolver.smart.matches(url):
             option = option_for_label(quality)
             if option is not None:
-                self.manager.add_smart_entry(
+                # The page title is often just the site name ("YouTube") -
+                # queue with a placeholder and fetch the real title via the
+                # site's oEmbed endpoint, which answers in well under a second.
+                placeholder = naming.clean_page_title(page_title) or "Fetching title…"
+                job = self.manager.add_smart_entry(
                     url,
-                    page_title or "Fetching title…",
+                    placeholder,
                     option,
                     use_session=self.settings.use_browser_session,
                     session_browser=self.settings.session_browser,
@@ -926,17 +946,19 @@ class MainWindow(QMainWindow):
                 )
                 self.statusBar().showMessage(f"Queued ({option.label})", 5000)
                 self.refresh()
+                self._fetch_quick_title(job.id, url)
                 return
         self.statusBar().showMessage(f"Analyzing {url} …")
         self._busy_begin()
         thread = _ResolveThread(
-            self.resolver, url, self.settings, page_title, quality, fallbacks, headers
+            self.resolver, url, self.settings, page_title, quality, fallbacks, headers, self
         )
         thread.resolved.connect(self._on_resolved)
 
         def _resolve_finished() -> None:
             self._resolve_threads.remove(thread)
             self._busy_end()
+            thread.deleteLater()
 
         thread.finished.connect(_resolve_finished)
         self._resolve_threads.append(thread)
@@ -951,6 +973,23 @@ class MainWindow(QMainWindow):
             self, "Save this download to", str(self.settings.download_dir)
         )
         return chosen or None
+
+    def _fetch_quick_title(self, job_id: int, url: str) -> None:
+        """Replace a queued job's placeholder name with the real video title
+        (oEmbed, ~instant). Best effort - the download's own metadata naming
+        corrects the file at completion regardless."""
+        from app.core import titles
+
+        proxy = self.settings.proxy
+
+        def done(result: object) -> None:
+            title = str(result) if result else ""
+            if not title or self.manager.db.get_job(job_id) is None:
+                return
+            self.manager.db.update_job_title(job_id, title)
+            self.refresh()
+
+        self._run_file_op(lambda: titles.quick_title(url, proxy), done, lambda _e: None)
 
     def _on_resolved(
         self,
@@ -1344,12 +1383,11 @@ class MainWindow(QMainWindow):
         on_done: Callable[[object], None],
         on_error: Callable[[object], None] | None = None,
     ) -> None:
-        thread = _FileOpThread(work)
+        thread = _FileOpThread(work, self)
         self._file_ops.add(thread)
         self._busy_begin()
 
-        def finished(result: object, error: object) -> None:
-            self._file_ops.discard(thread)
+        def deliver(result: object, error: object) -> None:
             self._busy_end()
             if error is not None:
                 if on_error is not None:
@@ -1359,7 +1397,13 @@ class MainWindow(QMainWindow):
             else:
                 on_done(result)
 
-        thread.done.connect(finished)
+        def cleanup() -> None:
+            # Only after run() fully returned: safe to let the object go.
+            self._file_ops.discard(thread)
+            thread.deleteLater()
+
+        thread.done.connect(deliver)
+        thread.finished.connect(cleanup)
         thread.start()
 
     def _convert_file(self, path: Path, target_format: str, ffmpeg_path: str) -> None:
