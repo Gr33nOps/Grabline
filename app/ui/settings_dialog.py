@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
+    QProgressBar,
     QProgressDialog,
     QPushButton,
     QSpinBox,
@@ -1309,6 +1310,10 @@ class SettingsDialog(chrome.Dialog):
         progress = QProgressDialog("Downloading FFmpeg…", "Hide", 0, 0, self)
         progress.setWindowTitle("Grabline")
         progress.setMinimumDuration(0)
+        bar = QProgressBar(progress)
+        bar.setRange(0, 0)
+        bar.setTextVisible(False)  # the themed 5px bar has no room for "42%"
+        progress.setBar(bar)
         installer = _FfmpegInstaller(self.settings.proxy)
         self._installer = installer
 

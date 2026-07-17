@@ -723,11 +723,15 @@ class MainWindow(QMainWindow):
     def _download_and_run_installer(self, name: str, url: str) -> None:
         """Fetch the new installer to the download folder and open it - the
         closest we get to auto-update without a signed self-updater."""
-        from PySide6.QtWidgets import QProgressDialog
+        from PySide6.QtWidgets import QProgressBar, QProgressDialog
 
         progress = QProgressDialog(f"Downloading {name}…", "Cancel", 0, 100, self)
         progress.setWindowTitle("Grabline update")
         progress.setMinimumDuration(0)
+        bar = QProgressBar(progress)
+        bar.setRange(0, 100)
+        bar.setTextVisible(False)  # the themed 5px bar has no room for "42%"
+        progress.setBar(bar)
         proxy = self.settings.proxy
         dest = str(self.settings.download_dir)
 
