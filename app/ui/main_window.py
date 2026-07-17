@@ -15,11 +15,9 @@ from PySide6.QtCore import (
     QEvent,
     QItemSelection,
     QItemSelectionModel,
-    QObject,
     QPoint,
     QSize,
     Qt,
-    QThread,
     QTimer,
     QUrl,
     Signal,
@@ -80,7 +78,7 @@ from app.core.settings import Settings
 from app.engines import cloud as cloud_engine
 from app.engines import torrent as torrent_engine
 from app.engines.smart import option_for_label
-from app.ui import chrome, components, design, icons, motion, theme
+from app.ui import chrome, components, design, icons, motion, theme, work_threads
 from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.cloud_dialog import CloudFolderDialog, prompt_cloud_url
@@ -118,46 +116,6 @@ _FILTER_STATUSES: dict[str, tuple[JobStatus, ...]] = {
 }
 
 
-class _ResolveThread(QThread):
-    # Resolution, page_title (str|None), quality label (str|None, F1.3),
-    # fallback URLs (tuple[str,...]), extra HTTP headers (dict[str,str])
-    resolved = Signal(object, object, object, object, object)
-
-    def __init__(
-        self,
-        resolver: Resolver,
-        url: str,
-        settings: Settings,
-        page_title: str | None,
-        quality: str | None = None,
-        fallbacks: tuple[str, ...] = (),
-        headers: dict[str, str] | None = None,
-        parent: QObject | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self._resolver = resolver
-        self._url = url
-        self._page_title = page_title
-        self._quality = quality
-        self._fallbacks = fallbacks
-        self._headers = headers or {}
-        self._use_session = settings.use_browser_session
-        self._browser = settings.session_browser
-        self._proxy = settings.proxy
-
-    def run(self) -> None:
-        resolution = self._resolver.resolve(
-            self._url,
-            use_session=self._use_session,
-            session_browser=self._browser,
-            proxy=self._proxy,
-            headers=self._headers or None,
-        )
-        self.resolved.emit(
-            resolution, self._page_title, self._quality, self._fallbacks, self._headers
-        )
-
-
 class _ScanFlagged(DownloadError):
     """A pre-extract virus scan flagged the archive. Advisory, not fatal: the
     caller asks the user whether to extract anyway."""
@@ -166,33 +124,6 @@ class _ScanFlagged(DownloadError):
         super().__init__(f"{scanner} flagged this archive")
         self.scanner = scanner
         self.detail = detail
-
-
-class _FileOpThread(QThread):
-    """Runs a slow file operation (hashing, extraction) off the UI thread."""
-
-    done = Signal(object, object)  # result, error Exception | None
-
-    def __init__(self, work: Callable[[], object], parent: QObject | None = None) -> None:
-        # Parented: the C++ thread object's lifetime is owned by Qt, so a
-        # dropped Python reference can never destroy a still-running QThread
-        # (the classic hard crash).
-        super().__init__(parent)
-        self._work = work
-
-    def run(self) -> None:
-        try:
-            self.done.emit(self._work(), None)
-        except (OSError, DownloadError, ValueError) as exc:
-            # The exception object itself, so handlers can distinguish
-            # PasswordRequired from a plain failure; str(error) still works.
-            self.done.emit(None, exc)
-
-
-class _ProgressRelay(QObject):
-    """Marshals worker-thread progress onto the GUI thread via a signal."""
-
-    tick = Signal(int)
 
 
 class MainWindow(QMainWindow):
@@ -297,8 +228,8 @@ class MainWindow(QMainWindow):
         self.clipboard_suppressor: Callable[[str], None] | None = None
         self._prev_status: dict[int, JobStatus] = {}
         self._was_active = False
-        self._resolve_threads: list[_ResolveThread] = []
-        self._file_ops: set[_FileOpThread] = set()
+        self._resolve_threads: list[work_threads.ResolveThread] = []
+        self._file_ops: set[work_threads.FileOpThread] = set()
         self._auto_extracted: set[int] = set()
         self._scanned: set[int] = set()
         self._timer = QTimer(self)
@@ -809,7 +740,7 @@ class MainWindow(QMainWindow):
         proxy = self.settings.proxy
         dest = str(self.settings.download_dir)
 
-        relay = _ProgressRelay(self)
+        relay = work_threads.ProgressRelay(self)
         relay.tick.connect(progress.setValue)
 
         def report(received: int, total: object) -> None:
@@ -1008,7 +939,7 @@ class MainWindow(QMainWindow):
                 return
         self.statusBar().showMessage(f"Analyzing {url} …")
         self._busy_begin()
-        thread = _ResolveThread(
+        thread = work_threads.ResolveThread(
             self.resolver, url, self.settings, page_title, quality, fallbacks, headers, self
         )
         thread.resolved.connect(self._on_resolved)
@@ -1441,7 +1372,7 @@ class MainWindow(QMainWindow):
         on_done: Callable[[object], None],
         on_error: Callable[[object], None] | None = None,
     ) -> None:
-        thread = _FileOpThread(work, self)
+        thread = work_threads.FileOpThread(work, self)
         self._file_ops.add(thread)
         self._busy_begin()
 
