@@ -755,8 +755,16 @@ class SmartDownload:
         else:
             base = Path(self.job.filename).stem or "download"
             outtmpl = str(Path(self.job.dest_dir) / f"{base}.%(ext)s")
+        fmt = options.get("format_spec") or "bv*+ba/b"
+        if not self.ffmpeg_path and "+" in fmt:
+            # No FFmpeg to merge separate video+audio: prefer a pre-merged
+            # (progressive) stream so the download still works instead of
+            # aborting on the merge. yt-dlp picks bv*+ba first when it can and
+            # only fails at merge time, so we must put the merge-free option
+            # first, not rely on the trailing '/b' fallback.
+            fmt = f"b/{fmt}"
         ydl_opts: dict[str, Any] = {
-            "format": options.get("format_spec") or "bv*+ba/b",
+            "format": fmt,
             "outtmpl": {"default": outtmpl},
             "noplaylist": True,
             "quiet": True,
@@ -894,6 +902,38 @@ class SmartDownload:
         except Exception:  # never let runtime setup crash the job
             log.exception("job %s: unexpected error provisioning a JS runtime", self.job.id)
 
+    def _wants_ffmpeg(self) -> bool:
+        """Whether this job needs FFmpeg: a merge format (bv*+ba) joins the
+        separate video and audio streams YouTube serves, and audio extraction
+        (MP3/M4A/...) re-encodes - both are FFmpeg jobs."""
+        opts = self.job.options
+        fmt = opts.get("format_spec") or "bv*+ba/b"
+        return "+" in fmt or bool(opts.get("audio_format"))
+
+    def _ensure_ffmpeg(self) -> None:
+        """Make FFmpeg available before yt-dlp runs, the same way the JS runtime
+        is provisioned on demand. YouTube serves video and audio as separate
+        streams that must be merged, so a quality download needs FFmpeg or
+        yt-dlp aborts ('merging of multiple formats but ffmpeg is not
+        installed'). Prefer one already present; fetch a pinned build once
+        otherwise. Non-fatal: on failure _build_options falls back to a
+        pre-merged format so the download still starts."""
+        if self.ffmpeg_path:
+            return
+        from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
+
+        found = find_ffmpeg()
+        if found is not None:
+            self.ffmpeg_path = found
+            return
+        try:
+            log.info("job %s: FFmpeg not found - fetching a pinned build (one-time)", self.job.id)
+            self.ffmpeg_path = str(ensure_ffmpeg(proxy=self.proxy))
+        except DownloadError as exc:
+            log.warning("job %s: could not provision FFmpeg: %s", self.job.id, exc)
+        except Exception:  # never let FFmpeg setup crash the job
+            log.exception("job %s: unexpected error provisioning FFmpeg", self.job.id)
+
     def _cookie_browser(self) -> str | None:
         """Which browser to read a login from: the one chosen in Settings, or
         the auto-detected installed one. None if we can't find a browser."""
@@ -950,6 +990,12 @@ class SmartDownload:
         import yt_dlp
 
         from app.core import jsruntime
+
+        # YouTube's quality streams are separate video + audio: fetch FFmpeg
+        # once, up front, so the very first download can merge them instead of
+        # aborting. (The JS runtime is provisioned the same way, below.)
+        if self._wants_ffmpeg():
+            self._ensure_ffmpeg()
 
         prefer_cookies = (
             bool(self.job.options.get("use_session")) and self._cookie_browser() is not None

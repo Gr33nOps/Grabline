@@ -381,7 +381,18 @@ def test_js_runtime_failure_is_non_fatal(db: Database, dest: Path, monkeypatch: 
     assert task._js_runtime is None
 
 
-def test_audio_extraction_requires_ffmpeg(server: MediaServer, db: Database, dest: Path):
+def test_audio_extraction_requires_ffmpeg(
+    server: MediaServer, db: Database, dest: Path, monkeypatch
+):
+    # With FFmpeg genuinely unavailable (none installed and the fetch fails),
+    # audio extraction fails with a clear message rather than a broken file.
+    import app.core.ffmpeg as ffmpeg_mod
+    from app.core.errors import DownloadError
+
+    monkeypatch.setattr(ffmpeg_mod, "find_ffmpeg", lambda settings=None: None)
+    monkeypatch.setattr(
+        ffmpeg_mod, "ensure_ffmpeg", lambda **k: (_ for _ in ()).throw(DownloadError("offline"))
+    )
     url = server.add("/a.mp4", payload(100_000, 58), content_type="video/mp4")
     job = _smart_job(db, url, dest, "a.mp3", audio_format="mp3")
     status = SmartDownload(db, job, ffmpeg_path=None).run()
@@ -533,3 +544,47 @@ def test_metadata_naming_uses_a_title_template(db: Database, dest: Path):
     plain = _smart_job(db, "https://youtu.be/y", dest, "video.mp4")
     opts = SmartDownload(db, plain, ffmpeg_path=None)._build_options()
     assert "%(title)s" not in opts["outtmpl"]["default"]
+
+
+def test_no_ffmpeg_degrades_merge_format_to_progressive(db: Database, dest: Path):
+    # Without FFmpeg to merge separate video+audio, a bv*+ba format would
+    # abort at merge time. _build_options must front-load a pre-merged stream.
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", format_spec="bv*+ba/b")
+    opts = SmartDownload(db, job, ffmpeg_path=None)._build_options()
+    assert opts["format"] == "b/bv*+ba/b"
+
+
+def test_ffmpeg_present_keeps_the_merge_format(db: Database, dest: Path):
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", format_spec="bv*+ba/b")
+    opts = SmartDownload(db, job, ffmpeg_path="/opt/ffmpeg")._build_options()
+    assert opts["format"] == "bv*+ba/b"  # merge stays; FFmpeg can join them
+
+
+def test_wants_ffmpeg_detects_merge_and_audio_extraction(db: Database, dest: Path):
+    merge = _smart_job(db, "https://youtu.be/a", dest, "a.mp4", format_spec="bv*+ba/b")
+    assert SmartDownload(db, merge, ffmpeg_path=None)._wants_ffmpeg() is True
+
+    audio = _smart_job(
+        db, "https://youtu.be/b", dest, "b.mp3", format_spec="ba/b", audio_format="mp3"
+    )
+    assert SmartDownload(db, audio, ffmpeg_path=None)._wants_ffmpeg() is True
+
+    progressive = _smart_job(db, "https://youtu.be/c", dest, "c.mp4", format_spec="b")
+    assert SmartDownload(db, progressive, ffmpeg_path=None)._wants_ffmpeg() is False
+
+
+def test_ensure_ffmpeg_prefers_an_existing_binary(db: Database, dest: Path, monkeypatch):
+    # A found binary is used without triggering a download.
+    import app.core.ffmpeg as ffmpeg_mod
+
+    monkeypatch.setattr(ffmpeg_mod, "find_ffmpeg", lambda settings=None: "/usr/bin/ffmpeg")
+
+    def _boom(*a, **k):  # ensure_ffmpeg must NOT be called when one is present
+        raise AssertionError("should not download FFmpeg when one is found")
+
+    monkeypatch.setattr(ffmpeg_mod, "ensure_ffmpeg", _boom)
+
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", format_spec="bv*+ba/b")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    task._ensure_ffmpeg()
+    assert task.ffmpeg_path == "/usr/bin/ffmpeg"
