@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 import sys
 import threading
+import traceback
+from types import TracebackType
+from typing import TextIO
 
 from PySide6.QtCore import QBuffer, QIODevice, QTimer
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
@@ -81,39 +84,43 @@ def _configure_logging(settings: Settings) -> None:
         logging.getLogger().addHandler(handler)
 
 
-def _install_crash_hooks(crash_log: object) -> None:
+def _install_crash_hooks(crash_log: TextIO | None) -> None:
     """Route uncaught Python exceptions - on the GUI thread and on worker
     threads - to crash.log with a full traceback. faulthandler catches native
     aborts (a QThread destroyed while running); these hooks catch the Python
     exceptions that would otherwise vanish when Qt swallows a slot exception or
     a daemon thread dies. Both write to the same file the user already sends."""
-    import threading as _threading
-    import traceback as _traceback
 
-    def _write(header: str, exc_type: object, exc: object, tb: object) -> None:
-        log.error("%s", header, exc_info=(exc_type, exc, tb))  # type: ignore[arg-type]
-        handle = crash_log
-        if handle is not None:
+    def _write(
+        header: str,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        log.error("%s", header, exc_info=exc)
+        if crash_log is not None:
             try:
-                handle.write(f"\n=== {header} ===\n")
-                _traceback.print_exception(exc_type, exc, tb, file=handle)  # type: ignore[arg-type]
-                handle.flush()
+                crash_log.write(f"\n=== {header} ===\n")
+                traceback.print_exception(exc_type, exc, tb, file=crash_log)
+                crash_log.flush()
             except (OSError, ValueError):
                 pass
 
-    def _excepthook(exc_type: object, exc: object, tb: object) -> None:
+    def _excepthook(
+        exc_type: type[BaseException], exc: BaseException, tb: TracebackType | None
+    ) -> None:
         _write("uncaught exception (GUI thread)", exc_type, exc, tb)
 
-    def _thread_excepthook(args: object) -> None:
+    def _thread_excepthook(args: threading.ExceptHookArgs) -> None:
         _write(
-            f"uncaught exception (thread {getattr(args, 'thread', None)})",
-            args.exc_type,  # type: ignore[attr-defined]
-            args.exc_value,  # type: ignore[attr-defined]
-            args.exc_traceback,  # type: ignore[attr-defined]
+            f"uncaught exception (thread {args.thread})",
+            args.exc_type,
+            args.exc_value,
+            args.exc_traceback,
         )
 
-    sys.excepthook = _excepthook  # type: ignore[assignment]
-    _threading.excepthook = _thread_excepthook  # type: ignore[assignment]
+    sys.excepthook = _excepthook
+    threading.excepthook = _thread_excepthook
 
 
 def main() -> int:

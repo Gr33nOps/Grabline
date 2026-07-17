@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor, QFont, QPalette
 
 
 @dataclass(frozen=True)
@@ -141,15 +141,13 @@ RADIUS = {"sm": 4, "md": 6, "lg": 8, "pill": 999}
 FONT = {"caption": 8, "small": 9, "body": 10, "h2": 11, "h1": 13, "display": 16}
 
 
-def numeric_font(base: object | None = None) -> object:
+def numeric_font(base: QFont | None = None) -> QFont:
     """A copy of ``base`` (or the default font) with tabular figures enabled,
     so live numbers (speeds, sizes, ETAs, percentages) keep every digit the
     same width and columns stop twitching as values tick."""
     import contextlib
 
-    from PySide6.QtGui import QFont
-
-    font = QFont(base) if isinstance(base, QFont) else QFont()
+    font = QFont(base) if base is not None else QFont()
     with contextlib.suppress(AttributeError, ValueError):  # Qt < 6.7
         font.setFeature(QFont.Tag("tnum"), 1)
     return font
