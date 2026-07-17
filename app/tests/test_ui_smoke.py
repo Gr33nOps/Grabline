@@ -839,3 +839,48 @@ def test_detail_graph_history_survives_switching(db: Database, tmp_path: Path):
         assert back == len(window._spark_history[a.id]) > 3  # still preserved, not reset
     finally:
         manager.shutdown()
+
+
+def test_resize_overlay_masks_border_and_hit_tests_edges(db: Database, tmp_path: Path):
+    from PySide6.QtCore import QPoint, Qt
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        window.resize(1000, 600)
+        window.show()
+        QApplication.processEvents()
+        r = window._resizer
+        assert r.geometry() == window.rect()
+        mask = r.mask()
+        assert not mask.contains(QPoint(500, 300))  # center passes through to content
+        assert mask.contains(QPoint(1, 300))  # left border is interactive
+        E = Qt.Edge
+        assert r._edges(QPoint(2, 300)) == E.LeftEdge
+        assert r._edges(QPoint(2, 2)) == (E.LeftEdge | E.TopEdge)
+        assert r._edges(QPoint(500, 300)) == E(0)
+        window.showMaximized()
+        QApplication.processEvents()
+        r._sync()
+        assert not r.isVisible()  # nothing to resize while maximized
+    finally:
+        manager.shutdown()
+
+
+def test_toolbar_has_one_torrent_dropdown(db: Database, tmp_path: Path):
+    from PySide6.QtWidgets import QMenu
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        labels = {a.text() for menu in window.findChildren(QMenu) for a in menu.actions()}
+        # All three torrent actions are grouped under one dropdown.
+        assert {"Add torrent…", "Search torrents…", "Create torrent…"} <= labels
+    finally:
+        manager.shutdown()

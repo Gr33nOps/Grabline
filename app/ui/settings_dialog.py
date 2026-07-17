@@ -928,8 +928,11 @@ class SettingsDialog(chrome.Dialog):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(10)
+        # Roomy, even rhythm: a wide gap between a label and its field, generous
+        # row spacing, and consistent page padding across every section.
+        form.setHorizontalSpacing(24)
+        form.setVerticalSpacing(13)
+        form.setContentsMargins(4, 8, 12, 8)
         tabs.addTab(page, title)
         return form
 

@@ -76,7 +76,7 @@ class SecurityDialog(chrome.Dialog):
         self._loading_bar = motion.SmoothProgressBar()
         self._loading_bar.set_indeterminate(True)
         layout.addWidget(self._loading_bar)
-        self._loading_note = QLabel("Gathering information… (checksums, local scan, VirusTotal)")
+        self._loading_note = QLabel("Checking the file…")
         layout.addWidget(self._loading_note)
         self._text = QPlainTextEdit()
         self._text.setReadOnly(True)

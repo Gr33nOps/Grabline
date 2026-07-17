@@ -11,6 +11,7 @@ edge-drag resizing that the frameless hint takes away.
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject, QPoint, Qt
+from PySide6.QtGui import QRegion
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -24,7 +25,7 @@ from app.ui import design, theme
 from app.ui.icons import svg_icon
 
 _BAR_HEIGHT = 38
-_RESIZE_MARGIN = 6
+_RESIZE_MARGIN = 8
 
 
 class _CaptionButton(QPushButton):
@@ -122,55 +123,92 @@ class TitleBar(QFrame):
         super().mouseDoubleClickEvent(event)  # type: ignore[arg-type]
 
 
-class EdgeResizer(QObject):
-    """Restores edge-drag resizing on a frameless top-level window."""
+_RESIZE_CURSORS = {
+    Qt.Edge.LeftEdge: Qt.CursorShape.SizeHorCursor,
+    Qt.Edge.RightEdge: Qt.CursorShape.SizeHorCursor,
+    Qt.Edge.TopEdge: Qt.CursorShape.SizeVerCursor,
+    Qt.Edge.BottomEdge: Qt.CursorShape.SizeVerCursor,
+    Qt.Edge.LeftEdge | Qt.Edge.TopEdge: Qt.CursorShape.SizeFDiagCursor,
+    Qt.Edge.RightEdge | Qt.Edge.BottomEdge: Qt.CursorShape.SizeFDiagCursor,
+    Qt.Edge.RightEdge | Qt.Edge.TopEdge: Qt.CursorShape.SizeBDiagCursor,
+    Qt.Edge.LeftEdge | Qt.Edge.BottomEdge: Qt.CursorShape.SizeBDiagCursor,
+}
+
+
+class EdgeResizer(QWidget):
+    """Restores edge- and corner-drag resizing on a frameless top-level window.
+
+    A previous version filtered mouse events on the window itself, but the
+    window's children cover every edge and either consume those events or -
+    lacking mouse tracking - never generate them, so resizing worked only in
+    stray gaps and the resize cursor could stick. This is a thin overlay
+    instead: it covers the window but is masked to just the outer margin, so
+    only that border is interactive (clicks in the center pass straight through
+    to the content). Because the overlay owns its border region, it always sees
+    its own move/press/leave events - resizing works over any child, and the
+    cursor resets the moment the pointer leaves the border."""
 
     def __init__(self, window: QWidget) -> None:
         super().__init__(window)
         self._window = window
-        window.setMouseTracking(True)
+        self.setMouseTracking(True)
+        self.setStyleSheet("background: transparent;")
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         window.installEventFilter(self)
+        self._sync()
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        if obj is self._window and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.WindowStateChange,
+        ):
+            self._sync()
+        return super().eventFilter(obj, event)
+
+    def _sync(self) -> None:
+        """Match the window's size, and mask to a hollow border frame. Hidden
+        while maximized/fullscreen, where there is nothing to resize."""
+        if self._window.isMaximized() or self._window.isFullScreen():
+            self.hide()
+            return
+        self.setGeometry(self._window.rect())
+        rect = self.rect()
+        margin = _RESIZE_MARGIN
+        inner = rect.adjusted(margin, margin, -margin, -margin)
+        self.setMask(QRegion(rect).subtracted(QRegion(inner)))
+        self.show()
+        self.raise_()
 
     def _edges(self, pos: QPoint) -> Qt.Edge:
-        rect = self._window.rect()
+        rect = self.rect()
+        margin = _RESIZE_MARGIN
         edges = Qt.Edge(0)
-        if pos.x() <= _RESIZE_MARGIN:
+        if pos.x() <= margin:
             edges |= Qt.Edge.LeftEdge
-        if pos.x() >= rect.width() - _RESIZE_MARGIN:
+        if pos.x() >= rect.width() - margin:
             edges |= Qt.Edge.RightEdge
-        if pos.y() <= _RESIZE_MARGIN:
+        if pos.y() <= margin:
             edges |= Qt.Edge.TopEdge
-        if pos.y() >= rect.height() - _RESIZE_MARGIN:
+        if pos.y() >= rect.height() - margin:
             edges |= Qt.Edge.BottomEdge
         return edges
 
-    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
-        if obj is self._window and not self._window.isMaximized():
-            if event.type() == QEvent.Type.MouseMove:
-                edges = self._edges(event.position().toPoint())  # type: ignore[attr-defined]
-                cursors = {
-                    Qt.Edge.LeftEdge: Qt.CursorShape.SizeHorCursor,
-                    Qt.Edge.RightEdge: Qt.CursorShape.SizeHorCursor,
-                    Qt.Edge.TopEdge: Qt.CursorShape.SizeVerCursor,
-                    Qt.Edge.BottomEdge: Qt.CursorShape.SizeVerCursor,
-                    Qt.Edge.LeftEdge | Qt.Edge.TopEdge: Qt.CursorShape.SizeFDiagCursor,
-                    Qt.Edge.RightEdge | Qt.Edge.BottomEdge: Qt.CursorShape.SizeFDiagCursor,
-                    Qt.Edge.RightEdge | Qt.Edge.TopEdge: Qt.CursorShape.SizeBDiagCursor,
-                    Qt.Edge.LeftEdge | Qt.Edge.BottomEdge: Qt.CursorShape.SizeBDiagCursor,
-                }
-                if edges in cursors:
-                    self._window.setCursor(cursors[edges])
-                else:
-                    self._window.unsetCursor()
-            elif event.type() == QEvent.Type.MouseButtonPress:
-                if event.button() == Qt.MouseButton.LeftButton:  # type: ignore[attr-defined]
-                    edges = self._edges(event.position().toPoint())  # type: ignore[attr-defined]
-                    if edges:
-                        handle = self._window.windowHandle()
-                        if handle is not None:
-                            handle.startSystemResize(edges)
-                            return True
-        return super().eventFilter(obj, event)
+    def mouseMoveEvent(self, event: object) -> None:
+        edges = self._edges(event.position().toPoint())  # type: ignore[attr-defined]
+        self.setCursor(_RESIZE_CURSORS.get(edges, Qt.CursorShape.ArrowCursor))
+
+    def mousePressEvent(self, event: object) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:  # type: ignore[attr-defined]
+            edges = self._edges(event.position().toPoint())  # type: ignore[attr-defined]
+            handle = self._window.windowHandle()
+            if edges and handle is not None:
+                handle.startSystemResize(edges)
+
+    def leaveEvent(self, event: object) -> None:
+        # The pointer left the border (into the content or off the window):
+        # drop the resize cursor so it never sticks.
+        self.unsetCursor()
+        super().leaveEvent(event)  # type: ignore[arg-type]
 
 
 def wrap_dialog(dialog: QDialog) -> None:

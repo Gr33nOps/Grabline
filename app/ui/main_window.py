@@ -145,7 +145,6 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)  # drop URLs (or text with URLs) onto the window
         # Custom chrome: no native title bar; ours draws the caption controls.
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
-        self._resizer = chrome.EdgeResizer(self)
 
         # State that per-row rendering + the theme toggle rely on.
         self._retintable: list[components.IconButton | components.SidebarButton] = []
@@ -194,6 +193,8 @@ class MainWindow(QMainWindow):
         column.addWidget(self._title_bar)
         column.addWidget(shell, 1)
         self.setCentralWidget(central)
+        # Created after the content so the resize overlay stacks above it.
+        self._resizer = chrome.EdgeResizer(self)
         self.statusBar().showMessage("Ready")
         # A global activity indicator: whenever anything is working in the
         # background (analyzing, hashing, extracting, converting, listing,
@@ -339,7 +340,16 @@ class MainWindow(QMainWindow):
         add_url.setMinimumWidth(96)  # never clip its label when the window narrows
         add_url.clicked.connect(self._add_url)
         lay.addWidget(add_url)
-        add_btn("torrent", self._add_torrent_file, "Add a torrent file")
+        # All torrent actions live under one dropdown, next to the cloud button.
+        add_menu_btn(
+            "torrent",
+            "Torrent",
+            (
+                ("Add torrent…", self._add_torrent_file),
+                ("Search torrents…", self._search_torrents),
+                ("Create torrent…", self._create_torrent),
+            ),
+        )
         add_btn("cloud", self._add_cloud, "Add a cloud download")
 
         lay.addWidget(self._sep())
@@ -353,10 +363,6 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._sep())
         add_btn("globe", self._grab_site, "Grab site")
         add_btn("inspect", self._inspect_url_prompt, "Inspect URL")
-        add_btn("search", self._search_torrents, "Search torrents")
-
-        lay.addWidget(self._sep())
-        add_btn("package", self._create_torrent, "Create torrent")
         add_btn("duplicate", self._find_duplicates, "Find duplicate files")
 
         lay.addWidget(self._sep())

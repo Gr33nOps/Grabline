@@ -292,7 +292,7 @@ def stylesheet(p: Palette) -> str:
     }}
 
     /* --- checkboxes / radios --- */
-    QCheckBox, QRadioButton {{ spacing: 7px; color: {p.text}; }}
+    QCheckBox, QRadioButton {{ spacing: 9px; color: {p.text}; padding: 1px 0; }}
     QCheckBox::indicator, QRadioButton::indicator {{
         width: 15px; height: 15px;
         border: 1px solid {p.border}; background: {p.surface};
