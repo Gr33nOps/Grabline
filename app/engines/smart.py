@@ -120,11 +120,16 @@ _AUTH_WALL_MARKERS = (
 )
 
 #: yt-dlp failures a JS runtime (+ EJS solver) cures: YouTube's n challenge was
-#: skipped, so only throttled/storyboard formats came back.
+#: skipped, so the jsless clients handed back throttled/storyboard formats or
+#: signature-expired media URLs (the intermittent "HTTP Error 403: Forbidden"
+#: on the fast path - solving the challenge yields fresh, working URLs).
 _RUNTIME_MARKERS = (
     "requested format is not available",
     "only images are available",
     "n challenge",
+    "http error 403",
+    "unable to download video data",
+    "unable to download webpage: http error 403",
 )
 
 

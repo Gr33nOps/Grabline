@@ -5,6 +5,7 @@ routes it in a background thread, and Smart Engine hits get the quality panel.
 from __future__ import annotations
 
 import time
+from collections import deque
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -152,6 +153,9 @@ class MainWindow(QMainWindow):
         self._progress_bars: dict[int, motion.SmoothProgressBar] = {}
         self._pills: dict[int, components.StatusPill] = {}
         self._speed_smoothers: dict[int, motion.SpeedSmoother] = {}
+        #: Per-download speed trail for the detail drawer's graph, so switching
+        #: away and back restores the history instead of restarting it.
+        self._spark_history: dict[int, deque[float]] = {}
         #: Force-removed jobs hidden immediately; cancelling a running worker
         #: is asynchronous, so its row would otherwise linger for seconds.
         self._removing: set[int] = set()
@@ -377,6 +381,7 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._sep())
 
         self.speed_line = motion.Sparkline()
+        self.speed_line.setMaximumWidth(72)  # compact in the toolbar
         lay.addWidget(self.speed_line)
         self._total_speed = components.role_label("—", "strong", size=design.FONT["h2"], bold=True)
         self._total_speed.setFont(design.numeric_font(self._total_speed.font()))
@@ -1141,7 +1146,9 @@ class MainWindow(QMainWindow):
             (job_id,) = tuple(self._selected_ids)
             view = self._last_views.get(job_id)
             if view is not None:
-                self._drawer.show_view(view, self._smoothed_speed(view))
+                self._drawer.show_view(
+                    view, self._smoothed_speed(view), self._spark_history.get(job_id)
+                )
         else:
             self._drawer.hide()
 
@@ -2216,11 +2223,21 @@ class MainWindow(QMainWindow):
         for job_id in list(self._speed_smoothers):
             if job_id not in running:
                 self._speed_smoothers.pop(job_id, None)  # a finished job starts fresh
+        for job_id in list(self._spark_history):
+            if job_id not in running:
+                self._spark_history.pop(job_id, None)
         speeds: dict[int, float] = {}
         for view in views:
             if view.id in running:
                 smoother = self._speed_smoothers.setdefault(view.id, motion.SpeedSmoother())
-                speeds[view.id] = smoother.push_total(now, view.downloaded)
+                speed = smoother.push_total(now, view.downloaded)
+                speeds[view.id] = speed
+                # Keep a per-download speed trail for the detail drawer's graph,
+                # measured every poll for every running job - so switching away
+                # and back restores the history instead of starting over.
+                self._spark_history.setdefault(view.id, deque(maxlen=motion.SPARK_HISTORY)).append(
+                    speed
+                )
             else:
                 speeds[view.id] = 0.0
         self._speeds = speeds

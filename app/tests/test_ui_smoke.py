@@ -803,3 +803,39 @@ def test_global_busy_indicator_tracks_background_work(db: Database, tmp_path: Pa
         assert window._busy_bar.isHidden()
     finally:
         manager.shutdown()
+
+
+def test_detail_graph_history_survives_switching(db: Database, tmp_path: Path):
+    from app.core.models import JobStatus
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        a = manager.add_url("https://example.com/a.zip", dest_dir=tmp_path)
+        b = manager.add_url("https://example.com/b.zip", dest_dir=tmp_path)
+        for job in (a, b):
+            db.update_job_total(job.id, 100_000)
+            db.set_job_status(job.id, JobStatus.DOWNLOADING)
+        # several polls so both accumulate their own speed trail
+        progress = {a.id: 0, b.id: 0}
+        for _ in range(8):
+            for job in (a, b):
+                progress[job.id] += 1000
+                db.update_job_downloaded(job.id, progress[job.id])
+            window.refresh()
+
+        def open_row(job_id: int) -> int:
+            window.table.selectRow(window._row_job_ids.index(job_id))
+            QApplication.processEvents()
+            return len(window._drawer._spark._samples)
+
+        opened = open_row(a.id)
+        assert opened == len(window._spark_history[a.id]) > 3  # restored, not empty
+        open_row(b.id)  # switch away
+        back = open_row(a.id)  # and back
+        assert back == len(window._spark_history[a.id]) > 3  # still preserved, not reset
+    finally:
+        manager.shutdown()

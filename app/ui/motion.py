@@ -12,7 +12,7 @@ stays cheap even with hundreds of rows.
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath
@@ -23,7 +23,7 @@ from app.ui.format import human_bytes
 
 _FPS = 60
 _FRAME_MS = 1000 // _FPS
-_SPARK_HISTORY = 48
+SPARK_HISTORY = 48
 
 
 class _Ticker(QObject):
@@ -256,12 +256,11 @@ class Sparkline(QWidget):
         super().__init__(parent)
         from collections import deque
 
-        self._samples: deque[float] = deque(maxlen=_SPARK_HISTORY)
+        self._samples: deque[float] = deque(maxlen=SPARK_HISTORY)
         self._last_push = 0.0
         self._push_interval = 0.5
         self._animating = False
-        self.setMinimumSize(48, 24)  # shrinks before its toolbar neighbours
-        self.setMaximumWidth(72)
+        self.setMinimumSize(48, 24)
         self.setToolTip("Recent total speed")
 
     def push(self, bytes_per_second: float) -> None:
@@ -273,6 +272,14 @@ class Sparkline(QWidget):
             self._push_interval = self._push_interval * 0.7 + gap * 0.3
         self._last_push = now
         self._samples.append(max(0.0, bytes_per_second))
+        self.update()
+
+    def set_samples(self, samples: Iterable[float]) -> None:
+        """Replace the whole history at once - used to restore a download's
+        graph when its details are reopened, so it doesn't start from empty."""
+        self._samples.clear()
+        self._samples.extend(max(0.0, s) for s in samples)
+        self._last_push = 0.0
         self.update()
 
     def clear(self) -> None:
@@ -310,7 +317,7 @@ class Sparkline(QWidget):
         peak = max(self._samples, default=0.0)
         if peak > 0 and len(self._samples) > 1:
             accent = QColor(p.accent)
-            step = rect.width() / (_SPARK_HISTORY - 1)
+            step = rect.width() / (SPARK_HISTORY - 1)
             base = rect.bottom()
             frac = 1.0
             if self._last_push:

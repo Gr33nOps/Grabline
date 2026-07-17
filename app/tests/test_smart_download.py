@@ -588,3 +588,35 @@ def test_ensure_ffmpeg_prefers_an_existing_binary(db: Database, dest: Path, monk
     task = SmartDownload(db, job, ffmpeg_path=None)
     task._ensure_ffmpeg()
     assert task.ffmpeg_path == "/usr/bin/ffmpeg"
+
+
+def test_http_403_escalates_to_the_runtime_retry(db: Database, dest: Path, monkeypatch):
+    # An intermittent 403 on the fast jsless path must retry with the JS
+    # runtime (which solves the n challenge -> fresh, working media URLs),
+    # not fail outright.
+    import yt_dlp
+
+    from app.engines import smart
+
+    assert smart._runtime_might_help("Unable to download video data: HTTP Error 403: Forbidden")
+
+    _no_runtime(monkeypatch)
+    job = _smart_job(db, "https://youtu.be/x", dest, "v.mp4", format_spec="bv*+ba/b")
+    task = SmartDownload(db, job, ffmpeg_path="/usr/bin/ffmpeg")
+    monkeypatch.setattr(task, "_ensure_ffmpeg", lambda: None)
+    monkeypatch.setattr(
+        task, "_ensure_js_runtime", lambda: setattr(task, "_js_runtime", ("deno", "/x/deno"))
+    )
+    calls: list[tuple[bool, bool]] = []
+
+    def fake_download(*, with_cookies: bool, with_runtime: bool):
+        calls.append((with_cookies, with_runtime))
+        if not with_runtime:
+            raise yt_dlp.utils.DownloadError(
+                "Unable to download video data: HTTP Error 403: Forbidden"
+            )
+        return {"title": "ok"}
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    assert task._download_smart() == {"title": "ok"}
+    assert calls == [(False, False), (False, True)]  # jsless first, runtime retry after 403

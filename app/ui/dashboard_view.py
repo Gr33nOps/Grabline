@@ -122,15 +122,27 @@ class DashboardView(QWidget):
             row.addWidget(tile)
         return row
 
-    def _table(self, _title: str, first: str) -> QTreeWidget:
+    def _table(self, title: str, first: str) -> QTreeWidget:
         tree = QTreeWidget()
+        tree.setObjectName("DashTable")
+        tree.setProperty("title", title)  # read by _wrap for the section heading
         tree.setHeaderLabels([first, "Downloaded", "Files"])
         tree.setRootIsDecorated(False)
         tree.setColumnWidth(0, 190)
+        # Tall enough to read ~8 rows without scrolling; these were collapsing
+        # to a couple of lines because the page's trailing stretch ate the space.
+        tree.setMinimumHeight(240)
         return tree
 
     def _wrap(self, tree: QTreeWidget) -> QWidget:
-        return tree
+        """A titled block: the section name above its table."""
+        box = QWidget()
+        col = QVBoxLayout(box)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(6)
+        col.addWidget(components.SectionLabel(str(tree.property("title") or "")))
+        col.addWidget(tree, 1)
+        return box
 
     # ------------------------------------------------------------- lifecycle
 

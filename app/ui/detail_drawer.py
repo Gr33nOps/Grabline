@@ -6,7 +6,7 @@ rebuild - so nothing flickers or doubles up, and it stays cheap to keep live.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from urllib.parse import urlsplit
 
 from PySide6.QtCore import Qt
@@ -193,10 +193,14 @@ class DetailDrawer(QFrame):
         if self._view is not None:
             self._callbacks[index](self._view)
 
-    def show_view(self, view: JobView, speed_bps: float) -> None:
+    def show_view(
+        self, view: JobView, speed_bps: float, history: Iterable[float] | None = None
+    ) -> None:
         new = self._view is None or self._view.id != view.id
         if new:
-            self._spark.clear()
+            # Restore this download's own speed trail instead of starting the
+            # graph over each time the details are reopened.
+            self._spark.set_samples(history or ())
         self._view = view
         self._update(view, speed_bps, new)
         self.show()
@@ -244,7 +248,10 @@ class DetailDrawer(QFrame):
         downloading = view.status is JobStatus.DOWNLOADING
         self._spark_card.setVisible(downloading)
         if downloading:
-            self._spark.push(speed_bps)
+            # On a fresh open the trail was just restored via set_samples (which
+            # already holds this poll's sample); only append on later ticks.
+            if not new:
+                self._spark.push(speed_bps)
             self._spark_val.setText(motion.fmt_speed(speed_bps))
             eta = "—"
             if speed_bps > 1 and view.total_size:
