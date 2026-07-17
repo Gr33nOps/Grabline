@@ -228,6 +228,13 @@ class MainWindow(QMainWindow):
         #: True while a right-click selects its row - selection then must not
         #: pop the details drawer (that is a left-click affordance).
         self._suppress_drawer = False
+        #: True while inside a handoff's modal dialog, to stop the 1s handoff
+        #: timer re-entering through the nested event loop and stacking dialogs.
+        self._in_handoff = False
+        #: Set once shutdown() runs; the pollers become no-ops so a late tick
+        #: (e.g. the 15s RSS singleShot, which stop() cannot cancel) never
+        #: touches the database after it closes.
+        self._shutting_down = False
 
         # Shell: a 48px icon rail on the left, the stacked content on the right.
         self._pages = QStackedWidget()
@@ -609,7 +616,35 @@ class MainWindow(QMainWindow):
     def open_setup(self) -> None:
         SetupDialog(self).exec()
 
+    def shutdown(self) -> None:
+        """Quiesce the window before the app closes the database. Stop the
+        polling timers (so no tick touches a closed connection), then wait for
+        this window's own worker threads to finish. A file-op or resolve thread
+        is parented to the window; if it were still running when the window is
+        destroyed at exit, Qt would abort the process. These workers wrap
+        bounded operations (a subprocess convert, a network resolve), so the
+        wait terminates."""
+        self._shutting_down = True
+        for timer in (self._timer, self._handoff_timer, self._rss_timer):
+            timer.stop()
+        for worker in [*self._file_ops, *self._resolve_threads]:
+            worker.wait(8000)
+
     def _poll_handoffs(self) -> None:
+        # Gallery/links handoffs open a modal dialog (exec) whose nested event
+        # loop keeps this 1s timer firing. Without a guard, rapid browser
+        # clicks re-enter here and stack modal dialogs on top of each other.
+        # The guard makes a re-entrant tick a no-op; any handoffs that arrived
+        # meanwhile are simply claimed on the next poll after the modal closes.
+        if self._shutting_down or self._in_handoff:
+            return
+        self._in_handoff = True
+        try:
+            self._drain_handoffs()
+        finally:
+            self._in_handoff = False
+
+    def _drain_handoffs(self) -> None:
         for handoff in self.manager.db.claim_handoffs():
             if handoff.source == "gallery" and handoff.payload:
                 self._open_gallery(list(handoff.payload), handoff.page_title)
@@ -1924,6 +1959,8 @@ class MainWindow(QMainWindow):
 
     def _poll_rss(self) -> None:
         """Check the RSS feeds and queue new matching torrent items."""
+        if self._shutting_down:  # the 15s singleShot outlives timer.stop()
+            return
         feeds = self.settings.rss_feeds
         if not feeds:
             return
@@ -1985,6 +2022,8 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------- refresh
 
     def refresh(self) -> None:
+        if self._shutting_down:
+            return
         views = self.manager.snapshot()
         # Optimistic removal: a force-removed running job stays in the DB until
         # its worker actually stops - hide it from the list right away.

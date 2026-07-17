@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from app.core.security import Risk, SecurityReport, check_file
 from app.core.settings import Settings
-from app.ui import chrome, motion
+from app.ui import chrome, motion, threads
 
 _COLORS = {Risk.OK: "#2ea043", Risk.CAUTION: "#d29922", Risk.WARNING: "#cf222e"}
 
@@ -118,6 +118,7 @@ class SecurityDialog(chrome.Dialog):
             )
         )
         self._thread.done.connect(self._show)
+        threads.retain(self._thread)  # survives dialog close; see app/ui/threads
         self._thread.start()
 
     def _show(self, report: object) -> None:
@@ -139,8 +140,3 @@ class SecurityDialog(chrome.Dialog):
             return
         digest = self._report.checksums.get("sha256") or next(iter(self._report.checksums.values()))
         QGuiApplication.clipboard().setText(digest)
-
-    def done(self, result: int) -> None:
-        if self._thread.isRunning():
-            self._thread.wait(3000)
-        super().done(result)

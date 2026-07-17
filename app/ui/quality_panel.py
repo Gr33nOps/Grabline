@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.engines.smart import MediaInfo, QualityOption
-from app.ui import chrome
+from app.ui import chrome, threads
 from app.ui.format import duration_text, human_bytes
 
 
@@ -182,6 +182,9 @@ class QualityPanel(chrome.Dialog):
         if media.thumbnail_url:
             self._fetcher = _ThumbnailFetcher(media.thumbnail_url)
             self._fetcher.loaded.connect(self._set_thumbnail)
+            # The fetcher outlives the dialog if the network is slow; retain()
+            # owns it so closing the panel never destroys a running thread.
+            threads.retain(self._fetcher)
             self._fetcher.start()
 
     # -------------------------------------------------------------- result
@@ -245,8 +248,3 @@ class QualityPanel(chrome.Dialog):
                     Qt.TransformationMode.SmoothTransformation,
                 )
             )
-
-    def done(self, result: int) -> None:
-        if self._fetcher is not None and self._fetcher.isRunning():
-            self._fetcher.wait(500)
-        super().done(result)

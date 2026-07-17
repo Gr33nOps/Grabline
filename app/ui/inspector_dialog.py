@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.inspector import InspectionReport, inspect_url
-from app.ui import chrome, motion
+from app.ui import chrome, motion, threads
 from app.ui.format import human_bytes
 
 
@@ -146,6 +146,7 @@ class InspectorDialog(chrome.Dialog):
 
         self._thread = _InspectThread(lambda: self._gather(url, headers, proxy))
         self._thread.done.connect(self._show)
+        threads.retain(self._thread)  # survives dialog close; see app/ui/threads
         self._thread.start()
 
     def _gather(
@@ -174,8 +175,3 @@ class InspectorDialog(chrome.Dialog):
             "Unreachable" if not report.reachable else f"HTTP {report.status} · done"
         )
         self._text.setPlainText(_render(report))
-
-    def done(self, result: int) -> None:
-        if self._thread.isRunning():
-            self._thread.wait(2000)
-        super().done(result)

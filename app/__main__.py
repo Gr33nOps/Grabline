@@ -81,16 +81,53 @@ def _configure_logging(settings: Settings) -> None:
         logging.getLogger().addHandler(handler)
 
 
+def _install_crash_hooks(crash_log: object) -> None:
+    """Route uncaught Python exceptions - on the GUI thread and on worker
+    threads - to crash.log with a full traceback. faulthandler catches native
+    aborts (a QThread destroyed while running); these hooks catch the Python
+    exceptions that would otherwise vanish when Qt swallows a slot exception or
+    a daemon thread dies. Both write to the same file the user already sends."""
+    import threading as _threading
+    import traceback as _traceback
+
+    def _write(header: str, exc_type: object, exc: object, tb: object) -> None:
+        log.error("%s", header, exc_info=(exc_type, exc, tb))  # type: ignore[arg-type]
+        handle = crash_log
+        if handle is not None:
+            try:
+                handle.write(f"\n=== {header} ===\n")
+                _traceback.print_exception(exc_type, exc, tb, file=handle)  # type: ignore[arg-type]
+                handle.flush()
+            except (OSError, ValueError):
+                pass
+
+    def _excepthook(exc_type: object, exc: object, tb: object) -> None:
+        _write("uncaught exception (GUI thread)", exc_type, exc, tb)
+
+    def _thread_excepthook(args: object) -> None:
+        _write(
+            f"uncaught exception (thread {getattr(args, 'thread', None)})",
+            args.exc_type,  # type: ignore[attr-defined]
+            args.exc_value,  # type: ignore[attr-defined]
+            args.exc_traceback,  # type: ignore[attr-defined]
+        )
+
+    sys.excepthook = _excepthook  # type: ignore[assignment]
+    _threading.excepthook = _thread_excepthook  # type: ignore[assignment]
+
+
 def main() -> int:
     # A native-crash trace (faulthandler) to the data folder: if anything
     # segfaults, crash.log says where instead of a silent vanish.
     import faulthandler
 
+    _crash_log = None
     try:
         _crash_log = open(paths.data_dir() / "crash.log", "a")  # noqa: SIM115 - lives for the process
         faulthandler.enable(_crash_log)
     except OSError:
         pass
+    _install_crash_hooks(_crash_log)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
@@ -264,6 +301,14 @@ def main() -> int:
 
     def shutdown() -> None:
         instance.clear_pid()
+        # Ordered teardown: stop UI polling first (so no timer touches the db
+        # after it closes), then drain retained worker threads (destroying a
+        # running QThread aborts the process), then stop the engine and close
+        # the database last.
+        window.shutdown()
+        from app.ui import threads
+
+        threads.shutdown()
         manager.shutdown()
         db.close()
 

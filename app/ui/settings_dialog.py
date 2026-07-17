@@ -40,7 +40,7 @@ from app.core import launcher, paths
 from app.core.errors import DownloadError
 from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
 from app.core.settings import SESSION_BROWSERS, Settings
-from app.ui import chrome, components, design
+from app.ui import chrome, components, design, threads
 from app.ui.format import human_bytes
 
 _PROJECT_URL = "https://github.com/Gr33nOps/Grabline"
@@ -1339,6 +1339,9 @@ class SettingsDialog(chrome.Dialog):
         installer.progressed.connect(on_progress)
         installer.succeeded.connect(on_success)
         installer.failed.connect(on_failure)
+        # The download can outlive the Settings dialog; retain() owns it so a
+        # dialog close never destroys a running thread. See app/ui/threads.
+        threads.retain(installer)
         installer.start()
 
     def _save(self) -> None:
@@ -1459,8 +1462,3 @@ class SettingsDialog(chrome.Dialog):
         except OSError as exc:
             QMessageBox.warning(self, "Grabline", f"Could not update autostart: {exc}")
         return True
-
-    def done(self, result: int) -> None:
-        if self._installer is not None and self._installer.isRunning():
-            self._installer.wait(1000)
-        super().done(result)
