@@ -11,15 +11,34 @@
   const HIDE_DELAY_MS = 350;
 
   // The app's line icons + accent/status colors (design.py) so the in-page UI
-  // reads as part of Grabline.
-  const svg = (paths) =>
-    `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" ` +
-    `stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  // reads as part of Grabline. Built as DOM nodes (no innerHTML, no dynamic
+  // markup) so the store's static analysis stays happy.
+  const SVGNS = "http://www.w3.org/2000/svg";
   const ICON = {
-    download: svg('<path d="M8 2v8"/><path d="M5 7l3 3 3-3"/><path d="M3 13h10"/>'),
-    check: svg('<path d="M3 8.5L6.5 12 13 4"/>'),
-    error: svg('<path d="M4 4l8 8"/><path d="M12 4l-8 8"/>'),
+    download: ["M8 2v8", "M5 7l3 3 3-3", "M3 13h10"],
+    check: ["M3 8.5L6.5 12 13 4"],
+    error: ["M4 4l8 8", "M12 4l-8 8"],
   };
+  function iconSvg(paths) {
+    const el = document.createElementNS(SVGNS, "svg");
+    const attrs = {
+      width: "17",
+      height: "17",
+      viewBox: "0 0 16 16",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+    };
+    for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, value);
+    for (const d of paths) {
+      const path = document.createElementNS(SVGNS, "path");
+      path.setAttribute("d", d);
+      el.appendChild(path);
+    }
+    return el;
+  }
   const ACCENT = "#0170fd";
   const OK = "#1f9d55";
   const WARN = "#cf222e";
@@ -91,7 +110,7 @@
   const host = document.createElement("div");
   const shadow = host.attachShadow({ mode: "closed" });
   const button = document.createElement("button");
-  button.innerHTML = ICON.download;
+  button.replaceChildren(iconSvg(ICON.download));
   button.title = "Download with Grabline";
   button.style.cssText = [
     "position: fixed",
@@ -163,7 +182,7 @@
     placeButton(rect);
     button.style.display = "flex";
     button.style.background = ACCENT;
-    button.innerHTML = ICON.download;
+    button.replaceChildren(iconSvg(ICON.download));
     startFollowing();
   }
 
@@ -456,7 +475,7 @@
     });
     // Quick inline feedback, then fade away.
     const failed = reply?.type === "error";
-    button.innerHTML = failed ? ICON.error : ICON.check;
+    button.replaceChildren(iconSvg(failed ? ICON.error : ICON.check));
     button.style.background = failed ? WARN : OK;
     setTimeout(hideButton, 900);
   });
