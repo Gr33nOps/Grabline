@@ -1219,7 +1219,7 @@ class SettingsDialog(chrome.Dialog):
                     getattr(imported, "version", None), "__version__", "?"
                 )
                 lines.append(f"{label}: {version}")
-            except Exception:
+            except (ImportError, AttributeError):  # optional dep absent/odd shape
                 lines.append(f"{label}: not available")
         from app.core.ffmpeg import find_ffmpeg as _find
 

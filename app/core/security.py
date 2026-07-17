@@ -13,12 +13,16 @@ A report gathers, best-effort and only what's configured:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from app.core import reputation, verify, virusscan
+from app.core.errors import DownloadError
+
+log = logging.getLogger(__name__)
 
 
 class Risk(IntEnum):
@@ -119,7 +123,10 @@ def check_file(
     if run_local_scan and virusscan.find_scanner(scanner_pref) is not None:
         try:
             result = virusscan.scan(path, scanner_pref)
-        except Exception:  # never let a scan failure sink the report
+        except (DownloadError, OSError) as exc:
+            # A scan that can't run (no scanner, subprocess error) must not sink
+            # the rest of the advisory report - but it should leave a trace.
+            log.debug("virus scan failed for %s: %s", path, exc)
             result = None
         if result is not None:
             report.scanner = result.scanner

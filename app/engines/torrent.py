@@ -14,6 +14,7 @@ opens it here instead of saving a file).
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ from app.core.errors import DownloadError
 from app.core.models import Job, JobStatus
 from app.core.settings import Settings
 from app.db.database import Database
+
+log = logging.getLogger(__name__)
 
 _POLL_SECONDS = 0.5
 _PERSIST_SECONDS = 0.3
@@ -275,7 +278,9 @@ class TorrentSession:
             return 0.0
         try:
             return float(sum(h.status().upload_rate for h in session.get_torrents()))
-        except Exception:  # pragma: no cover - never break the dashboard
+        except Exception:  # libtorrent's binding exceptions are opaque; a bad
+            # handle read must not break the dashboard, but leave a trace.
+            log.debug("upload-rate read failed", exc_info=True)
             return 0.0
 
     def _tick(self) -> None:
@@ -303,8 +308,9 @@ class TorrentSession:
                     # Seeding-time limit (Settings -> Torrent): stop after N minutes.
                     if minutes > 0 and int(status.seeding_duration) >= minutes * 60:
                         handle.pause()
-            except Exception:  # pragma: no cover - never kill the ticker
-                pass
+            except Exception:  # libtorrent's binding exceptions are opaque; one
+                # bad tick must not kill the ratio-enforcement loop, but log it.
+                log.debug("seed-ratio tick failed", exc_info=True)
 
 
 #: Module-level singleton - DHT, port mappings and peers live process-wide.
