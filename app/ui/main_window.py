@@ -99,7 +99,6 @@ from app.ui.security_dialog import SecurityDialog
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.settings_view import SettingsView
 from app.ui.setup_dialog import SetupDialog
-from app.ui.tools_view import ToolsView
 from app.ui.torrent_dialog import AddTorrentDialog, CreateTorrentDialog
 
 #: Table columns: an icon, name, size, progress, speed, ETA, status.
@@ -174,22 +173,9 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self._dashboard_view)  # index 1
         self._queue_view = QueueView(self.manager)
         self._pages.addWidget(self._queue_view)  # index 2
-        self._tools_view = ToolsView(
-            {
-                "grab_site": self._grab_site,
-                "inspect_url": self._inspect_url_prompt,
-                "search_torrents": self._search_torrents,
-                "create_torrent": self._create_torrent,
-                "find_duplicates": self._find_duplicates,
-                "import_links": self._import_links,
-                "import_list": self._import_list,
-                "export_list": self._export_list,
-            }
-        )
-        self._pages.addWidget(self._tools_view)  # index 3
         self._settings_view = SettingsView(self.settings, self._on_settings_applied)
-        self._pages.addWidget(self._settings_view)  # index 4
-        self._page_index = {"downloads": 0, "dashboard": 1, "queue": 2, "tools": 3, "settings": 4}
+        self._pages.addWidget(self._settings_view)  # index 3
+        self._page_index = {"downloads": 0, "dashboard": 1, "queue": 2, "settings": 3}
         shell = QWidget()
         row = QHBoxLayout(shell)
         row.setContentsMargins(0, 0, 0, 0)
@@ -258,11 +244,13 @@ class MainWindow(QMainWindow):
         lay.setSpacing(2)
         lay.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
+        # The rail is pure navigation now that every tool lives on the
+        # downloads toolbar. Settings takes the slot the Tools page held.
         nav = (
             ("downloads", "download", "Downloads", lambda: self._switch_view("downloads")),
             ("dashboard", "dashboard", "Dashboard", lambda: self._switch_view("dashboard")),
             ("queue", "queue", "Queue manager", lambda: self._switch_view("queue")),
-            ("tools", "tools", "Tools", lambda: self._switch_view("tools")),
+            ("settings", "settings", "Settings", lambda: self._switch_view("settings")),
         )
         for key, icon_name, tip, handler in nav:
             btn = components.SidebarButton(icon_name, tip)
@@ -273,14 +261,6 @@ class MainWindow(QMainWindow):
         self._nav["downloads"].set_active(True)
 
         lay.addStretch(1)
-
-        # Settings anchors the bottom of the rail. Theme switching lives in
-        # Settings → Appearance - no quick toggle here.
-        settings_btn = components.SidebarButton("settings", "Settings")
-        settings_btn.clicked.connect(lambda: self._switch_view("settings"))
-        self._nav["settings"] = settings_btn
-        self._retintable.append(settings_btn)
-        lay.addWidget(settings_btn, 0, Qt.AlignmentFlag.AlignHCenter)
         return bar
 
     def _build_downloads_page(self) -> QWidget:
@@ -329,40 +309,60 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(8, 6, 10, 6)
         lay.setSpacing(2)
 
-        def add_btn(
-            icon_name: str, label: str, handler: object, *, danger: bool = False, tip: str = ""
-        ) -> None:
-            btn = components.IconButton(icon_name, label, danger=danger, tooltip=tip)
+        def add_btn(icon_name: str, handler: object, tip: str, *, danger: bool = False) -> None:
+            btn = components.IconButton(icon_name, danger=danger, tooltip=tip)
             btn.clicked.connect(handler)
             self._retintable.append(btn)
             lay.addWidget(btn)
 
-        # One labeled primary action; secondary add-sources are icons with
-        # tooltips. (Also what lets the toolbar fit a 760px window.)
+        def add_menu_btn(icon_name: str, tip: str, items: tuple[tuple[str, object], ...]) -> None:
+            btn = components.IconButton(icon_name, tooltip=tip)
+            menu = QMenu(btn)
+            for label, handler in items:
+                menu.addAction(label).triggered.connect(handler)
+            btn.clicked.connect(lambda: menu.exec(btn.mapToGlobal(QPoint(0, btn.height()))))
+            self._retintable.append(btn)
+            lay.addWidget(btn)
+
+        # The one labeled, primary action. Everything else is an icon with a
+        # tooltip, grouped by separators, so the whole toolbar fits one row.
         add_url = QPushButton("  Add URL")
         add_url.setProperty("accent", "true")
         add_url.setCursor(Qt.CursorShape.PointingHandCursor)
-        # accent_on is white in every palette/preset, so no retint needed.
         add_url.setIcon(icons.svg_icon("add", theme.current().accent_on))
         add_url.setIconSize(QSize(16, 16))
         add_url.setToolTip("Add a download from a URL")
+        add_url.setMinimumWidth(96)  # never clip its label when the window narrows
         add_url.clicked.connect(self._add_url)
         lay.addWidget(add_url)
-        add_btn("torrent", "", self._add_torrent_file, tip="Add a .torrent file")
-        add_btn("cloud", "", self._add_cloud, tip="Add a cloud/server download")
+        add_btn("torrent", self._add_torrent_file, "Add a torrent file")
+        add_btn("cloud", self._add_cloud, "Add a cloud download")
+
         lay.addWidget(self._sep())
-        add_btn("pause", "", self._pause_selected, tip="Pause the selected downloads")
-        add_btn("resume", "", self._resume_selected, tip="Resume the selected downloads")
-        add_btn("cancel", "", self._cancel_selected, tip="Cancel the selected downloads")
-        add_btn(
-            "trash",
-            "",
-            self._remove_selected,
-            danger=True,
-            tip="Remove the selected downloads from the list (files stay on disk)",
+        add_menu_btn(
+            "import",
+            "Import",
+            (("Import links…", self._import_links), ("Import list…", self._import_list)),
         )
+        add_btn("export", self._export_list, "Export list")
+
         lay.addWidget(self._sep())
-        add_btn("folder", "", self._open_folder, tip="Open the download folder")
+        add_btn("globe", self._grab_site, "Grab site")
+        add_btn("inspect", self._inspect_url_prompt, "Inspect URL")
+        add_btn("search", self._search_torrents, "Search torrents")
+
+        lay.addWidget(self._sep())
+        add_btn("package", self._create_torrent, "Create torrent")
+        add_btn("duplicate", self._find_duplicates, "Find duplicate files")
+
+        lay.addWidget(self._sep())
+        add_btn("pause", self._pause_selected, "Pause")
+        add_btn("resume", self._resume_selected, "Resume")
+        add_btn("cancel", self._cancel_selected, "Cancel")
+        add_btn("trash", self._remove_selected, "Delete from list", danger=True)
+
+        lay.addWidget(self._sep())
+        add_btn("folder", self._open_folder, "Open downloads folder")
         lay.addStretch(1)
 
         self.search_box = QLineEdit()
@@ -536,7 +536,6 @@ class MainWindow(QMainWindow):
         self._title_bar.retint()
         for btn in self._retintable:
             btn.retint()
-        self._tools_view.retint()
         self._style_filter_buttons()
         # Rebuild rows so per-row widgets (pills, bars) repaint in the new theme.
         self._row_job_ids = []
@@ -2156,15 +2155,10 @@ class MainWindow(QMainWindow):
         self._cell(row, _COL_ICON).setIcon(icons.svg_icon(name, self._type_color(view)))
 
         name_item = self._cell(row, _COL_NAME)
-        # No URL tooltip - hover text was clutter; the details drawer has it.
-        # Small suffix markers surface tags and notes at a glance.
-        markers = ""
-        if view.tags:
-            markers += "  🏷"
-        if view.notes:
-            markers += "  📝"
-        name_item.setText(view.display_name + markers)
-        if markers:
+        name_item.setText(view.display_name)
+        # Tags and notes stay reachable on hover (and in the detail drawer),
+        # without a marker glyph cluttering the name.
+        if view.tags or view.notes:
             name_item.setToolTip(
                 (f"Tags: {view.tags}\n" if view.tags else "") + ("Has notes" if view.notes else "")
             )

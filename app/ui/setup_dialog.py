@@ -59,7 +59,7 @@ class SetupDialog(chrome.Dialog):
         self._store_url = browser_setup.extension_install_url()
         self._add_hint: QLabel | None = None
         if browser is not None:
-            add_button = QPushButton(f"➜  Add Grabline to {browser[1]}")
+            add_button = QPushButton(f"Add Grabline to {browser[1]}")
             add_button.setStyleSheet("font-weight: 600; padding: 6px;")
             add_button.clicked.connect(self._add_to_browser)
             layout.addWidget(add_button)

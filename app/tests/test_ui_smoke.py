@@ -267,23 +267,20 @@ def test_remove_selected_and_clear_completed(db: Database, tmp_path: Path):
         manager.shutdown()
 
 
-def test_main_window_sidebar_and_tools_page(db: Database, tmp_path: Path):
+def test_main_window_sidebar_is_pure_navigation(db: Database, tmp_path: Path):
     _qapp()
     settings = Settings(db)
     settings.download_dir = tmp_path
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
-        # The shell is pure navigation: the old "More actions" overflow menu
-        # became the Tools page (a card per power feature).
-        assert set(window._nav) == {"downloads", "dashboard", "queue", "tools", "settings"}
+        # The rail is navigation only; every tool moved to the downloads
+        # toolbar, so there is no Tools page and no overflow menu.
+        assert set(window._nav) == {"downloads", "dashboard", "queue", "settings"}
         assert not hasattr(window, "_overflow_menu")
-        window._switch_view("tools")
-        assert window._pages.currentWidget() is window._tools_view
-        from app.ui.tools_view import ToolCard
-
-        cards = window._tools_view.findChildren(ToolCard)
-        assert len(cards) == 8  # five tools + import links/list + export list
+        assert not hasattr(window, "_tools_view")
+        window._switch_view("settings")
+        assert window._pages.currentWidget() is window._settings_view
     finally:
         manager.shutdown()
 

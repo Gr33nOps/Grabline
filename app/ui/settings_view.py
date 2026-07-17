@@ -133,5 +133,5 @@ class SettingsView(QWidget):
 
     def _save(self) -> None:
         if self._dialog.apply():
-            self._saved.setText("✓ Saved")
+            self._saved.setText("Saved")
             self._on_applied()

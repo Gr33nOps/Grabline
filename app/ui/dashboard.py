@@ -192,9 +192,7 @@ class DashboardDialog(chrome.Dialog):
         from app.core import net
 
         vpn = net.active_vpn_interfaces()
-        self._vpn_label.setText(
-            f"🔒 VPN active on {', '.join(vpn)}" if vpn else "VPN: not detected"
-        )
+        self._vpn_label.setText(f"VPN active on {', '.join(vpn)}" if vpn else "VPN not detected")
 
         self._fill_tree(self.server_tree, self.manager.stats_by_host())
         self._fill_tree(self.category_tree, self.manager.stats_by_category())

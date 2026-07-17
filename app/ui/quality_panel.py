@@ -135,7 +135,6 @@ class QualityPanel(chrome.Dialog):
         self.save_metadata = QCheckBox("Save metadata")
         self.keep_chapters = QCheckBox("Chapters")
         self.keep_chapters.setChecked(True)
-        self.keep_chapters.setToolTip("Keep the video's chapter marks in the file")
         extras_row.addWidget(self.save_thumbnail)
         extras_row.addWidget(self.save_metadata)
         extras_row.addWidget(self.keep_chapters)
@@ -148,10 +147,6 @@ class QualityPanel(chrome.Dialog):
         self.sponsorblock.addItem("Off", None)
         self.sponsorblock.addItem("Mark segments", "mark")
         self.sponsorblock.addItem("Remove sponsor segments", "remove")
-        self.sponsorblock.setToolTip(
-            "Uses the community SponsorBlock database to mark or cut "
-            "sponsor / self-promo / interaction reminders"
-        )
         sponsor_row.addWidget(self.sponsorblock, 1)
         layout.addLayout(sponsor_row)
 

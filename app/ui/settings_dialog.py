@@ -135,13 +135,7 @@ class SettingsDialog(chrome.Dialog):
         self.new_dl_combo.addItem("Add paused (start by hand)", False)
         self.new_dl_combo.setCurrentIndex(0 if settings.auto_start_downloads else 1)
         general_form.addRow("New downloads:", self.new_dl_combo)
-        general_form.addRow(
-            _note(
-                "Always on by design: a single Grabline instance (the browser "
-                "hands URLs to the running app). English-only for now; an "
-                "update channel arrives when beta builds exist."
-            )
-        )
+        general_form.addRow(_note("Grabline runs as a single instance. English only for now."))
 
         # ---- Downloads -------------------------------------------------------
         downloads_form = self._add_form_tab(tabs, "Downloads")
@@ -170,13 +164,11 @@ class SettingsDialog(chrome.Dialog):
         self.free_mb_spin.setSuffix(" MB")
         self.free_mb_spin.setSpecialValueText("Off")
         self.free_mb_spin.setValue(settings.min_free_mb)
-        self.free_mb_spin.setToolTip("Warn before adding when the download drive is below this.")
         downloads_form.addRow("Low disk space warning:", self.free_mb_spin)
         downloads_form.addRow(
             _note(
-                "A file that already exists is renamed (name (1).ext) - nothing "
-                "is ever silently overwritten. Adding a URL already in the list "
-                "asks first. In-progress data lives next to the file (.gl-part)."
+                "Existing files are renamed name (1).ext, never overwritten; "
+                "a duplicate URL asks first."
             )
         )
 
@@ -185,10 +177,6 @@ class SettingsDialog(chrome.Dialog):
         self.connections_spin = QSpinBox()
         self.connections_spin.setRange(1, 128)
         self.connections_spin.setValue(settings.connections)
-        self.connections_spin.setToolTip(
-            "8-16 saturates most connections. Beyond ~32 many servers throttle "
-            "or ban the extra sockets - more is not always faster."
-        )
         engine_form.addRow("Connections per download:", self.connections_spin)
         self.speed_spin = QSpinBox()
         self.speed_spin.setRange(0, 1_000_000)
@@ -218,30 +206,17 @@ class SettingsDialog(chrome.Dialog):
         self.retry_spin.setValue(settings.auto_retry_max)
         self.retry_spin.setSuffix(" times")
         self.retry_spin.setSpecialValueText("Forever")
-        self.retry_spin.setToolTip(
-            "Forever keeps retrying with capped backoff - downloads survive "
-            "internet drops, VPN reconnects, and router reboots on their own."
-        )
         retry_row.addWidget(self.retry_check)
         retry_row.addWidget(self.retry_spin)
         retry_row.addStretch(1)
         engine_form.addRow("Reconnect:", retry_row)
         engine_form.addRow(
-            _note(
-                "Right-click a download for per-download overrides: its own "
-                "speed limit, connection count, and mirrors."
-            )
+            _note("Right-click a download to override its speed limit, connections, and mirrors.")
         )
         engine_form.addRow(
             _note(
-                "Always on, nothing to configure: dynamic segmentation (free "
-                "connections steal work from the slowest), smart chunk "
-                "allocation, HTTP/2 where offered, IPv6, error-aware retries "
-                "(rate limits back off, dead links fail fast), mirror "
-                "failover, resume after crash / reboot / reconnect / power "
-                "loss, and per-server capability detection. Not available: "
-                "HTTP/3 and QUIC - the HTTP stack Grabline uses does not "
-                "support them yet."
+                "Segmentation, HTTP/2, IPv6, mirror failover, and crash or reconnect resume are "
+                "automatic. HTTP/3 and QUIC aren't supported yet."
             )
         )
 
@@ -260,7 +235,6 @@ class SettingsDialog(chrome.Dialog):
         pair_button.clicked.connect(self._pair_browsers)
         pairing_layout.addWidget(pair_button)
         setup_button = QPushButton("Setup wizard…")
-        setup_button.setToolTip("The step-by-step browser setup from the first launch.")
         setup_button.clicked.connect(self._open_setup_wizard)
         pairing_layout.addWidget(setup_button)
         browser_layout.addWidget(pairing)
@@ -280,10 +254,8 @@ class SettingsDialog(chrome.Dialog):
         session_layout.addLayout(browser_row)
         session_layout.addWidget(
             _note(
-                "Grabline uses your browser login automatically only when a video "
-                "asks for it (age- or login-restricted); this switch just forces it "
-                "on. Your real login is used only for your own content, read per "
-                "download, kept in memory, never stored or sent anywhere."
+                "Grabline reads your browser login only when a video requires it; this forces "
+                "it on. It's read per download, kept in memory, and never stored."
             )
         )
         browser_layout.addWidget(session)
@@ -294,10 +266,8 @@ class SettingsDialog(chrome.Dialog):
         browser_layout.addWidget(self.clipboard_check)
         browser_layout.addWidget(
             _note(
-                "Per-site hover-button toggles, the button corner, download "
-                "takeover, and media/stream detection live in the extension's "
-                "toolbar popup - right where you see the page. File-type and "
-                "size-based interception rules are on the roadmap."
+                "Hover buttons, download takeover, and media detection are controlled in the "
+                "extension's toolbar popup."
             )
         )
         browser_layout.addStretch(1)
@@ -319,10 +289,6 @@ class SettingsDialog(chrome.Dialog):
         self.playlist_cap_spin = QSpinBox()
         self.playlist_cap_spin.setRange(1, 500)
         self.playlist_cap_spin.setValue(settings.playlist_batch_cap)
-        self.playlist_cap_spin.setToolTip(
-            "Opening a playlist preselects this many entries; you can always "
-            "tick more or fewer before queueing."
-        )
         playlist_form.addRow("Preselect playlist entries:", self.playlist_cap_spin)
         video_layout.addLayout(playlist_form)
         self.hq_first_check = QCheckBox(
@@ -330,19 +296,12 @@ class SettingsDialog(chrome.Dialog):
             "challenge up front; can add minutes before a download begins)"
         )
         self.hq_first_check.setChecked(settings.video_hq_first)
-        self.hq_first_check.setToolTip(
-            "Off: downloads start in seconds using YouTube's runtime-free "
-            "clients, which can top out at 1080p. On: every video download "
-            "pays the challenge-solver cost first and gets the complete "
-            "format ladder (4K/8K where available)."
-        )
         video_layout.addWidget(self.hq_first_check)
         defaults_form = QFormLayout()
         self.default_quality_combo = QComboBox()
         for label in ("Best", "2160p", "1440p", "1080p", "720p", "480p", "MP3", "M4A", "FLAC"):
             self.default_quality_combo.addItem(label)
         self.default_quality_combo.setCurrentText(settings.video_default_quality)
-        self.default_quality_combo.setToolTip("Preselected in the quality panel.")
         defaults_form.addRow("Default quality:", self.default_quality_combo)
         self.bitrate_combo = QComboBox()
         for rate in ("128", "192", "256", "320"):
@@ -362,22 +321,16 @@ class SettingsDialog(chrome.Dialog):
         video_layout.addLayout(defaults_form)
         video_layout.addWidget(
             _note(
-                "Chosen per download in the panel: exact quality, subtitles and "
-                "their languages (embedded or .srt), clip trimming, chapters, "
-                "SponsorBlock, thumbnail/metadata sidecars, and extra FFmpeg "
-                "arguments. Not offered: OAuth account login (an open-source "
-                "app cannot ship client secrets - the cookies file covers "
-                "signed-in content) and custom filename templates (Grabline "
-                "names files from the real title). yt-dlp updates ship with "
-                "each Grabline release."
+                "Quality, subtitles, trimming, chapters, SponsorBlock, and sidecar files are "
+                "chosen per download in the panel. Account login and custom filename templates "
+                "aren't offered."
             )
         )
         video_layout.addWidget(_note(self._js_runtime_text()))
         video_layout.addWidget(
             _note(
-                "Per-video choices - quality, MP3/M4A/FLAC, subtitles, clip "
-                "trimming, chapters, SponsorBlock - are offered in the panel "
-                "when you add a video."
+                "Quality, audio format, subtitles, trimming, and chapters are chosen when you "
+                "add a video."
             )
         )
         video_layout.addStretch(1)
@@ -430,19 +383,11 @@ class SettingsDialog(chrome.Dialog):
         torrent_form.addRow("Save torrents to:", torrent_dir_row)
         self.search_url_edit = QLineEdit(settings.torrent_search_url)
         self.search_url_edit.setPlaceholderText("https://example.com/search?q=%s")
-        self.search_url_edit.setToolTip(
-            "Search Torrents… opens this in your browser with %s replaced by the query."
-        )
         torrent_form.addRow("Search URL:", self.search_url_edit)
         self.rss_edit = QPlainTextEdit()
         self.rss_edit.setPlainText("\n".join(settings.rss_feeds))
         self.rss_edit.setPlaceholderText("feed URL, or:  feed URL | filter text\none per line")
         self.rss_edit.setFixedHeight(72)
-        self.rss_edit.setToolTip(
-            "Checked periodically; new items whose link is a torrent/magnet "
-            "(and whose title contains the filter, if given) are queued "
-            "automatically."
-        )
         torrent_form.addRow("RSS feeds:", self.rss_edit)
         self.rss_interval_spin = QSpinBox()
         self.rss_interval_spin.setRange(5, 1440)
@@ -465,9 +410,6 @@ class SettingsDialog(chrome.Dialog):
         self.seed_minutes_spin.setSuffix(" min")
         self.seed_minutes_spin.setSpecialValueText("No time limit")
         self.seed_minutes_spin.setValue(settings.torrent_seed_minutes)
-        self.seed_minutes_spin.setToolTip(
-            "Stop seeding after this long (the ratio limit also applies)."
-        )
         torrent_form.addRow("Seeding time limit:", self.seed_minutes_spin)
         self.trackers_default_edit = QPlainTextEdit()
         self.trackers_default_edit.setPlainText("\n".join(settings.torrent_trackers))
@@ -478,9 +420,8 @@ class SettingsDialog(chrome.Dialog):
         torrent_form.addRow("Default trackers:", self.trackers_default_edit)
         torrent_form.addRow(
             _note(
-                "PEX and web seeds are always on. How many torrents run at once "
-                "is the queue system's job - see Queue Manager. Per-torrent "
-                "bandwidth follows the global and scheduled limits."
+                "PEX and web seeds are always on. Concurrency is set in Queue manager; "
+                "bandwidth follows the global limits."
             )
         )
 
@@ -489,11 +430,8 @@ class SettingsDialog(chrome.Dialog):
         cloud_layout = QVBoxLayout(cloud_tab)
         cloud_layout.addWidget(
             _note(
-                "Download from cloud storage and file servers. Paste an sftp://, "
-                "ftp://, ftps://, scp://, s3:// or webdav:// address (Add Cloud "
-                "Download), or a public Google Drive / Dropbox / OneDrive / "
-                "Nextcloud share link into Add URL - share links download at full "
-                "speed with no account needed."
+                "Paste an sftp, ftp, ftps, scp, s3, or webdav address, or a public Drive, "
+                "Dropbox, OneDrive, or Nextcloud share link into Add URL."
             )
         )
         accounts_row = QHBoxLayout()
@@ -504,17 +442,11 @@ class SettingsDialog(chrome.Dialog):
         cloud_layout.addLayout(accounts_row)
         cloud_layout.addWidget(
             _note(
-                "Passwords and key passphrases are stored in your system keychain. "
-                "Several accounts per host are supported; the right one is chosen "
-                "automatically by the address you download."
+                "Passwords are kept in your system keychain; the right account "
+                "is chosen by address."
             )
         )
-        cloud_layout.addWidget(
-            _note(
-                "Not supported: Mega and Proton Drive (end-to-end encrypted) and "
-                "iCloud (no public API)."
-            )
-        )
+        cloud_layout.addWidget(_note("Not supported: Mega, Proton Drive, and iCloud."))
         cloud_layout.addStretch(1)
         tabs.addTab(cloud_tab, "Cloud Downloads")
 
@@ -527,21 +459,11 @@ class SettingsDialog(chrome.Dialog):
         archive_form.addRow(self.extract_check)
         self.scan_check = QCheckBox("Virus-scan archives before extracting")
         self.scan_check.setChecked(settings.scan_before_extract)
-        self.scan_check.setToolTip(
-            "Uses a scanner already on this machine - Windows Defender or "
-            "ClamAV. If none is installed, extraction stops with a message "
-            "instead of pretending to scan."
-        )
         archive_form.addRow(self.scan_check)
         self.passwords_edit = QPlainTextEdit()
         self.passwords_edit.setPlainText("\n".join(settings.archive_passwords))
         self.passwords_edit.setPlaceholderText("one password per line")
         self.passwords_edit.setFixedHeight(72)
-        self.passwords_edit.setToolTip(
-            "Tried in order when an archive is encrypted. Passwords you type "
-            "into the extract prompt are remembered here too. Stored locally, "
-            "unencrypted - same trust level as the downloaded files."
-        )
         archive_form.addRow("Archive passwords:", self.passwords_edit)
         self.extract_subfolder_check = QCheckBox("Extract into a folder named after the archive")
         self.extract_subfolder_check.setChecked(settings.extract_to_subfolder)
@@ -551,9 +473,8 @@ class SettingsDialog(chrome.Dialog):
         archive_form.addRow(self.delete_archive_check)
         archive_form.addRow(
             _note(
-                "Formats: ZIP / TAR / GZ / BZ2 / XZ built in; RAR and 7Z via an "
-                "installed 7-Zip. Right-click a finished archive for Preview "
-                "archive… (extract selected files) and Extract here."
+                "ZIP, TAR, GZ, BZ2, and XZ are built in; RAR and 7Z need an installed 7-Zip. "
+                "Right-click a finished archive to preview or extract it."
             )
         )
 
@@ -563,9 +484,6 @@ class SettingsDialog(chrome.Dialog):
         self.favorites_edit.setPlainText("\n".join(settings.favorite_folders))
         self.favorites_edit.setPlaceholderText("one folder per line, e.g. /home/me/Movies")
         self.favorites_edit.setFixedHeight(72)
-        self.favorites_edit.setToolTip(
-            "Quick destinations shown under 'Move to' when you right-click a finished download."
-        )
         files_form.addRow("Favorite folders:", self.favorites_edit)
         self.rename_edit = QPlainTextEdit()
         self.rename_edit.setPlainText(
@@ -573,23 +491,15 @@ class SettingsDialog(chrome.Dialog):
         )
         self.rename_edit.setPlaceholderText("find -> replace   (one rule per line)")
         self.rename_edit.setFixedHeight(72)
-        self.rename_edit.setToolTip(
-            "Applied in order to every new download's name (never the "
-            "extension). Example:  [SPONSORED] ->\nleaves the rest of the "
-            "name intact."
-        )
         files_form.addRow("Rename rules:", self.rename_edit)
         self.default_tags_edit = QLineEdit(settings.default_tags)
         self.default_tags_edit.setPlaceholderText("tags for every new download, comma separated")
         files_form.addRow("Default tags:", self.default_tags_edit)
         files_form.addRow(
             _note(
-                "Always on: smart filenames (page titles replace junk like "
-                "videoplayback.mp4), illegal characters stripped, and "
-                "name (1).ext version numbering. Categories map by extension "
-                "(Video / Music / Images / Documents / Archives / Programs / "
-                "Games / Torrents). Adding a duplicate URL asks first; Find "
-                "Duplicate Files… (⋯ menu) hash-compares finished downloads."
+                "Files are named from the page title, illegal characters are "
+                "stripped, and duplicates become name (1).ext. Categories map "
+                "by file extension."
             )
         )
 
@@ -601,18 +511,11 @@ class SettingsDialog(chrome.Dialog):
             self.default_queue_combo.addItem(queue_row.name, queue_row.id)
         idx = self.default_queue_combo.findData(settings.default_queue_id)
         self.default_queue_combo.setCurrentIndex(max(0, idx))
-        self.default_queue_combo.setToolTip(
-            "New downloads join this queue when no category rule claims them."
-        )
         queue_form.addRow("Default queue:", self.default_queue_combo)
         queue_form.addRow(
             _note(
-                "Named queues - per-queue downloads-at-once, sequential or "
-                "parallel mode, priorities (their order), schedules, category "
-                "auto-assign, and queue-after-queue dependencies - are managed "
-                "on the Queue page in the sidebar. Unpaused queues start with "
-                "Grabline. The global simultaneous-downloads limit is under "
-                "Downloads."
+                "Named queues — concurrency, order, schedules, and dependencies — are managed "
+                "on the Queue page. The global download limit is under Downloads."
             )
         )
 
@@ -655,10 +558,6 @@ class SettingsDialog(chrome.Dialog):
         scheduler_form.addRow(battery_row)
         self.network_check = QCheckBox("Wait for internet - resume the moment it reconnects")
         self.network_check.setChecked(settings.wait_for_network)
-        self.network_check.setToolTip(
-            "Failed downloads always retry with backoff; this also holds new "
-            "starts while offline and retries immediately on reconnect."
-        )
         scheduler_form.addRow(self.network_check)
         self.after_combo = QComboBox()
         for label, value in (
@@ -689,10 +588,6 @@ class SettingsDialog(chrome.Dialog):
         self.proxy_edit.setPlaceholderText(
             "http(s):// · socks5:// · socks4:// host:port  (blank = direct)"
         )
-        self.proxy_edit.setToolTip(
-            "HTTP, HTTPS, SOCKS5 and SOCKS4 are supported, with user:pass@ auth. "
-            "The proxy applies to every download, including torrents."
-        )
         proxy_form.addRow("Proxy:", self.proxy_edit)
         net_layout.addLayout(proxy_form)
         net_layout.addWidget(_note(self._vpn_status_text()))
@@ -712,9 +607,6 @@ class SettingsDialog(chrome.Dialog):
         self.throttle_threshold_spin.setRange(1, 1_000_000)
         self.throttle_threshold_spin.setSuffix(" KB/s")
         self.throttle_threshold_spin.setValue(settings.auto_throttle_threshold_kbps)
-        self.throttle_threshold_spin.setToolTip(
-            "How much other (non-Grabline) network traffic counts as 'busy'."
-        )
         throttle_layout.addRow("When others use over:", self.throttle_threshold_spin)
         net_layout.addWidget(throttle_group)
 
@@ -739,11 +631,8 @@ class SettingsDialog(chrome.Dialog):
         net_layout.addLayout(extras_form)
         net_layout.addWidget(
             _note(
-                "One proxy URL covers HTTP, HTTPS, SOCKS5 and SOCKS4, with "
-                "user:pass@ auth. The upload cap lives under Torrent (the only "
-                "engine that uploads). The nightly full-speed window is under "
-                "Download Engine. VPN status is shown on the Dashboard and "
-                "never gates downloads."
+                "One proxy covers HTTP, HTTPS, SOCKS5, and SOCKS4, with user:pass@ auth. VPN "
+                "status shows on the Dashboard and never blocks downloads."
             )
         )
         net_layout.addStretch(1)
@@ -752,10 +641,7 @@ class SettingsDialog(chrome.Dialog):
         # ---- Security ----------------------------------------------------------
         security_form = self._add_form_tab(tabs, "Security")
         security_form.addRow(
-            _note(
-                "These checks only ever warn - a flagged file is kept and stays "
-                "usable, and you decide. Antivirus false positives are common."
-            )
+            _note("These checks only warn — a flagged file stays usable and it's your call.")
         )
         self.scan_downloads_check = QCheckBox(
             "Security-check every finished download (local virus scan + VirusTotal if set)"
@@ -768,18 +654,10 @@ class SettingsDialog(chrome.Dialog):
         self.virustotal_edit = QLineEdit(settings.virustotal_key)
         self.virustotal_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.virustotal_edit.setPlaceholderText("your VirusTotal API key (optional)")
-        self.virustotal_edit.setToolTip(
-            "Only the file's SHA-256 hash is sent to VirusTotal, never the file "
-            "itself. Get a free key at virustotal.com."
-        )
         security_form.addRow("VirusTotal key:", self.virustotal_edit)
         self.safebrowsing_edit = QLineEdit(settings.safebrowsing_key)
         self.safebrowsing_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.safebrowsing_edit.setPlaceholderText("your Google Safe Browsing API key (optional)")
-        self.safebrowsing_edit.setToolTip(
-            "When set, a download's URL is checked against Google Safe Browsing "
-            "before it starts. The URL is sent to Google, so this is opt-in."
-        )
         security_form.addRow("Safe Browsing key:", self.safebrowsing_edit)
         self.scanner_combo = QComboBox()
         for label, value in (
@@ -799,11 +677,8 @@ class SettingsDialog(chrome.Dialog):
         security_form.addRow("File types to scan:", self.scan_ext_edit)
         security_form.addRow(
             _note(
-                "Checksums come in MD5, SHA-1, SHA-256, SHA-512 and CRC32 - "
-                "paste any of them into Verify checksum and Grabline figures "
-                "out which. TLS certificates are always validated. There is "
-                "deliberately no quarantine/delete action: a flagged file "
-                "stays yours, because antivirus false positives are common."
+                "Checksums support MD5, SHA-1, SHA-256, SHA-512, and CRC32. TLS is always "
+                "validated. Nothing is ever quarantined or deleted."
             )
         )
 
@@ -862,9 +737,8 @@ class SettingsDialog(chrome.Dialog):
         stats_layout.addWidget(self.stats_label)
         stats_layout.addWidget(
             _note(
-                "Live graphs and per-server / per-category breakdowns are on the "
-                "Dashboard page in the sidebar. Statistics are stored locally and "
-                "never sent anywhere."
+                "Graphs and per-server breakdowns are on the Dashboard. "
+                "Statistics stay on this machine."
             )
         )
         stats_form = QFormLayout()
@@ -882,9 +756,6 @@ class SettingsDialog(chrome.Dialog):
         self.refresh_spin.setSingleStep(100)
         self.refresh_spin.setSuffix(" ms")
         self.refresh_spin.setValue(settings.dashboard_refresh_ms)
-        self.refresh_spin.setToolTip(
-            "Dashboard sampling interval (graphs animate at 60fps regardless)."
-        )
         stats_form.addRow("Dashboard refresh:", self.refresh_spin)
         stats_layout.addLayout(stats_form)
         clear_row = QHBoxLayout()
@@ -932,28 +803,15 @@ class SettingsDialog(chrome.Dialog):
             columns_row.addWidget(check)
         columns_row.addStretch(1)
         appearance_form.addRow("Visible columns:", columns_row)
-        appearance_form.addRow(
-            _note(
-                "The sun/moon button at the bottom of the sidebar switches "
-                "between light and dark instantly. Progress bars animate "
-                "smoothly by design; a font-size control is on the roadmap."
-            )
-        )
+        appearance_form.addRow(_note("Theme and accent apply instantly."))
 
         # ---- Advanced ----------------------------------------------------------
         advanced_form = self._add_form_tab(tabs, "Advanced")
         self.script_edit = QLineEdit(settings.script_on_complete)
         self.script_edit.setPlaceholderText("e.g. /usr/bin/my-script --scan")
-        self.script_edit.setToolTip(
-            "Run after every finished download; the file's full path is "
-            "appended as the last argument. Runs directly, never via a shell."
-        )
         advanced_form.addRow("Run command:", self.script_edit)
         self.ffmpeg_override_edit = QLineEdit(settings.ffmpeg_path or "")
         self.ffmpeg_override_edit.setPlaceholderText("blank = found automatically")
-        self.ffmpeg_override_edit.setToolTip(
-            "A specific ffmpeg binary to use instead of the automatically found/installed one."
-        )
         advanced_form.addRow("FFmpeg path override:", self.ffmpeg_override_edit)
         data_label = QLabel(str(paths.data_dir()))
         data_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -992,11 +850,8 @@ class SettingsDialog(chrome.Dialog):
         advanced_form.addRow("Maintenance:", db_row)
         advanced_form.addRow(
             _note(
-                "Deliberately absent: a remote-control API port (Grabline "
-                "never opens a network port - the browser talks over Native "
-                "Messaging) and a custom yt-dlp binary (it runs as a library "
-                "and updates with each release). Logging changes take effect "
-                "on the next launch."
+                "There's no remote-control port and no bundled yt-dlp binary. Logging changes "
+                "apply on the next launch."
             )
         )
 
@@ -1020,11 +875,7 @@ class SettingsDialog(chrome.Dialog):
         about_layout.addLayout(head)
         about_layout.addSpacing(6)
         about_layout.addWidget(
-            _note(
-                "A fast, open-source download manager. Free software under the "
-                "AGPL-3.0 license. No telemetry - Grabline never phones home; "
-                "the only network requests are the ones you ask for."
-            )
+            _note("A free, open-source download manager under the AGPL-3.0 license. No telemetry.")
         )
         links_row = QHBoxLayout()
         update_btn = QPushButton("Check for updates")
@@ -1037,7 +888,6 @@ class SettingsDialog(chrome.Dialog):
         report_btn = QPushButton("Report an issue")
         report_btn.clicked.connect(lambda: self._open_url(f"{_PROJECT_URL}/issues"))
         diag_btn = QPushButton("Copy diagnostics")
-        diag_btn.setToolTip("Version, OS and dependency info for bug reports - no personal data.")
         diag_btn.clicked.connect(self._copy_diagnostics)
         links_row.addWidget(project_btn)
         links_row.addWidget(releases_btn)
