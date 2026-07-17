@@ -119,7 +119,7 @@ class InspectorDialog(chrome.Dialog):
         super().__init__(parent)
         self._mirrors = mirrors
         self._checksum_work = checksum_work
-        self.setWindowTitle("Grabline - download inspector")
+        self.setWindowTitle("Download inspector")
         self.setMinimumSize(620, 480)
         layout = QVBoxLayout(self)
         self._status = QLabel(f"Inspecting {url} …")

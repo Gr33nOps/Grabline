@@ -23,7 +23,7 @@ from app.ui.format import human_bytes
 class DupesDialog(chrome.Dialog):
     def __init__(self, groups: list[list[Path]], parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Grabline - duplicate files")
+        self.setWindowTitle("Duplicate files")
         self.setMinimumSize(560, 380)
         layout = QVBoxLayout(self)
 

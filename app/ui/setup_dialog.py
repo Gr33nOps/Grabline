@@ -25,7 +25,7 @@ from app.ui import chrome
 class SetupDialog(chrome.Dialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Grabline - Browser Setup")
+        self.setWindowTitle("Browser setup")
         self.setMinimumWidth(560)
         layout = QVBoxLayout(self)
 

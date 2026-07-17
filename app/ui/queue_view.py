@@ -44,7 +44,7 @@ class QueueView(QWidget):
         header.setObjectName("Toolbar")
         hl = QHBoxLayout(header)
         hl.setContentsMargins(16, 10, 12, 10)
-        title = components.role_label("Queue Manager", "strong", size=design.FONT["h1"], bold=True)
+        title = components.role_label("Queue manager", "strong", size=design.FONT["h1"], bold=True)
         hl.addWidget(title)
         hl.addStretch(1)
         new_btn = components.IconButton("add", "New queue")
@@ -75,6 +75,11 @@ class QueueView(QWidget):
             if w is not None:
                 w.deleteLater()
         queues = {q.id: q for q in self.manager.list_queues()}
+        if not queues:
+            empty = components.role_label("No queues yet — press New queue to create one", "muted")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._body.addSpacing(48)
+            self._body.addWidget(empty)
         for index, queue in enumerate(queues.values(), start=1):
             self._body.addWidget(self._card(index, queue, queues))
             if self._editing == queue.id:

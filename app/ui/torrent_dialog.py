@@ -45,7 +45,7 @@ class AddTorrentDialog(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.meta = meta
-        self.setWindowTitle("Grabline - add torrent")
+        self.setWindowTitle("Add torrent")
         self.setMinimumWidth(540)
         layout = QVBoxLayout(self)
 
@@ -126,7 +126,7 @@ class CreateTorrentDialog(chrome.Dialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Grabline - create torrent")
+        self.setWindowTitle("Create torrent")
         self.setMinimumWidth(520)
         layout = QVBoxLayout(self)
         form = QFormLayout()

@@ -71,7 +71,7 @@ class SecurityDialog(chrome.Dialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Grabline - security check")
+        self.setWindowTitle("Security check")
         self.setMinimumSize(560, 460)
         layout = QVBoxLayout(self)
         self._verdict = QLabel(f"Checking {path.name} …")

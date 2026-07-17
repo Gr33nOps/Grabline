@@ -107,6 +107,7 @@ class StatTile(QFrame):
         self.value = role_label(
             "—", "accent" if accent else "strong", size=design.FONT["display"], bold=True
         )
+        self.value.setFont(design.numeric_font(self.value.font()))
         self.sub = role_label("", "muted", size=design.FONT["small"])
         self.sub.hide()
         lay.addWidget(cap)
@@ -319,6 +320,18 @@ class GraphCard(QFrame):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPolyline(QPolygonF(pts))
         painter.end()
+
+
+def cap_field_widths(root: QWidget, width: int = 320) -> None:
+    """Stop enum-ish fields (combos, spinners, time pickers) stretching to
+    the form's full width: a three-option dropdown does not need 800px.
+    Free-text inputs keep growing — paths and URLs genuinely want room."""
+    from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox, QTimeEdit
+
+    for cls in (QComboBox, QSpinBox, QDoubleSpinBox, QTimeEdit):
+        for field in root.findChildren(cls):
+            if field.maximumWidth() > width:
+                field.setMaximumWidth(width)
 
 
 def accent_button(text: str) -> QPushButton:

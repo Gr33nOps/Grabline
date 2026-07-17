@@ -72,7 +72,7 @@ class GalleryPanel(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.urls = urls
-        self.setWindowTitle("Grabline - images on this page")
+        self.setWindowTitle("Images on this page")
         self.setMinimumSize(640, 480)
 
         layout = QVBoxLayout(self)

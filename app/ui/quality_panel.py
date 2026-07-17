@@ -68,7 +68,7 @@ class QualityPanel(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.media = media
-        self.setWindowTitle("Grabline - choose quality")
+        self.setWindowTitle("Choose quality")
         self.setMinimumWidth(460)
 
         layout = QVBoxLayout(self)
@@ -79,14 +79,14 @@ class QualityPanel(chrome.Dialog):
         self._thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._thumbnail.setStyleSheet("background: rgba(127,127,127,0.15); border-radius: 4px;")
         header.addWidget(self._thumbnail)
+        from app.ui import components, design
+
         text_column = QVBoxLayout()
-        title = QLabel(media.title)
+        title = components.role_label(media.title, "strong", size=design.FONT["h1"], bold=True)
         title.setWordWrap(True)
-        title.setStyleSheet("font-weight: 600; font-size: 14px;")
         text_column.addWidget(title)
         detail_parts = [part for part in (media.uploader, duration_text(media.duration)) if part]
-        detail = QLabel("  •  ".join(detail_parts))
-        detail.setStyleSheet("color: gray;")
+        detail = components.role_label("  •  ".join(detail_parts), "muted")
         text_column.addWidget(detail)
         text_column.addStretch(1)
         header.addLayout(text_column, 1)
@@ -176,6 +176,7 @@ class QualityPanel(chrome.Dialog):
         buttons.accepted.connect(self._validate_and_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+        components.cap_field_widths(self)
 
         self._fetcher: _ThumbnailFetcher | None = None
         if media.thumbnail_url:

@@ -56,7 +56,7 @@ class GifDialog(chrome.Dialog):
         super().__init__(parent)
         self._ffmpeg_path = ffmpeg_path
         self._source = source
-        self.setWindowTitle("Grabline - convert to GIF")
+        self.setWindowTitle("Convert to GIF")
         self.setMinimumWidth(360)
 
         form = QFormLayout(self)

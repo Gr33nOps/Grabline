@@ -111,7 +111,7 @@ class BatchImportDialog(chrome.Dialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Grabline - import links")
+        self.setWindowTitle("Import links")
         self.setMinimumSize(520, 380)
 
         layout = QVBoxLayout(self)

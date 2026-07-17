@@ -63,7 +63,7 @@ class QueueManagerDialog(chrome.Dialog):
     def __init__(self, manager: DownloadManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.manager = manager
-        self.setWindowTitle("Grabline - queue manager")
+        self.setWindowTitle("Queue manager")
         self.setMinimumSize(460, 360)
         layout = QVBoxLayout(self)
         layout.addWidget(

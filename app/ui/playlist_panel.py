@@ -38,7 +38,7 @@ class PlaylistPanel(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.playlist = playlist
-        self.setWindowTitle("Grabline - playlist")
+        self.setWindowTitle("Playlist")
         self.setMinimumSize(480, 420)
 
         layout = QVBoxLayout(self)

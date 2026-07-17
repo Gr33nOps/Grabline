@@ -430,7 +430,7 @@ def stylesheet(p: Palette) -> str:
         border-radius: {RADIUS["md"]}px; font-weight: 700;
     }}
     QLabel#VpnBanner {{
-        color: {p.accent}; background: {p.accent_dim}; border: 1px solid {p.accent};
+        color: {p.text2}; background: {p.surface2}; border: 1px solid {p.border};
         border-radius: {RADIUS["md"]}px; padding: 8px 12px;
     }}
     QLabel[role="caption"] {{ color: {p.text3}; font-weight: 700; }}

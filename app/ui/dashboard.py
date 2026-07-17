@@ -59,7 +59,7 @@ class DashboardDialog(chrome.Dialog):
         self.manager = manager
         self._speed = SpeedTracker()
         self._system = SystemSampler()
-        self.setWindowTitle("Grabline - dashboard")
+        self.setWindowTitle("Dashboard")
         self.setMinimumSize(720, 560)
         layout = QVBoxLayout(self)
 

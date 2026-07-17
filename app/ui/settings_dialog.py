@@ -103,7 +103,7 @@ class SettingsDialog(chrome.Dialog):
     def __init__(self, settings: Settings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.settings = settings
-        self.setWindowTitle("Grabline - Settings")
+        self.setWindowTitle("Settings")
         self.setMinimumWidth(520)
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
@@ -1054,6 +1054,9 @@ class SettingsDialog(chrome.Dialog):
         )
         about_layout.addStretch(1)
         tabs.addTab(about_tab, "About")
+
+        # Enum-ish fields hug a sane width instead of stretching form-wide.
+        components.cap_field_widths(self)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel

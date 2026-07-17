@@ -17,6 +17,7 @@ from PySide6.QtCore import (
     QItemSelectionModel,
     QObject,
     QPoint,
+    QSize,
     Qt,
     QThread,
     QTimer,
@@ -322,7 +323,7 @@ class MainWindow(QMainWindow):
         nav = (
             ("downloads", "download", "Downloads", lambda: self._switch_view("downloads")),
             ("dashboard", "dashboard", "Dashboard", lambda: self._switch_view("dashboard")),
-            ("queue", "queue", "Queue Manager", lambda: self._switch_view("queue")),
+            ("queue", "queue", "Queue manager", lambda: self._switch_view("queue")),
             ("tools", "tools", "Tools", lambda: self._switch_view("tools")),
         )
         for key, icon_name, tip, handler in nav:
@@ -398,9 +399,19 @@ class MainWindow(QMainWindow):
             self._retintable.append(btn)
             lay.addWidget(btn)
 
-        add_btn("add", "Add URL", self._add_url, tip="Add a download from a URL")
-        add_btn("torrent", "Add Torrent", self._add_torrent_file, tip="Add a .torrent file")
-        add_btn("cloud", "Add Cloud", self._add_cloud, tip="Add a cloud/server download")
+        # One labeled primary action; secondary add-sources are icons with
+        # tooltips. (Also what lets the toolbar fit a 760px window.)
+        add_url = QPushButton("  Add URL")
+        add_url.setProperty("accent", "true")
+        add_url.setCursor(Qt.CursorShape.PointingHandCursor)
+        # accent_on is white in every palette/preset, so no retint needed.
+        add_url.setIcon(icons.svg_icon("add", theme.current().accent_on))
+        add_url.setIconSize(QSize(16, 16))
+        add_url.setToolTip("Add a download from a URL")
+        add_url.clicked.connect(self._add_url)
+        lay.addWidget(add_url)
+        add_btn("torrent", "", self._add_torrent_file, tip="Add a .torrent file")
+        add_btn("cloud", "", self._add_cloud, tip="Add a cloud/server download")
         lay.addWidget(self._sep())
         add_btn("pause", "", self._pause_selected, tip="Pause the selected downloads")
         add_btn("resume", "", self._resume_selected, tip="Resume the selected downloads")

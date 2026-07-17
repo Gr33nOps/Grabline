@@ -43,7 +43,7 @@ class LinkPanel(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.urls = urls
-        self.setWindowTitle("Grabline - links on this page")
+        self.setWindowTitle("Links on this page")
         self.setMinimumSize(560, 460)
 
         layout = QVBoxLayout(self)

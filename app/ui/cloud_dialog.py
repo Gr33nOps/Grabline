@@ -39,7 +39,7 @@ class CloudAccountsDialog(chrome.Dialog):
     def __init__(self, store: CredentialStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.store = store
-        self.setWindowTitle("Grabline - cloud accounts")
+        self.setWindowTitle("Cloud accounts")
         self.setMinimumSize(480, 340)
         layout = QVBoxLayout(self)
         layout.addWidget(
@@ -151,7 +151,7 @@ class CloudFolderDialog(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.files = files
-        self.setWindowTitle("Grabline - remote folder")
+        self.setWindowTitle("Remote folder")
         self.setMinimumSize(520, 380)
         layout = QVBoxLayout(self)
         total = sum(f.size or 0 for f in files)

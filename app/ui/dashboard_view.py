@@ -57,7 +57,7 @@ class DashboardView(QWidget):
         root.addLayout(
             self._tile_row(
                 [
-                    ("current", "Current", True),
+                    ("current", "Current", False),  # data, not an action: no accent
                     ("average", "Average", False),
                     ("peak", "Peak", False),
                     ("eta", "ETA (all)", False),
