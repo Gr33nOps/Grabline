@@ -260,7 +260,8 @@ class Sparkline(QWidget):
         self._last_push = 0.0
         self._push_interval = 0.5
         self._animating = False
-        self.setMinimumSize(72, 24)
+        self.setMinimumSize(48, 24)  # shrinks before its toolbar neighbours
+        self.setMaximumWidth(72)
         self.setToolTip("Recent total speed")
 
     def push(self, bytes_per_second: float) -> None:

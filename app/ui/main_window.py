@@ -387,7 +387,7 @@ class MainWindow(QMainWindow):
         bar = QFrame()
         bar.setObjectName("Toolbar")
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(10, 6, 12, 6)
+        lay.setContentsMargins(8, 6, 10, 6)
         lay.setSpacing(2)
 
         def add_btn(
@@ -419,14 +419,18 @@ class MainWindow(QMainWindow):
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Search downloads…")
         self.search_box.setClearButtonEnabled(True)
-        self.search_box.setFixedWidth(200)
+        # Compresses first when the window narrows, so the toolbar never
+        # overlaps itself at the 760px minimum window width.
+        self.search_box.setMinimumWidth(96)
+        self.search_box.setMaximumWidth(210)
         self.search_box.textChanged.connect(lambda _t: self._apply_filter())
         lay.addWidget(self.search_box)
         lay.addWidget(self._sep())
 
         self.speed_line = motion.Sparkline()
         lay.addWidget(self.speed_line)
-        self._total_speed = components.role_label("—", "accent", size=design.FONT["h2"], bold=True)
+        self._total_speed = components.role_label("—", "strong", size=design.FONT["h2"], bold=True)
+        self._total_speed.setFont(design.numeric_font(self._total_speed.font()))
         lay.addWidget(self._total_speed)
         return bar
 
@@ -495,6 +499,7 @@ class MainWindow(QMainWindow):
 
     def _build_table(self) -> QWidget:
         self.table = QTableWidget(0, len(_COLUMNS), self)
+        self.table.setObjectName("JobsTable")  # full-bleed styling in the QSS
         self.table.setHorizontalHeaderLabels(_COLUMNS)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
@@ -512,12 +517,35 @@ class MainWindow(QMainWindow):
         self.table.setColumnWidth(_COL_PROGRESS, 150)
         self.table.setColumnWidth(_COL_SPEED, 100)
         self.table.setColumnWidth(_COL_ETA, 84)
-        # Wide enough for "● Downloading" without clipping on Windows fonts.
-        self.table.setColumnWidth(_COL_STATUS, 136)
+        # Hugging pills need less room than the old filled chips did.
+        self.table.setColumnWidth(_COL_STATUS, 116)
         header.setStretchLastSection(False)
+        # Header alignment matches its column's content: text left, numbers
+        # right. (Qt centers headers by default, matching nothing.)
+        right = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        left = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        for col, align in (
+            (_COL_NAME, left),
+            (_COL_SIZE, right),
+            (_COL_PROGRESS, left),
+            (_COL_SPEED, right),
+            (_COL_ETA, right),
+            (_COL_STATUS, left),
+        ):
+            item = self.table.horizontalHeaderItem(col)
+            if item is not None:
+                item.setTextAlignment(align)
         from PySide6.QtWidgets import QHeaderView
 
         header.setSectionResizeMode(_COL_NAME, QHeaderView.ResizeMode.Stretch)
+        # The empty state: one quiet line naming the action that exists,
+        # instead of a bare surface. Purely visual; hidden once rows appear.
+        self._empty_label = components.role_label(
+            "Nothing here yet — paste a link or press Add URL", "muted"
+        )
+        self._empty_label.setParent(self.table.viewport())
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_label.hide()
         self._apply_table_prefs()
         return self.table
 
@@ -1966,6 +1994,8 @@ class MainWindow(QMainWindow):
         self._update_filter_counts(views)
         self._update_status_info(views)
         self._apply_filter()
+        self._empty_label.setGeometry(self.table.viewport().rect())
+        self._empty_label.setVisible(not views)
         # Keep an open detail drawer live.
         drawer_id = self._drawer.current_id()
         if self._drawer.isVisible() and drawer_id is not None:
@@ -2103,8 +2133,14 @@ class MainWindow(QMainWindow):
             icon_item = QTableWidgetItem()
             icon_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(row, _COL_ICON, icon_item)
+            right = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            num_font = design.numeric_font(self.table.font())
             for col in (_COL_NAME, _COL_SIZE, _COL_SPEED, _COL_ETA):
-                self.table.setItem(row, col, QTableWidgetItem(""))
+                item = QTableWidgetItem("")
+                if col != _COL_NAME:  # numbers: right-aligned, tabular digits
+                    item.setTextAlignment(right)
+                    item.setFont(num_font)
+                self.table.setItem(row, col, item)
             bar = motion.SmoothProgressBar()
             self.table.setCellWidget(row, _COL_PROGRESS, self._pad(bar))
             self._progress_bars[view.id] = bar
@@ -2115,8 +2151,10 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _pad(widget: QWidget) -> QWidget:
         """Wrap a cell widget with a little horizontal padding so it doesn't
-        touch the gridless cell edges."""
+        touch the gridless cell edges. The holder is transparent (see the
+        #CellHolder rule) so row hover/selection paint straight through."""
         holder = QWidget()
+        holder.setObjectName("CellHolder")
         lay = QHBoxLayout(holder)
         lay.setContentsMargins(6, 0, 6, 0)
         lay.addWidget(widget)
@@ -2167,7 +2205,8 @@ class MainWindow(QMainWindow):
         speed = self._smoothed_speed(view)
         speed_item = self._cell(row, _COL_SPEED)
         speed_item.setText(motion.fmt_speed(speed) if view.status is JobStatus.DOWNLOADING else "—")
-        speed_item.setForeground(QColor(p.accent if speed > 0 else p.text3))
+        # Speed is data, not an action: primary text while moving, muted idle.
+        speed_item.setForeground(QColor(p.text if speed > 0 else p.text3))
 
         eta = "—"
         if view.status is JobStatus.DOWNLOADING and speed > 1 and view.total_size:

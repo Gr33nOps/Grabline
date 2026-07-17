@@ -55,11 +55,12 @@ def role_label(text: str, role: str, *, size: int | None = None, bold: bool = Fa
 
 
 class StatusPill(QLabel):
-    """A subtle, rounded status label with a leading dot, coloured by status."""
+    """A quiet status readout: colored dot + tinted label, no fill. Eight
+    filled chips in a column read as a wall of buttons; text reads as state."""
 
     def __init__(self, status: str = "queued", parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.set_status(status)
 
     def set_status(self, status: str) -> None:
@@ -68,9 +69,8 @@ class StatusPill(QLabel):
         label = _STATUS_LABEL.get(status, status.title())
         self.setText(f"●  {label}")
         self.setStyleSheet(
-            f"QLabel {{ color: {color}; background: {_dim(color, 0.14)};"
-            f" border-radius: 4px; padding: 2px 9px; font-size: {design.FONT['small']}pt;"
-            f" font-weight: 600; }}"
+            f"QLabel {{ color: {color}; background: transparent;"
+            f" font-size: {design.FONT['small']}pt; font-weight: 600; }}"
         )
 
 
@@ -148,9 +148,20 @@ class IconButton(QPushButton):
         self.retint()
 
     def retint(self) -> None:
+        # Danger buttons rest neutral and only turn red on hover: a toolbar
+        # with a permanently red trash can reads as an alarm, not a tool.
         p = theme.current()
-        color = p.st_failed if self._danger else p.text2
-        self.setIcon(svg_icon(self._icon_name, color))
+        self.setIcon(svg_icon(self._icon_name, p.text2))
+
+    def enterEvent(self, event: object) -> None:
+        if self._danger:
+            self.setIcon(svg_icon(self._icon_name, theme.current().warn))
+        super().enterEvent(event)  # type: ignore[arg-type]
+
+    def leaveEvent(self, event: object) -> None:
+        if self._danger:
+            self.setIcon(svg_icon(self._icon_name, theme.current().text2))
+        super().leaveEvent(event)  # type: ignore[arg-type]
 
 
 class SidebarButton(QPushButton):

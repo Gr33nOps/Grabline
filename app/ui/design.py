@@ -141,6 +141,20 @@ RADIUS = {"sm": 4, "md": 6, "lg": 8, "pill": 999}
 FONT = {"caption": 8, "small": 9, "body": 10, "h2": 11, "h1": 13, "display": 16}
 
 
+def numeric_font(base: object | None = None) -> object:
+    """A copy of ``base`` (or the default font) with tabular figures enabled,
+    so live numbers (speeds, sizes, ETAs, percentages) keep every digit the
+    same width and columns stop twitching as values tick."""
+    import contextlib
+
+    from PySide6.QtGui import QFont
+
+    font = QFont(base) if isinstance(base, QFont) else QFont()
+    with contextlib.suppress(AttributeError, ValueError):  # Qt < 6.7
+        font.setFeature(QFont.Tag("tnum"), 1)
+    return font
+
+
 #: Accent presets offered in Settings → Appearance ("" = the brand blue).
 ACCENT_PRESETS: tuple[tuple[str, str], ...] = (
     ("Grabline Blue", ""),
@@ -247,7 +261,9 @@ def stylesheet(p: Palette) -> str:
         background: {p.accent}; color: {p.accent_on}; border: 1px solid {p.accent};
     }}
     QPushButton[accent="true"]:hover {{ background: {p.accent_h}; }}
-    QPushButton[flat="true"] {{ background: transparent; border: none; color: {p.text2}; }}
+    QPushButton[flat="true"] {{
+        background: transparent; border: none; color: {p.text2}; padding: 5px 9px;
+    }}
     QPushButton[flat="true"]:hover {{ background: {p.row_hover}; color: {p.text}; }}
     QPushButton[danger="true"]:hover {{ border-color: {p.warn}; color: {p.warn}; }}
 
@@ -313,6 +329,13 @@ def stylesheet(p: Palette) -> str:
     QTableWidget::item, QTreeWidget::item, QListWidget::item {{
         padding: 3px 4px; border: none;
     }}
+    /* The downloads table is the content plane, not a floating card: no
+       border of its own (the filter bar above and sidebar beside it already
+       draw the edges), square corners, and no doubled lines. */
+    QTableWidget#JobsTable {{ border: none; border-radius: 0; }}
+    /* Cell-widget wrappers must never paint: an opaque holder punches a
+       bg-colored hole through row hover and selection. */
+    QWidget#CellHolder {{ background: transparent; }}
     QTableView::item:hover, QTreeView::item:hover, QListView::item:hover {{
         background: {p.row_hover};
     }}
@@ -323,12 +346,10 @@ def stylesheet(p: Palette) -> str:
         background: {p.surface2};
         color: {p.text3};
         border: none;
-        border-right: 1px solid {p.border2};
         border-bottom: 1px solid {p.border};
-        padding: 5px 8px;
+        padding: 6px 10px;
         font-size: {FONT["small"]}pt;
     }}
-    QHeaderView::section:last {{ border-right: none; }}
 
     /* --- scrollbars --- */
     QScrollBar:vertical {{ background: transparent; width: 9px; margin: 2px; }}
