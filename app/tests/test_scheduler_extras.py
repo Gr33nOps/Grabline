@@ -143,7 +143,10 @@ def test_wait_for_network_gates_and_fast_retries(db: Database, monkeypatch: pyte
         monkeypatch.setattr("app.core.manager.connectivity.is_online", lambda: True)
         manager._net_checked = 0.0
         assert manager.downloads_allowed_now() is True
-        assert manager._retry_at[42] == 0.0
+        # The reconnect zeroes the backoff; the live scheduler thread may then
+        # consume the (stale) entry at any moment - both outcomes mean "retry
+        # now", so never assert the key still exists (that raced in CI).
+        assert manager._retry_at.get(42, 0.0) == 0.0
     finally:
         manager.shutdown()
 
