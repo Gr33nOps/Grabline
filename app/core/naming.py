@@ -64,10 +64,28 @@ _UGLY_STEMS = frozenset(
 )
 
 
+#: 8-4-4-4-12 UUIDs and long bare hex runs - cache keys, not names.
+_UUID_STEM = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_HEX_STEM = re.compile(r"^[0-9a-f]{16,}$")
+
+
 def is_ugly_name(name: str) -> bool:
-    """Would a human curse this filename? (videoplayback.mp4, index, 1234…)"""
+    """Would a human curse this filename? (videoplayback.mp4, index, 1234…,
+    1434659607842-pgv4ql-1642193429401.mp4)"""
     stem = Path(name).stem.lower()
-    return len(stem) < 3 or stem.isdigit() or stem in _UGLY_STEMS
+    if len(stem) < 3 or stem.isdigit() or stem in _UGLY_STEMS:
+        return True
+    if _UUID_STEM.match(stem) or _HEX_STEM.match(stem):
+        return True
+    # ID soup: a long spaceless token that is mostly digits is a CDN asset
+    # key (timestamps, video ids), not a title. Real release names carry
+    # their digits sparsely ("Movie.2024.1080p" is ~25% digits), so half the
+    # characters being digits separates the two cleanly.
+    if " " not in stem and len(stem) >= 12:
+        digits = sum(c.isdigit() for c in stem)
+        if digits / len(stem) >= 0.5:
+            return True
+    return False
 
 
 def improved_filename(url: str, page_title: str | None, content_type: str | None = None) -> str:
@@ -130,6 +148,9 @@ def clean_page_title(title: str | None) -> str | None:
     if not title:
         return None
     cleaned = title.strip()
+    # Browsers prepend the unread-notification badge to the tab title, and the
+    # extension hands us the tab title verbatim: "(93) Video - YouTube".
+    cleaned = re.sub(r"^\(\d+\)\s*", "", cleaned)
     for suffix in (
         " - YouTube",
         " - YouTube Music",

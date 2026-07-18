@@ -49,6 +49,14 @@ def test_is_ugly_name():
     assert is_ugly_name("f.bin")
     assert not is_ugly_name("My Vacation 2026.mp4")
     assert not is_ugly_name("lecture-03-recursion.pdf")
+    # CDN asset keys: digit soup, UUIDs, hex - a title beats all of these.
+    assert is_ugly_name("1434659607842-pgv4ql-1642193429401.mp4")  # the IMDb trailer case
+    assert is_ugly_name("vi3341271833.mp4")
+    assert is_ugly_name("a3f9c2e8b1d04567.ts")
+    assert is_ugly_name("f81d4fae-7dec-11d0-a765-00a0c91e6bf6.mp4")
+    # Release-style names keep their sparse digits.
+    assert not is_ugly_name("Top.Gun.Maverick.2022.1080p.WEBRip.mp4")
+    assert not is_ugly_name("S01E02 - The Heist.mkv")
 
 
 def test_improved_filename_rescues_ugly_names():
@@ -101,3 +109,16 @@ def test_rename_rules_result_is_sanitized():
 
 def test_no_rules_is_a_no_op():
     assert naming.apply_rename_rules("as-is.zip", []) == "as-is.zip"
+
+
+def test_clean_page_title_strips_badge_and_boilerplate():
+    from app.core.naming import clean_page_title
+
+    # The browser's unread badge rides in on every tab title.
+    assert clean_page_title("(93) Cool Video - YouTube") == "Cool Video"
+    assert clean_page_title("(2) YouTube") is None  # badge + site name = nothing
+    assert clean_page_title("YouTube") is None
+    assert clean_page_title("Cool Video - YouTube") == "Cool Video"
+    # Known casualty, accepted: a rare title that itself starts with "(n) "
+    # loses its prefix. Badges on every tab beat one film's typography.
+    assert clean_page_title("(500) Days of Summer") == "Days of Summer"
