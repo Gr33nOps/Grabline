@@ -8,7 +8,9 @@ the checkpointer, and the UI thread can all talk to one Database instance.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import sqlite3
 import threading
 from collections.abc import Mapping, Sequence
@@ -181,6 +183,12 @@ class Database:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
+        # The DB holds API keys and browser-session cookies. Lock the file to
+        # the owner on POSIX (defense in depth behind the 0700 data dir);
+        # best-effort, and a no-op on Windows where the profile is ACL'd.
+        if os.name == "posix":
+            with contextlib.suppress(OSError):
+                os.chmod(self._path, 0o600)
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.execute("PRAGMA journal_mode=WAL")

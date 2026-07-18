@@ -175,7 +175,7 @@ def main() -> int:
 
     data_dir = paths.data_dir()
     try:
-        data_dir.mkdir(parents=True, exist_ok=True)
+        paths.ensure_private_dir(data_dir)
         probe = data_dir / ".write-test"
         probe.write_bytes(b"")
         probe.unlink()
