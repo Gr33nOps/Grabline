@@ -37,6 +37,33 @@ _SINGLE_SUFFIXES = (".gz", ".bz2", ".xz")
 
 _SINGLE_MODULES = {".gz": gzip, ".bz2": bz2, ".xz": lzma}
 
+#: Decompression-bomb guard (CWE-409). A 50 KB zip can declare (or stream)
+#: 50 GB of zeros; without a ceiling, extraction fills the disk. The cap is
+#: generous - real archives, even large game or dataset bundles, land far
+#: under it - so it never rejects a legitimate download, only a deliberate
+#: bomb. Both the declared total (cheap, pre-extraction) and the actually
+#: streamed bytes (for archives that lie about their size) are checked.
+_MAX_EXTRACTED_BYTES = 20 * 1024 * 1024 * 1024  # 20 GiB
+_BOMB_MESSAGE = (
+    "refusing to extract this archive: it expands to more than 20 GB, which "
+    "is characteristic of a decompression bomb"
+)
+
+
+class _LimitedWriter:
+    """A file object that raises once more than ``limit`` bytes are written,
+    so a lying archive can't stream past the declared-size check."""
+
+    def __init__(self, sink: object, limit: int) -> None:
+        self._sink = sink
+        self._remaining = limit
+
+    def write(self, data: bytes) -> int:
+        self._remaining -= len(data)
+        if self._remaining < 0:
+            raise DownloadError(_BOMB_MESSAGE)
+        return self._sink.write(data)  # type: ignore[attr-defined]
+
 
 class PasswordRequired(DownloadError):
     """The archive is encrypted and none of the offered passwords opened it."""
@@ -226,6 +253,13 @@ def extract(
     return target
 
 
+def _check_declared_size(total: int) -> None:
+    """Refuse before extracting when the archive's own table of contents adds
+    up to more than the bomb ceiling. Cheap - no bytes written yet."""
+    if total > _MAX_EXTRACTED_BYTES:
+        raise DownloadError(_BOMB_MESSAGE)
+
+
 def _extract_single(path: Path, dest: Path | None) -> Path:
     """Decompress a bare .gz/.bz2/.xz next to itself (data.csv.gz -> data.csv)."""
     name = _strip_suffix(path.name) or path.name + ".out"
@@ -233,11 +267,16 @@ def _extract_single(path: Path, dest: Path | None) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     module = _SINGLE_MODULES[Path(path.name.lower()).suffix]
     try:
+        # .bz2/.xz declare no size, so the ceiling is enforced on the stream
+        # itself: the writer raises the moment output passes the cap.
         with module.open(path, "rb") as source, open(target, "wb") as sink:
-            shutil.copyfileobj(source, sink)
+            shutil.copyfileobj(source, _LimitedWriter(sink, _MAX_EXTRACTED_BYTES))
     except (OSError, EOFError, lzma.LZMAError) as exc:
         target.unlink(missing_ok=True)
         raise DownloadError(f"the file could not be decompressed ({exc})") from exc
+    except DownloadError:
+        target.unlink(missing_ok=True)
+        raise
     return target
 
 
@@ -249,6 +288,10 @@ def _extract_zip(
         for member in selected:
             if not _is_within(target, target / member):
                 raise DownloadError("refusing to extract an archive with unsafe paths")
+        chosen = frozenset(selected)
+        _check_declared_size(
+            sum(info.file_size for info in bundle.infolist() if info.filename in chosen)
+        )
         encrypted = any(
             info.flag_bits & 0x1 for info in bundle.infolist() if _wanted(info.filename, members)
         )
@@ -274,6 +317,7 @@ def _extract_tar(path: Path, target: Path, members: Sequence[str] | None) -> Non
         for member in selected:
             if not _is_within(target, target / member.name):
                 raise DownloadError("refusing to extract an archive with unsafe paths")
+        _check_declared_size(sum(m.size for m in selected if m.isfile()))
         # data filter (Python 3.12+) strips setuid bits, device nodes, etc.
         bundle.extractall(target, members=selected, filter="data")
 
