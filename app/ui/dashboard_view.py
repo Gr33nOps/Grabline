@@ -114,8 +114,8 @@ class DashboardView(QWidget):
         self._timer.timeout.connect(self._tick)
         # Sample continuously, even while the dashboard isn't the visible page,
         # so the graphs keep a real rolling history instead of starting from
-        # empty each time it's opened. A hidden GraphCard's update() is a no-op,
-        # so only the cheap sampling runs; no wasted painting.
+        # empty each time it's opened. Off screen the tick takes its cheap
+        # path - see _tick - and while the whole window is hidden it stops.
         self._timer.start()
 
     def _tile_row(self, specs: list[tuple[str, str, bool]]) -> QHBoxLayout:
@@ -165,6 +165,20 @@ class DashboardView(QWidget):
             if v.status is JobStatus.DOWNLOADING and v.total_size
         )
         reading = self._speed.update(downloaded, remaining if active else None)
+
+        # Off screen: keep the graphs' rolling history and nothing else. The
+        # tiles, tables and VPN label are read, not stored, so computing them
+        # for nobody is pure cost - and this page is off screen most of the
+        # time the app is open.
+        if not self.isVisible():
+            system = self._system.sample()
+            self.g_download.push([reading.current])
+            self.g_upload.push([self.manager.torrent_upload_rate()])
+            self.g_network.push([system.net_recv_per_sec, system.net_sent_per_sec])
+            self.g_cpu.push([system.cpu_percent])
+            self.g_disk.push([system.disk_bytes_per_sec])
+            return
+
         self._tiles["current"].set_value(motion.fmt_speed(reading.current))
         self._tiles["average"].set_value(motion.fmt_speed(reading.average))
         self._tiles["peak"].set_value(motion.fmt_speed(reading.peak))

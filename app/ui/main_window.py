@@ -1993,6 +1993,11 @@ class MainWindow(QMainWindow):
     def refresh(self) -> None:
         if self._shutting_down:
             return
+        if not self.isVisible():
+            # Hidden to the tray. Nothing here is stored - every line below
+            # writes into widgets nobody is looking at - and the manager keeps
+            # downloading regardless. showEvent refreshes on the way back.
+            return
         views = self.manager.snapshot()
         # Optimistic removal: a force-removed running job stays in the DB until
         # its worker actually stops - hide it from the list right away.
@@ -2318,6 +2323,12 @@ class MainWindow(QMainWindow):
             self.begin_add_url(urls[0])
 
     # --------------------------------------------------------------- close
+
+    def showEvent(self, event: object) -> None:
+        # Coming back from the tray: refresh() skipped every tick while hidden,
+        # so catch the list up before the window is painted.
+        super().showEvent(event)  # type: ignore[arg-type]
+        self.refresh()
 
     def changeEvent(self, event: QEvent) -> None:
         # Minimize-to-tray (Settings → General): hide instead of the taskbar.

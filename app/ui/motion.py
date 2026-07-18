@@ -291,6 +291,7 @@ class Sparkline(QWidget):
             self._push_interval = self._push_interval * 0.7 + gap * 0.3
         self._last_push = now
         self._samples.append(max(0.0, bytes_per_second))
+        self._sync_animation()
         self.update()
 
     def set_samples(self, samples: Iterable[float]) -> None:
@@ -299,29 +300,44 @@ class Sparkline(QWidget):
         self._samples.clear()
         self._samples.extend(max(0.0, s) for s in samples)
         self._last_push = 0.0
+        self._sync_animation()
         self.update()
 
     def clear(self) -> None:
         self._samples.clear()
         self._last_push = 0.0
+        self._sync_animation()
         self.update()
+
+    def _has_motion(self) -> bool:
+        """Is there anything on screen that moves? A sparkline of nothing but
+        zeros paints no line at all, so scrolling it is pure waste - and that
+        is the app's whole idle state."""
+        return self.isVisible() and any(self._samples)
+
+    def _sync_animation(self) -> None:
+        """Hold a ticker subscription only while something actually moves."""
+        wanted = self._has_motion()
+        if wanted == self._animating:
+            return
+        self._animating = wanted
+        if wanted:
+            ticker().tick.connect(self.update)
+            ticker().subscribe()
+            return
+        import contextlib
+
+        with contextlib.suppress(RuntimeError, TypeError):  # app teardown
+            ticker().tick.disconnect(self.update)
+            ticker().unsubscribe()
 
     def showEvent(self, event: object) -> None:
         super().showEvent(event)  # type: ignore[arg-type]
-        if not self._animating:
-            ticker().tick.connect(self.update)
-            ticker().subscribe()
-            self._animating = True
+        self._sync_animation()
 
     def hideEvent(self, event: object) -> None:
         super().hideEvent(event)  # type: ignore[arg-type]
-        if self._animating:
-            self._animating = False
-            import contextlib
-
-            with contextlib.suppress(RuntimeError, TypeError):  # app teardown
-                ticker().tick.disconnect(self.update)
-                ticker().unsubscribe()
+        self._sync_animation()
 
     def paintEvent(self, _event: object) -> None:
         import time

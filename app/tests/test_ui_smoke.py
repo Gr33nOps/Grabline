@@ -83,6 +83,7 @@ def test_main_window_lists_jobs(db: Database, tmp_path: Path):
 
         job = db.create_job("http://example.invalid/x.bin", str(tmp_path), "x.bin")
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         window.refresh()
         assert window.table.rowCount() == 1
         # Name lives in column 1 (column 0 is the type icon).
@@ -174,6 +175,7 @@ def test_duplicate_prompt_yes_starts_a_new_download(db: Database, tmp_path: Path
         url = "https://example.invalid/dup.bin"
         db.create_job(url, str(tmp_path), "dup.bin")  # the existing duplicate
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
 
         monkeypatch.setattr(
             QMessageBox,
@@ -252,6 +254,7 @@ def test_remove_selected_and_clear_completed(db: Database, tmp_path: Path):
         ids = [db.create_job(f"http://x/{i}.bin", str(tmp_path), f"{i}.bin").id for i in range(3)]
         db.set_job_status(ids[2], JobStatus.COMPLETED)
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         window.refresh()
         assert window.table.rowCount() == 3
 
@@ -274,6 +277,7 @@ def test_main_window_sidebar_is_pure_navigation(db: Database, tmp_path: Path):
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         # The rail is navigation only; every tool moved to the downloads
         # toolbar, so there is no Tools page and no overflow menu.
         assert set(window._nav) == {"downloads", "dashboard", "queue", "settings"}
@@ -320,6 +324,7 @@ def test_main_window_search_filter(db: Database, tmp_path: Path):
         db.create_job("http://example.invalid/report.pdf", str(tmp_path), "report.pdf")
         db.create_job("http://example.invalid/movie.mkv", str(tmp_path), "movie.mkv")
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         window.refresh()
         assert window.table.rowCount() == 2
         window.search_box.setText("movie")
@@ -646,6 +651,7 @@ def test_quality_label_add_skips_analysis(db: Database, tmp_path: Path, monkeypa
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         queued: list[tuple[str, str, str, dict[str, object]]] = []
 
         class _JobStub:
@@ -776,6 +782,7 @@ def test_global_busy_indicator_tracks_background_work(db: Database, tmp_path: Pa
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         assert window._busy_bar.isHidden()
 
         window._busy_begin()
@@ -814,6 +821,7 @@ def test_detail_graph_history_survives_switching(db: Database, tmp_path: Path):
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         a = manager.add_url("https://example.com/a.zip", dest_dir=tmp_path)
         b = manager.add_url("https://example.com/b.zip", dest_dir=tmp_path)
         for job in (a, b):
@@ -850,6 +858,7 @@ def test_resize_overlay_masks_border_and_hit_tests_edges(db: Database, tmp_path:
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         window.resize(1000, 600)
         window.show()
         QApplication.processEvents()
@@ -879,6 +888,7 @@ def test_toolbar_has_one_torrent_dropdown(db: Database, tmp_path: Path):
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         labels = {a.text() for menu in window.findChildren(QMenu) for a in menu.actions()}
         # All three torrent actions are grouped under one dropdown.
         assert {"Add torrent…", "Search torrents…", "Create torrent…"} <= labels
@@ -961,6 +971,7 @@ def test_close_to_tray_explains_itself_once(db: Database, tmp_path: Path):
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         shown: list[tuple[str, str]] = []
 
         class FakeTray:
@@ -994,6 +1005,7 @@ def test_close_to_tray_off_quits_normally(db: Database, tmp_path: Path):
     manager = DownloadManager(db, settings=settings, max_concurrent=0)
     try:
         window = MainWindow(manager, settings)
+        window.show()  # refresh() only updates a window a user can see
         window.close_to_tray = True
         window.show()
         event = QCloseEvent()
@@ -1053,3 +1065,65 @@ def test_graph_scale_eases_down_but_snaps_up():
     for _ in range(400):  # and still gets there
         eased = ease_scale(eased, 100.0)
     assert abs(eased - 100.0) < 1.0
+
+
+def test_idle_widgets_hold_no_ticker_subscription(db: Database, tmp_path: Path):
+    """The 60fps heartbeat must have zero subscribers when nothing moves.
+
+    A sparkline of nothing but zeros paints no line at all, and an idle
+    Grabline used to scroll exactly that - forever, on every page, even hidden
+    to the tray. Measured 13% of a core doing it."""
+    from PySide6.QtGui import QColor
+
+    from app.ui import motion
+    from app.ui.graph import Series, TimeGraph
+
+    _qapp()
+    ticker = motion.ticker()
+    before = ticker._subs
+
+    spark = motion.Sparkline()
+    graph = TimeGraph("CPU", [Series("cpu", QColor("#ff0000"))], lambda v: "")
+    spark.show()
+    graph.show()
+    assert ticker._subs == before  # nothing to draw yet
+
+    for _ in range(4):  # zeros are still nothing to draw
+        spark.push(0.0)
+        graph.push([0.0])
+    assert ticker._subs == before
+    assert spark._animating is False
+    assert graph._animating is False
+
+    spark.push(1024.0)  # real data -> animate
+    graph.push([37.0])
+    assert spark._animating is True
+    assert graph._animating is True
+    assert ticker._subs == before + 2
+
+    spark.hide()  # off screen -> stop, even with data
+    graph.hide()
+    assert ticker._subs == before
+    assert ticker._timer.isActive() is (before > 0)
+
+    spark.deleteLater()
+    graph.deleteLater()
+
+
+def test_hidden_window_skips_refresh(db: Database, tmp_path: Path):
+    """Hidden to the tray, refresh() writes into widgets nobody can see."""
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        db.create_job("http://example.invalid/x.bin", str(tmp_path), "x.bin")
+        window = MainWindow(manager, settings)
+        window.hide()
+        window.refresh()
+        assert window.table.rowCount() == 0  # skipped entirely
+
+        window.show()  # showEvent catches the list up
+        assert window.table.rowCount() == 1
+    finally:
+        manager.shutdown()

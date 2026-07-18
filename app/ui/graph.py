@@ -63,27 +63,39 @@ class TimeGraph(QWidget):
         self._last_push = now
         for value, serie in zip(values, self.series, strict=False):
             serie.samples.append(max(0.0, value))
+        self._sync_animation()
         self.update()
 
     def sizeHint(self) -> QSize:
         return QSize(260, 120)
 
     # Repaint on the shared 60fps ticker while on screen, so the curve scrolls
-    # between pushes rather than jumping a whole sample every refresh.
-    def showEvent(self, event: object) -> None:
-        super().showEvent(event)  # type: ignore[arg-type]
-        if not self._animating:
+    # between pushes rather than jumping a whole sample every refresh - but
+    # only while there is a curve to scroll. A graph of flat zeros paints
+    # nothing, and animating nothing is what an idle Grabline was doing.
+    def _has_motion(self) -> bool:
+        return self.isVisible() and any(any(s.samples) for s in self.series)
+
+    def _sync_animation(self) -> None:
+        wanted = self._has_motion()
+        if wanted == self._animating:
+            return
+        self._animating = wanted
+        if wanted:
             motion.ticker().tick.connect(self.update)
             motion.ticker().subscribe()
-            self._animating = True
+            return
+        with contextlib.suppress(RuntimeError, TypeError):  # app teardown
+            motion.ticker().tick.disconnect(self.update)
+            motion.ticker().unsubscribe()
+
+    def showEvent(self, event: object) -> None:
+        super().showEvent(event)  # type: ignore[arg-type]
+        self._sync_animation()
 
     def hideEvent(self, event: object) -> None:
         super().hideEvent(event)  # type: ignore[arg-type]
-        if self._animating:
-            self._animating = False
-            with contextlib.suppress(RuntimeError, TypeError):  # app teardown
-                motion.ticker().tick.disconnect(self.update)
-                motion.ticker().unsubscribe()
+        self._sync_animation()
 
     def _scale_max(self) -> float:
         if self._fixed_max is not None:
