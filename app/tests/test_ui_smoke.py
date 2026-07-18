@@ -948,3 +948,57 @@ def test_reset_is_cancelable(db: Database, monkeypatch):
 
     assert Settings(db).max_concurrent == 9
     assert dialog.concurrent_spin.value() == 9
+
+
+def test_close_to_tray_explains_itself_once(db: Database, tmp_path: Path):
+    """Closing the window hides it. Say so the first time, or Grabline looks
+    like it quit and the running downloads look lost."""
+    from PySide6.QtGui import QCloseEvent
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        shown: list[tuple[str, str]] = []
+
+        class FakeTray:
+            def showMessage(self, title, body, icon, msecs):
+                shown.append((title, body))
+
+        window.tray = FakeTray()
+        window.close_to_tray = True  # a tray exists
+        window.show()
+
+        window.closeEvent(QCloseEvent())
+        assert window.isHidden()
+        assert len(shown) == 1
+        assert "still running" in shown[0][0]
+
+        window.show()
+        window.closeEvent(QCloseEvent())
+        assert len(shown) == 1  # said once, never nagged again
+        assert settings.tray_hint_shown is True
+    finally:
+        manager.shutdown()
+
+
+def test_close_to_tray_off_quits_normally(db: Database, tmp_path: Path):
+    from PySide6.QtGui import QCloseEvent
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    settings.close_to_tray = False
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        window.close_to_tray = True
+        window.show()
+        event = QCloseEvent()
+        window.closeEvent(event)
+        assert event.isAccepted()
+        assert settings.tray_hint_shown is False  # nothing was hidden
+    finally:
+        manager.shutdown()
