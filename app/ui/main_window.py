@@ -30,6 +30,7 @@ from PySide6.QtGui import (
     QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
+    QFontMetrics,
     QGuiApplication,
 )
 from PySide6.QtWidgets import (
@@ -388,11 +389,21 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.search_box)
         lay.addWidget(self._sep())
 
+        # Both of these are given a fixed width. They sit at the end of the
+        # toolbar, so anything that changes width as the speed changes ("—" ->
+        # "1.98 MB/s") drags the search box and every button left and right
+        # twice a second.
         self.speed_line = motion.Sparkline()
-        self.speed_line.setMaximumWidth(72)  # compact in the toolbar
+        self.speed_line.setFixedWidth(72)  # compact in the toolbar
         lay.addWidget(self.speed_line)
         self._total_speed = components.role_label("—", "strong", size=design.FONT["h2"], bold=True)
         self._total_speed.setFont(design.numeric_font(self._total_speed.font()))
+        self._total_speed.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        # Widest reading the formatter can produce, measured in the real font
+        # rather than guessed at in pixels.
+        self._total_speed.setFixedWidth(
+            QFontMetrics(self._total_speed.font()).horizontalAdvance("1023.99 MB/s") + 4
+        )
         lay.addWidget(self._total_speed)
         return bar
 
@@ -2157,9 +2168,9 @@ class MainWindow(QMainWindow):
     def _pad(widget: QWidget) -> QWidget:
         """Wrap a cell widget with a little horizontal padding so it doesn't
         touch the gridless cell edges. The holder is transparent (see the
-        #CellHolder rule) so row hover/selection paint straight through."""
+        #BareContainer rule) so row hover/selection paint straight through."""
         holder = QWidget()
-        holder.setObjectName("CellHolder")
+        holder.setObjectName("BareContainer")
         lay = QHBoxLayout(holder)
         lay.setContentsMargins(6, 0, 6, 0)
         lay.addWidget(widget)

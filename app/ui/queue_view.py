@@ -103,6 +103,8 @@ class QueueView(QWidget):
         lay.addWidget(badge)
 
         text = QWidget()
+        # Layout only - without this it paints the page background over the card.
+        text.setObjectName("BareContainer")
         tl = QVBoxLayout(text)
         tl.setContentsMargins(0, 0, 0, 0)
         tl.setSpacing(1)

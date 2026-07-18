@@ -1002,3 +1002,54 @@ def test_close_to_tray_off_quits_normally(db: Database, tmp_path: Path):
         assert settings.tray_hint_shown is False  # nothing was hidden
     finally:
         manager.shutdown()
+
+
+def _graph_x_extents(
+    widget, plot_left: float, plot_width: float, frac: float
+) -> tuple[float, float]:
+    """Leftmost and rightmost point x the graph would paint at animation
+    phase ``frac`` (0 = a sample just landed, 1 = the next is due)."""
+    from app.ui.graph import _HISTORY
+
+    step = plot_width / (_HISTORY - 1)
+    newest = plot_left + plot_width + (1.0 - frac) * step
+    last = len(widget.series[0].samples) - 1
+    return newest - last * step, newest
+
+
+def test_graph_curve_always_spans_its_plot(db: Database):
+    """The scrolling curve must overhang both edges at every phase of the
+    animation. If it falls short on the left, a gap opens and closes there on
+    every push - which reads as a flicker, not a scroll."""
+    from PySide6.QtGui import QColor
+
+    from app.ui.graph import _HISTORY, Series, TimeGraph
+
+    _qapp()
+    serie = Series("Download", QColor("#3d8dfd"))
+    graph = TimeGraph("Download", [serie], lambda v: f"{v:.0f}")
+    for i in range(_HISTORY * 2):  # well past full, so the deque is rolling
+        graph.push([float(i % 17)])
+
+    assert len(serie.samples) == _HISTORY + 1  # one held off-screen on purpose
+
+    left, width = 7.0, 300.0
+    for k in range(41):
+        frac = k / 40
+        first_x, last_x = _graph_x_extents(graph, left, width, frac)
+        assert first_x <= left, f"gap on the left at frac={frac:.2f} ({first_x:.2f} > {left})"
+        assert last_x >= left + width, f"gap on the right at frac={frac:.2f}"
+
+
+def test_graph_scale_eases_down_but_snaps_up():
+    """A peak scrolling out of the window must not rescale the whole curve in
+    one frame; a peak arriving must be on screen the frame it lands."""
+    from app.ui.motion import ease_scale
+
+    assert ease_scale(0.0, 500.0) == 500.0  # first sample: adopt it
+    assert ease_scale(100.0, 900.0) == 900.0  # rising snaps, never clips
+    eased = ease_scale(1000.0, 100.0)
+    assert 100.0 < eased < 1000.0  # falling eases
+    for _ in range(400):  # and still gets there
+        eased = ease_scale(eased, 100.0)
+    assert abs(eased - 100.0) < 1.0

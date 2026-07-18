@@ -331,9 +331,11 @@ def stylesheet(p: Palette) -> str:
        border of its own (the filter bar above and sidebar beside it already
        draw the edges), square corners, and no doubled lines. */
     QTableWidget#JobsTable {{ border: none; border-radius: 0; }}
-    /* Cell-widget wrappers must never paint: an opaque holder punches a
-       bg-colored hole through row hover and selection. */
-    QWidget#CellHolder {{ background: transparent; }}
+    /* A layout-only container must never paint. QWidget's base rule gives it
+       the page background, which punches a dark hole through whatever it sits
+       on - row hover and selection in the table, the card behind it on the
+       Queue page. Name any bare wrapper this and it stays out of the way. */
+    QWidget#BareContainer {{ background: transparent; }}
     QTableView::item:hover, QTreeView::item:hover, QListView::item:hover {{
         background: {p.row_hover};
     }}

@@ -25,6 +25,21 @@ _FPS = 60
 _FRAME_MS = 1000 // _FPS
 SPARK_HISTORY = 48
 
+#: How fast a graph's y-axis relaxes back down, per painted frame.
+_SCALE_EASE = 0.06
+
+
+def ease_scale(current: float, target: float) -> float:
+    """The y-axis top for a live graph, eased so the curve doesn't jump.
+
+    Rising snaps: a new peak must be on screen the frame it arrives, or the
+    line would be drawn clipped off the top. Falling eases, because the drop
+    is only an old peak scrolling out of the window - the data on screen has
+    not changed, and rescaling it in one frame reads as a flicker."""
+    if target > current or current <= 0:
+        return target
+    return current + (target - current) * _SCALE_EASE
+
 
 class _Ticker(QObject):
     """One 60fps heartbeat shared by every animated widget. Widgets subscribe
@@ -256,10 +271,14 @@ class Sparkline(QWidget):
         super().__init__(parent)
         from collections import deque
 
-        self._samples: deque[float] = deque(maxlen=SPARK_HISTORY)
+        # One more than fits on screen: the extra sample sits off the left edge
+        # so the curve always reaches past it and slides out under the clip,
+        # instead of a gap opening and closing there on every push.
+        self._samples: deque[float] = deque(maxlen=SPARK_HISTORY + 1)
         self._last_push = 0.0
         self._push_interval = 0.5
         self._animating = False
+        self._scale = 0.0
         self.setMinimumSize(48, 24)
         self.setToolTip("Recent total speed")
 
@@ -314,7 +333,8 @@ class Sparkline(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect().adjusted(1, 2, -1, -2)
-        peak = max(self._samples, default=0.0)
+        peak = ease_scale(self._scale, max(self._samples, default=0.0))
+        self._scale = peak
         if peak > 0 and len(self._samples) > 1:
             accent = QColor(p.accent)
             step = rect.width() / (SPARK_HISTORY - 1)
@@ -324,8 +344,15 @@ class Sparkline(QWidget):
                 frac = min(1.0, (time.monotonic() - self._last_push) / self._push_interval)
             shift = (1.0 - frac) * step
             painter.setClipRect(rect)
+            # Anchored on the newest sample at the right edge, walking back in
+            # time to the left - so the far end runs off-screen, never short.
+            newest = rect.left() + rect.width() + shift
+            last = len(self._samples) - 1
             pts = [
-                QPointF(rect.left() + i * step + shift, base - (v / peak) * rect.height())
+                QPointF(
+                    newest - (last - i) * step,
+                    base - min(1.0, v / peak) * rect.height(),
+                )
                 for i, v in enumerate(self._samples)
             ]
             fill = QColor(accent)

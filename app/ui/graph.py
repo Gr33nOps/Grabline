@@ -5,12 +5,16 @@ the current palette so it reads in light and dark.
 
 from __future__ import annotations
 
+import contextlib
+import time
 from collections import deque
 from collections.abc import Callable
 
 from PySide6.QtCore import QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
+
+from app.ui import motion
 
 _HISTORY = 120  # samples kept (~1 min at the 500ms refresh)
 
@@ -19,7 +23,10 @@ class Series:
     def __init__(self, name: str, color: QColor) -> None:
         self.name = name
         self.color = color
-        self.samples: deque[float] = deque(maxlen=_HISTORY)
+        # One past the visible window, so the oldest point always sits off the
+        # left edge and the curve slides out under the clip instead of the
+        # left end popping between positions. See TimeGraph.paintEvent.
+        self.samples: deque[float] = deque(maxlen=_HISTORY + 1)
 
 
 class TimeGraph(QWidget):
@@ -40,9 +47,20 @@ class TimeGraph(QWidget):
         self.series = series
         self._fmt = fmt
         self._fixed_max = fixed_max
+        self._last_push = 0.0
+        self._push_interval = 0.5
+        self._animating = False
+        self._scale = 0.0
         self.setMinimumHeight(110)
 
     def push(self, values: list[float]) -> None:
+        now = time.monotonic()
+        if self._last_push:
+            # Track the real arrival rate: the dashboard refresh is a setting,
+            # and a busy machine delivers late.
+            gap = min(2.0, max(0.05, now - self._last_push))
+            self._push_interval = self._push_interval * 0.7 + gap * 0.3
+        self._last_push = now
         for value, serie in zip(values, self.series, strict=False):
             serie.samples.append(max(0.0, value))
         self.update()
@@ -50,11 +68,29 @@ class TimeGraph(QWidget):
     def sizeHint(self) -> QSize:
         return QSize(260, 120)
 
+    # Repaint on the shared 60fps ticker while on screen, so the curve scrolls
+    # between pushes rather than jumping a whole sample every refresh.
+    def showEvent(self, event: object) -> None:
+        super().showEvent(event)  # type: ignore[arg-type]
+        if not self._animating:
+            motion.ticker().tick.connect(self.update)
+            motion.ticker().subscribe()
+            self._animating = True
+
+    def hideEvent(self, event: object) -> None:
+        super().hideEvent(event)  # type: ignore[arg-type]
+        if self._animating:
+            self._animating = False
+            with contextlib.suppress(RuntimeError, TypeError):  # app teardown
+                motion.ticker().tick.disconnect(self.update)
+                motion.ticker().unsubscribe()
+
     def _scale_max(self) -> float:
         if self._fixed_max is not None:
             return self._fixed_max
         peak = max((max(s.samples, default=0.0) for s in self.series), default=0.0)
-        return peak if peak > 0 else 1.0
+        self._scale = motion.ease_scale(self._scale, peak)
+        return self._scale if self._scale > 0 else 1.0
 
     def paintEvent(self, _event: object) -> None:
         painter = QPainter(self)
@@ -72,15 +108,21 @@ class TimeGraph(QWidget):
         plot = frame.adjusted(6, 20, -6, -6)
         scale = self._scale_max()
         if plot.width() > 4 and plot.height() > 4:
+            step = plot.width() / (_HISTORY - 1)
+            frac = 1.0
+            if self._last_push:
+                frac = min(1.0, (time.monotonic() - self._last_push) / self._push_interval)
+            # A whole sample of travel, paid off smoothly until the next push.
+            newest_x = plot.left() + plot.width() + (1.0 - frac) * step
+            painter.setClipRect(plot)
             for serie in self.series:
                 if len(serie.samples) < 2:
                     continue
-                step = plot.width() / (_HISTORY - 1)
                 baseline = plot.bottom()
-                offset = _HISTORY - len(serie.samples)
+                last = len(serie.samples) - 1
                 points = [
                     QPointF(
-                        plot.left() + (offset + i) * step,
+                        newest_x - (last - i) * step,
                         baseline - min(1.0, value / scale) * plot.height(),
                     )
                     for i, value in enumerate(serie.samples)
@@ -101,6 +143,7 @@ class TimeGraph(QWidget):
                 painter.setPen(QPen(serie.color, 1.5))
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawPolyline(QPolygonF(points))
+            painter.setClipping(False)  # the title and readout live outside the plot
 
         painter.setPen(text_color)
         painter.drawText(

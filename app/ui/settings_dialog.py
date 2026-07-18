@@ -54,6 +54,17 @@ def _note(text: str) -> QLabel:
     return label
 
 
+def _inline_row() -> QHBoxLayout:
+    """A horizontal row of controls that reads as separate controls.
+
+    Qt's default spacing is tight enough that a checkbox's box lands hard
+    against the previous control's text - "Size[x]Progress" - because a
+    checkbox has no border of its own to hold the gap open."""
+    row = QHBoxLayout()
+    row.setSpacing(14)
+    return row
+
+
 def _parse_rename_rules(text: str) -> list[tuple[str, str]]:
     """'find -> replace' per line; a line without '->' deletes the text."""
     rules: list[tuple[str, str]] = []
@@ -176,8 +187,7 @@ class SettingsDialog(chrome.Dialog):
         self.speed_spin.setSuffix(" KB/s")
         self.speed_spin.setSpecialValueText("Unlimited")
         engine_form.addRow("Speed limit:", self.speed_spin)
-        schedule_row = QHBoxLayout()
-        schedule_row.setSpacing(10)
+        schedule_row = _inline_row()
         self.schedule_check = QCheckBox("Full speed between")
         self.full_from = QTimeEdit()
         self.full_from.setDisplayFormat("HH:mm")
@@ -189,7 +199,7 @@ class SettingsDialog(chrome.Dialog):
         schedule_row.addWidget(self.full_to)
         schedule_row.addStretch(1)
         engine_form.addRow("Speed schedule:", schedule_row)
-        retry_row = QHBoxLayout()
+        retry_row = _inline_row()
         self.retry_check = QCheckBox("Auto-retry failed downloads, up to")
         self.retry_spin = QSpinBox()
         self.retry_spin.setRange(0, 99)
@@ -326,7 +336,7 @@ class SettingsDialog(chrome.Dialog):
         torrent_form.addRow(self.upnp_check)
         self.natpmp_check = QCheckBox("NAT-PMP port mapping")
         torrent_form.addRow(self.natpmp_check)
-        seed_row = QHBoxLayout()
+        seed_row = _inline_row()
         self.seed_check = QCheckBox("Seed after downloading, up to ratio")
         self.ratio_spin = QDoubleSpinBox()
         self.ratio_spin.setRange(0.0, 100.0)
@@ -474,7 +484,7 @@ class SettingsDialog(chrome.Dialog):
 
         # ---- Scheduler ---------------------------------------------------------
         scheduler_form = self._add_form_tab(tabs, "Scheduler")
-        window_row = QHBoxLayout()
+        window_row = _inline_row()
         self.download_schedule_check = QCheckBox("Only download between")
         self.download_start = QTimeEdit()
         self.download_start.setDisplayFormat("HH:mm")
@@ -486,8 +496,7 @@ class SettingsDialog(chrome.Dialog):
         window_row.addWidget(self.download_stop)
         window_row.addStretch(1)
         scheduler_form.addRow("Download times:", window_row)
-        days_row = QHBoxLayout()
-        days_row.setSpacing(12)  # keep each day's box clear of the next day's label
+        days_row = _inline_row()
         self.day_checks: list[QCheckBox] = []
         for label in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"):
             check = QCheckBox(label)
@@ -495,7 +504,7 @@ class SettingsDialog(chrome.Dialog):
             days_row.addWidget(check)
         days_row.addStretch(1)
         scheduler_form.addRow("Days:", days_row)
-        battery_row = QHBoxLayout()
+        battery_row = _inline_row()
         self.battery_check = QCheckBox("Pause downloads on battery, below")
         self.battery_pct_spin = QSpinBox()
         self.battery_pct_spin.setRange(0, 100)
@@ -620,7 +629,7 @@ class SettingsDialog(chrome.Dialog):
         notify_form = self._add_form_tab(tabs, "Notifications")
         self.notify_check = QCheckBox("Show a notification when a download completes")
         notify_form.addRow(self.notify_check)
-        sound_row = QHBoxLayout()
+        sound_row = _inline_row()
         self.sound_check = QCheckBox("Play a sound")
         self.sound_file_edit = QLineEdit()
         self.sound_file_edit.setPlaceholderText("blank = system sound")
@@ -640,7 +649,7 @@ class SettingsDialog(chrome.Dialog):
         self.toast_spin.setRange(1, 30)
         self.toast_spin.setSuffix(" s")
         notify_form.addRow("Notification duration:", self.toast_spin)
-        quiet_row = QHBoxLayout()
+        quiet_row = _inline_row()
         self.quiet_check = QCheckBox("Quiet hours between")
         self.quiet_from_edit = QTimeEdit()
         self.quiet_from_edit.setDisplayFormat("HH:mm")
@@ -708,7 +717,7 @@ class SettingsDialog(chrome.Dialog):
         self.density_combo.addItem("Comfortable", "comfortable")
         self.density_combo.addItem("Compact", "compact")
         appearance_form.addRow("List density:", self.density_combo)
-        columns_row = QHBoxLayout()
+        columns_row = _inline_row()
         self.column_checks: dict[str, QCheckBox] = {}
         for key, label in (
             ("size", "Size"),
@@ -953,8 +962,7 @@ class SettingsDialog(chrome.Dialog):
         answer = QMessageBox.question(
             self,
             "Grabline",
-            "Reset all settings to their defaults? Your downloads and history "
-            "are not touched.",
+            "Reset all settings to their defaults? Your downloads and history are not touched.",
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
