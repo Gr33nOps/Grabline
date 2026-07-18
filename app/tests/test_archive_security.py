@@ -2,12 +2,14 @@
 
 Each test crafts a hostile archive and asserts extraction refuses it, plus a
 matching benign case proving legitimate archives still extract. These are the
-proof tests behind finding F1 (decompression bomb) in docs/security-model.md.
+proof tests behind findings F1 (decompression bomb) and F2 (external-tool
+path traversal) in docs/security-model.md.
 """
 
 from __future__ import annotations
 
 import bz2
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -63,3 +65,47 @@ def test_normal_archive_still_extracts(tmp_path: Path):
     out = archive.extract(good, tmp_path / "out3")
     assert (out / "notes.txt").read_text() == "hello"
     assert (out / "data" / "report.csv").exists()
+
+
+# --------------------------------------------------- F2: external-tool traversal
+
+
+def _seven_zip() -> str | None:
+    return shutil.which("7z") or shutil.which("7za")
+
+
+@pytest.mark.skipif(_seven_zip() is None, reason="needs 7z to build a .7z")
+def test_external_traversal_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A .7z whose listing shows a member escaping the target is refused
+    before the external tool runs (CWE-22) - parity with the zip/tar guard.
+
+    The listing is what the guard inspects, so the attack is simulated by a
+    listing that contains a traversal entry; the real 7z refuses to build such
+    an archive, which is exactly why the in-app guard is defense in depth.
+    """
+    payload = tmp_path / "x.txt"
+    payload.write_text("data")
+    bundle = tmp_path / "a.7z"
+    import subprocess
+
+    subprocess.run([_seven_zip(), "a", str(bundle), str(payload)], capture_output=True, check=True)
+
+    # Force the listing to include an escaping member.
+    evil = (archive.ArchiveEntry("../../escaped.txt", 4), archive.ArchiveEntry("x.txt", 4))
+    monkeypatch.setattr(archive, "_list_external", lambda _p: evil)
+
+    with pytest.raises(DownloadError, match="unsafe paths"):
+        archive.extract(bundle, tmp_path / "out")
+
+
+@pytest.mark.skipif(_seven_zip() is None, reason="needs 7z")
+def test_external_normal_still_extracts(tmp_path: Path):
+    """The external guard must not reject a benign .7z."""
+    payload = tmp_path / "hello.txt"
+    payload.write_text("hi there")
+    bundle = tmp_path / "b.7z"
+    import subprocess
+
+    subprocess.run([_seven_zip(), "a", str(bundle), str(payload)], capture_output=True, check=True)
+    out = archive.extract(bundle, tmp_path / "out")
+    assert (out / "hello.txt").read_text() == "hi there"

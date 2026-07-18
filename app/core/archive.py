@@ -352,9 +352,27 @@ def _run_tool(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _guard_external_entries(path: Path, target: Path, members: Sequence[str] | None) -> None:
+    """Refuse a .rar/.7z whose listing shows a member escaping the target, or
+    summing past the bomb ceiling - before the external tool runs (CWE-22 /
+    CWE-409). zip and tar are guarded in-process; the external tools are
+    trusted to sanitize paths themselves, and old unrar/7z builds did not
+    (e.g. CVE-2022-30333). Listing costs one cheap tool invocation.
+    """
+    total = 0
+    for entry in _list_external(path):
+        if not _wanted(entry.name, members):
+            continue
+        if not _is_within(target, target / entry.name):
+            raise DownloadError("refusing to extract an archive with unsafe paths")
+        total += entry.size or 0
+    _check_declared_size(total)
+
+
 def _extract_external(
     path: Path, target: Path, passwords: Sequence[str], members: Sequence[str] | None
 ) -> None:
+    _guard_external_entries(path, target, members)
     tool = _external_tool(path)
     name = Path(tool).name
     selected = list(members or ())
