@@ -112,6 +112,11 @@ class DashboardView(QWidget):
         # Settings → Statistics: sampling interval (default 500ms).
         self._timer.setInterval(self.manager.settings.dashboard_refresh_ms)
         self._timer.timeout.connect(self._tick)
+        # Sample continuously, even while the dashboard isn't the visible page,
+        # so the graphs keep a real rolling history instead of starting from
+        # empty each time it's opened. A hidden GraphCard's update() is a no-op,
+        # so only the cheap sampling runs; no wasted painting.
+        self._timer.start()
 
     def _tile_row(self, specs: list[tuple[str, str, bool]]) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -148,12 +153,7 @@ class DashboardView(QWidget):
 
     def showEvent(self, event: object) -> None:
         super().showEvent(event)  # type: ignore[arg-type]
-        self._tick()
-        self._timer.start()
-
-    def hideEvent(self, event: object) -> None:
-        super().hideEvent(event)  # type: ignore[arg-type]
-        self._timer.stop()
+        self._tick()  # an immediate refresh so the tiles aren't a beat stale
 
     def _tick(self) -> None:
         views = self.manager.snapshot()

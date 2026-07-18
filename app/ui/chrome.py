@@ -22,7 +22,11 @@ from app.ui import design, theme
 from app.ui.icons import svg_icon
 
 _BAR_HEIGHT = 38
-_RESIZE_MARGIN = 8
+# The edges are a thin sliver so a scrollbar sitting at the window's right or
+# bottom edge stays grabbable; the corners are a fat square so diagonal resize
+# is still easy to hit.
+_EDGE_MARGIN = 4
+_CORNER_MARGIN = 20
 
 
 class _CaptionButton(QPushButton):
@@ -163,30 +167,50 @@ class EdgeResizer(QWidget):
         return super().eventFilter(obj, event)
 
     def _sync(self) -> None:
-        """Match the window's size, and mask to a hollow border frame. Hidden
+        """Match the window's size, and mask to a thin border frame plus a fat
+        square at each corner - the only regions that grab the resize. Hidden
         while maximized/fullscreen, where there is nothing to resize."""
         if self._window.isMaximized() or self._window.isFullScreen():
             self.hide()
             return
         self.setGeometry(self._window.rect())
         rect = self.rect()
-        margin = _RESIZE_MARGIN
-        inner = rect.adjusted(margin, margin, -margin, -margin)
-        self.setMask(QRegion(rect).subtracted(QRegion(inner)))
+        e, c = _EDGE_MARGIN, _CORNER_MARGIN
+        mask = QRegion(rect).subtracted(QRegion(rect.adjusted(e, e, -e, -e)))
+        w, h = rect.width(), rect.height()
+        for cx, cy in ((0, 0), (w - c, 0), (0, h - c), (w - c, h - c)):
+            mask = mask.united(QRegion(cx, cy, c, c))
+        self.setMask(mask)
         self.show()
         self.raise_()
 
     def _edges(self, pos: QPoint) -> Qt.Edge:
         rect = self.rect()
-        margin = _RESIZE_MARGIN
+        e, c = _EDGE_MARGIN, _CORNER_MARGIN
+        x, y, w, h = pos.x(), pos.y(), rect.width(), rect.height()
+        # A corner grab: within the fat corner square on both axes.
+        near_l, near_r = x <= c, x >= w - c
+        near_t, near_b = y <= c, y >= h - c
+        if (near_l or near_r) and (near_t or near_b):
+            edges = Qt.Edge(0)
+            if near_l:
+                edges |= Qt.Edge.LeftEdge
+            if near_r:
+                edges |= Qt.Edge.RightEdge
+            if near_t:
+                edges |= Qt.Edge.TopEdge
+            if near_b:
+                edges |= Qt.Edge.BottomEdge
+            return edges
+        # Otherwise a thin edge grab.
         edges = Qt.Edge(0)
-        if pos.x() <= margin:
+        if x <= e:
             edges |= Qt.Edge.LeftEdge
-        if pos.x() >= rect.width() - margin:
+        if x >= w - e:
             edges |= Qt.Edge.RightEdge
-        if pos.y() <= margin:
+        if y <= e:
             edges |= Qt.Edge.TopEdge
-        if pos.y() >= rect.height() - margin:
+        if y >= h - e:
             edges |= Qt.Edge.BottomEdge
         return edges
 

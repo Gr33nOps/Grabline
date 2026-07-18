@@ -59,6 +59,7 @@ class HlsDownload:
         self._cancelled = False
         self._downloaded = 0
         self._out_time = 0.0  # seconds muxed so far, from -progress
+        self._size_ema: float | None = None  # smoothed total-size estimate
         self._duration: float | None = None
         self._failure = "FFmpeg could not process this stream"
         options = job.options or {}
@@ -233,17 +234,27 @@ class HlsDownload:
     def _persist_estimate(self, last_estimate: int) -> int:
         """Total-size estimate: bytes so far scaled by muxed/total duration.
 
-        Self-correcting as the bitrate reveals itself; the real size replaces
-        it at finalize. Only written when it moves by more than 2%.
+        Two things kept the old version jumpy: the raw estimate rode every
+        bitrate wobble, and it was only rewritten on a >2% move - so the
+        downloaded bytes ran ahead of a stale total and the percentage lurched.
+        Now the estimate is EMA-smoothed (it converges instead of jumping), it
+        never drops below what's already on disk (the bar can't exceed 100%),
+        and it is persisted in step with the downloaded bytes so both progress
+        bars read the same steadily-rising fraction. The real size replaces it
+        at finalize.
         """
         if not self._duration or self._out_time < _ESTIMATE_MIN_SECONDS:
             return last_estimate
         if self._out_time >= self._duration or self._downloaded <= 0:
             return last_estimate
-        estimate = int(self._downloaded * self._duration / self._out_time)
-        if last_estimate and abs(estimate - last_estimate) < last_estimate * 0.02:
-            return last_estimate
-        self.db.update_job_total(self.job.id, estimate)
+        raw = self._downloaded * self._duration / self._out_time
+        if self._size_ema is None:
+            self._size_ema = raw
+        else:
+            self._size_ema += (raw - self._size_ema) * 0.15
+        estimate = max(int(self._size_ema), self._downloaded)
+        if estimate != last_estimate:
+            self.db.update_job_total(self.job.id, estimate)
         return estimate
 
     @staticmethod

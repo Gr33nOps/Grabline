@@ -49,11 +49,6 @@ async function activeTab() {
   return tab ?? null;
 }
 
-async function defaultQuality() {
-  const { defaultQuality = "best" } = await api.storage.local.get("defaultQuality");
-  return defaultQuality || null;
-}
-
 let paired = false;
 
 async function renderStatus() {
@@ -103,12 +98,7 @@ async function renderQuickActions(tab) {
     if (!tab?.url) return;
     grabTab.disabled = true;
     grabTab.textContent = "Sent";
-    await api.runtime.sendMessage({
-      cmd: "grab",
-      url: tab.url,
-      tabId: tab.id,
-      quality: await defaultQuality(),
-    });
+    await api.runtime.sendMessage({ cmd: "grab", url: tab.url, tabId: tab.id });
   });
 
   const input = document.getElementById("paste-url");
@@ -118,7 +108,7 @@ async function renderQuickActions(tab) {
     if (!/^https?:\/\//i.test(url)) return;
     send.disabled = true;
     send.textContent = "Sent";
-    await api.runtime.sendMessage({ cmd: "grab", url, quality: await defaultQuality() });
+    await api.runtime.sendMessage({ cmd: "grab", url });
     input.value = "";
     setTimeout(() => {
       send.disabled = false;
@@ -167,7 +157,6 @@ async function renderMediaList(tab) {
         url: item.url,
         tabId: tab.id,
         title: mediaName(item, tab),
-        quality: await defaultQuality(),
       });
       if (reply?.type === "error") {
         grab.textContent = "Failed";
@@ -225,13 +214,6 @@ async function renderRecent() {
 }
 
 async function wireToggles(tab) {
-  const quality = document.getElementById("default-quality");
-  const { defaultQuality: dq = "best" } = await api.storage.local.get("defaultQuality");
-  quality.value = dq;
-  quality.addEventListener("change", () => {
-    void api.storage.local.set({ defaultQuality: quality.value });
-  });
-
   const intercept = document.getElementById("toggle-intercept");
   const hover = document.getElementById("toggle-hover");
   const overlay = document.getElementById("toggle-overlay");

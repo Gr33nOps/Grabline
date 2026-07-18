@@ -52,6 +52,16 @@
   const OK = "#1f9d55";
   const WARN = "#cf222e";
 
+  // The button wears the Grabline logo; feedback swaps in a check/cross.
+  const LOGO_URL = api.runtime.getURL("icons/icon48.png");
+  function logoImg() {
+    const img = document.createElement("img");
+    img.src = LOGO_URL;
+    img.alt = "";
+    img.style.cssText = "width:100%;height:100%;border-radius:8px;display:block;";
+    return img;
+  }
+
   // Which corner of the hovered element the ⬇ sits in - user-settable in
   // the popup (some sites put their own controls exactly where we default).
   let corner = "top-right";
@@ -97,7 +107,7 @@
     const host = document.createElement("div");
     const shadow = host.attachShadow({ mode: "closed" });
     const button = document.createElement("button");
-    button.replaceChildren(iconSvg(ICON.download));
+    button.replaceChildren(logoImg());
     button.title = "Download with Grabline";
     button.style.cssText = [
       "position: fixed",
@@ -107,12 +117,13 @@
       "justify-content: center",
       "width: 30px",
       "height: 30px",
+      "padding: 0",
       "border: none",
       "border-radius: 8px",
-      `background: ${ACCENT}`,
+      "background: transparent",
       "color: #fff",
       "cursor: pointer",
-      "box-shadow: 0 2px 6px rgba(0,0,0,.35)",
+      "box-shadow: 0 2px 6px rgba(0,0,0,.4)",
     ].join(";");
     shadow.appendChild(button);
 
@@ -168,6 +179,7 @@
       const failed = reply?.type === "error";
       button.replaceChildren(iconSvg(failed ? ICON.error : ICON.check));
       button.style.background = failed ? WARN : OK;
+      button.style.padding = "";
       setTimeout(hide, 900);
     }
 
@@ -248,8 +260,9 @@
       button.style.left = `${position.left}px`;
       button.style.top = `${position.top}px`;
       button.style.display = "flex";
-      button.style.background = ACCENT;
-      button.replaceChildren(iconSvg(ICON.download));
+      button.style.background = "transparent";
+      button.style.padding = "0";
+      button.replaceChildren(logoImg());
     }
 
     document.addEventListener(
@@ -286,6 +299,10 @@
       if (document.hidden) hide();
     });
     window.addEventListener("blur", hide);
+    // Entering or leaving fullscreen (a video going fullscreen) reparents the
+    // page under a fixed-position button, stranding it mid-screen - hide it.
+    document.addEventListener("fullscreenchange", hide, true);
+    document.addEventListener("webkitfullscreenchange", hide, true);
 
     button.addEventListener("mouseenter", () => clearTimeout(hideTimer));
     button.addEventListener("mouseleave", () => {
@@ -300,15 +317,8 @@
         else openPanel();
         return;
       }
-      // No panel for this site: one click grabs at the popup's default quality.
-      const { defaultQuality = "best" } = await api.storage.local.get("defaultQuality");
-      feedback(
-        await api.runtime.sendMessage({
-          cmd: "grab",
-          url: currentUrl,
-          quality: defaultQuality || null,
-        }),
-      );
+      // No panel for this site: one click grabs at the app's default quality.
+      feedback(await api.runtime.sendMessage({ cmd: "grab", url: currentUrl }));
     });
   };
 })();

@@ -39,9 +39,18 @@
     }
     return el;
   }
-  const ACCENT = "#0170fd";
   const OK = "#1f9d55";
   const WARN = "#cf222e";
+
+  // The button wears the Grabline logo; feedback swaps in a check/cross.
+  const LOGO_URL = api.runtime.getURL("icons/icon48.png");
+  function logoImg() {
+    const img = document.createElement("img");
+    img.src = LOGO_URL;
+    img.alt = "";
+    img.style.cssText = "width:100%;height:100%;border-radius:8px;display:block;";
+    return img;
+  }
   // Hosts where a site module (content/sites/*.js) owns the media UI. On
   // those hosts the generic overlay stands back: browse pages run inline
   // preview <video>s whose blob src would fall back to the *page* URL (= the
@@ -128,7 +137,7 @@
   const host = document.createElement("div");
   const shadow = host.attachShadow({ mode: "closed" });
   const button = document.createElement("button");
-  button.replaceChildren(iconSvg(ICON.download));
+  button.replaceChildren(logoImg());
   button.title = "Download with Grabline";
   button.style.cssText = [
     "position: fixed",
@@ -138,13 +147,13 @@
     "justify-content: center",
     "width: 34px",
     "height: 34px",
+    "padding: 0",
     "border: none",
     "border-radius: 8px",
-    `background: ${ACCENT}`,
+    "background: transparent",
     "color: #fff",
     "cursor: pointer",
-    "box-shadow: 0 2px 8px rgba(0,0,0,.35)",
-    "opacity: .92",
+    "box-shadow: 0 2px 8px rgba(0,0,0,.4)",
   ].join(";");
   shadow.appendChild(button);
 
@@ -199,8 +208,9 @@
     currentTarget = element;
     placeButton(rect);
     button.style.display = "flex";
-    button.style.background = ACCENT;
-    button.replaceChildren(iconSvg(ICON.download));
+    button.style.background = "transparent";
+    button.style.padding = "0";
+    button.replaceChildren(logoImg());
     startFollowing();
   }
 
@@ -477,6 +487,10 @@
     if (document.hidden) hideButton();
   });
   window.addEventListener("blur", hideButton);
+  // A video going fullscreen reparents the page under this fixed button and
+  // strands it in the middle of the screen - hide it on any fullscreen change.
+  document.addEventListener("fullscreenchange", hideButton, true);
+  document.addEventListener("webkitfullscreenchange", hideButton, true);
 
   button.addEventListener("mouseenter", () => clearTimeout(hideTimer));
   button.addEventListener("mouseleave", scheduleHide);
@@ -485,17 +499,16 @@
     event.stopPropagation();
     if (!currentTarget) return;
     const media = mediaUrlFor(currentTarget);
-    const { defaultQuality = "best" } = await api.storage.local.get("defaultQuality");
     const reply = await api.runtime.sendMessage({
       cmd: "grab",
       url: media.url,
       sniff: media.fromPage,
-      quality: defaultQuality || null,
     });
     // Quick inline feedback, then fade away.
     const failed = reply?.type === "error";
     button.replaceChildren(iconSvg(failed ? ICON.error : ICON.check));
     button.style.background = failed ? WARN : OK;
+    button.style.padding = "";
     setTimeout(hideButton, 900);
   });
 })();

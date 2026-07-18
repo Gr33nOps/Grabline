@@ -39,6 +39,12 @@
 * {
   box-sizing: border-box;
 }
+html {
+  /* Reserve the scrollbar's width so it never sits on top of the content
+     (which was clipping the recent-download status and the controls). */
+  scrollbar-gutter: stable;
+  background: var(--bg);
+}
 body {
   width: 340px;
   margin: 0;
