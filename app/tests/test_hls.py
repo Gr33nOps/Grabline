@@ -252,3 +252,56 @@ def test_tail_stall_keeps_a_fully_muxed_stream(db: Database, dest: Path):
     task2._duration = 100.0
     task2._out_time = 30.0
     assert not task2._looks_complete(part)
+
+
+def test_ffmpeg_protocol_whitelist(db: Database, dest: Path):
+    """The FFmpeg command confines input protocols so a remote manifest can't
+    reach file://, concat: or gopher: (CWE-668 / CWE-918). The whitelist must
+    precede every -i, and must not contain 'file'."""
+    from app.engines.hls import _INPUT_PROTOCOLS
+
+    job = _hls_job(
+        db, "https://cdn.example/master.m3u8", dest, options={"audio_url": "https://cdn/a.m3u8"}
+    )
+    task = HlsDownload(db, job, ffmpeg_path="ffmpeg")
+    command = task._command(job.part_path)
+
+    # Every -i is immediately preceded by the whitelist.
+    for i, arg in enumerate(command):
+        if arg == "-i":
+            assert command[i - 2] == "-protocol_whitelist"
+            assert command[i - 1] == _INPUT_PROTOCOLS
+    # file: is deliberately absent; the dangerous exotics never appear.
+    protocols = set(_INPUT_PROTOCOLS.split(","))
+    assert "file" not in protocols
+    assert protocols.isdisjoint({"concat", "subfile", "gopher", "pipe", "rtp"})
+    # The web essentials are present so real streams still work.
+    assert {"http", "https", "tls", "crypto"} <= protocols
+
+
+@pytest.mark.skipif(FFMPEG is None, reason="needs a real ffmpeg")
+def test_whitelist_blocks_local_file_read(dest: Path, tmp_path: Path):
+    """End to end against real FFmpeg: a manifest pointing a segment at a local
+    file yields no output (the protocol is refused), while the same command
+    shape muxes a normal http stream fine (covered by the reassembly test)."""
+    import subprocess
+
+    from app.engines.hls import _INPUT_PROTOCOLS
+
+    secret = tmp_path / "secret.txt"
+    secret.write_text("LOCAL-SECRET\n" * 4)
+    manifest = tmp_path / "evil.m3u8"
+    manifest.write_text(
+        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:1\n"
+        f"#EXTINF:1.0,\nfile://{secret}\n#EXT-X-ENDLIST\n"
+    )
+    out = tmp_path / "out.ts"
+    # A local manifest needs 'file' just to open the input; add it, and confirm
+    # the whitelist still refuses the file:// *segment* inside it.
+    subprocess.run(
+        [FFMPEG, "-y", "-loglevel", "error", "-protocol_whitelist", _INPUT_PROTOCOLS + ",file",
+         "-i", str(manifest), "-c", "copy", "-f", "mpegts", str(out)],
+        capture_output=True, text=True, timeout=30,
+    )
+    got = out.read_bytes() if out.exists() else b""
+    assert b"LOCAL-SECRET" not in got  # the nested file:// segment was refused

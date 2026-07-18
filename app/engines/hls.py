@@ -33,6 +33,12 @@ log = logging.getLogger(__name__)
 
 _ESTIMATE_MIN_SECONDS = 5.0  # muxed seconds before the size estimate is trusted
 
+#: FFmpeg input protocols a remote HLS/DASH stream legitimately uses - and
+#: nothing more. http/https for manifest+segments, tcp/tls underneath, crypto
+#: for AES-128 keys, data for inline base64 keys. No file:, concat:, subfile:,
+#: pipe: or exotic protocols. See _command (CWE-668 / CWE-918).
+_INPUT_PROTOCOLS = "http,https,tcp,tls,crypto,data"
+
 
 class HlsDownload:
     """Runs one HLS job via FFmpeg. One-shot object."""
@@ -124,11 +130,23 @@ class HlsDownload:
             "-nostats",
             "-progress",
             "pipe:1",
+            # Confine what protocols the (remote, attacker-controlled) manifest
+            # may open. Without this a crafted playlist can point a segment at
+            # file:// (read the user's disk into the output) or use concat:/
+            # subfile:/gopher: - FFmpeg's known local-file-disclosure and SSRF
+            # vectors. Modern FFmpeg blocks cross-protocol reads by default, but
+            # Grabline runs whatever ffmpeg is on PATH, so we pin it: only the
+            # protocols real HLS/DASH needs. The input is always a remote URL,
+            # so file is intentionally absent. Must precede -i to bind to it.
+            "-protocol_whitelist",
+            _INPUT_PROTOCOLS,
             "-i",
             self._input_url,
         ]
         if self._audio_url:
-            command += ["-i", self._audio_url, "-map", "0", "-map", "1"]
+            # Per-input option: bind the whitelist to the audio input too.
+            command += ["-protocol_whitelist", _INPUT_PROTOCOLS, "-i", self._audio_url]
+            command += ["-map", "0", "-map", "1"]
         command += ["-c", "copy", "-f", "mp4", str(part)]
         return command
 
