@@ -85,7 +85,7 @@ def _desktop_entry(command: list[str], *, icon: Path | None, autostart: bool = F
         "Type=Application",
         f"Name={APP_NAME}",
         "GenericName=Download Manager",
-        "Comment=The open-source IDM: a download button on any media, anywhere",
+        "Comment=Download manager with browser integration, video and torrent support",
         f"Exec={exec_line}",
         f"Icon={icon if icon is not None else _ENTRY_ID}",
         "Terminal=false",
@@ -95,8 +95,27 @@ def _desktop_entry(command: list[str], *, icon: Path | None, autostart: bool = F
     if autostart:
         lines.append("X-GNOME-Autostart-enabled=true")
     else:
+        # Keywords feed the desktop's search; StartupWMClass ties the running
+        # window back to this entry so it groups and pins correctly.
+        lines.append("Keywords=download;downloader;torrent;video;manager;")
         lines.append("MimeType=application/x-bittorrent;x-scheme-handler/magnet;")
+        lines.append(f"StartupWMClass={APP_NAME}")
     return "\n".join(lines) + "\n"
+
+
+def packaged_install() -> bool:
+    """True when a system package (.deb/.rpm) installed this copy.
+
+    Such a package ships its own /usr/share/applications entry, so writing a
+    second per-user one would list Grabline twice in the app grid and in
+    search. AppImage and tarball runs are *not* packaged - nothing else
+    provides an entry for them, so they still get one."""
+    if not getattr(sys, "frozen", False):
+        return False
+    executable = str(Path(sys.executable).resolve())
+    if executable.startswith(("/opt/", "/usr/")):
+        return True
+    return Path("/usr/share/applications/grabline.desktop").is_file()
 
 
 def _write_if_changed(path: Path, content: str) -> None:
@@ -114,7 +133,7 @@ def install_menu_entry(icon_png: bytes | None = None) -> Path | None:
     elsewhere - the Windows installer and macOS app bundle own that job).
     Safe to call on every startup: rewrites only when something changed,
     so a moved venv heals itself."""
-    if sys.platform != "linux":
+    if sys.platform != "linux" or packaged_install():
         return None
     icon = _icon_path()
     if icon_png is not None and (not icon.exists() or icon.read_bytes() != icon_png):

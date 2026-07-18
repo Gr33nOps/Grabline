@@ -66,3 +66,26 @@ def test_autostart_roundtrip():
     launcher.set_autostart(False)
     assert launcher.autostart_enabled() is False
     launcher.set_autostart(False)  # disabling twice is fine
+
+
+def test_menu_entry_has_search_keywords_and_wm_class():
+    entry = launcher.install_menu_entry(icon_png=b"png")
+    assert entry is not None
+    content = entry.read_text()
+    assert "Keywords=download;downloader;torrent;video;manager;" in content
+    assert "StartupWMClass=Grabline" in content
+    assert "x-scheme-handler/magnet" in content
+
+
+def test_packaged_install_skips_the_per_user_menu_entry(monkeypatch: pytest.MonkeyPatch):
+    """A .deb ships /usr/share/applications/grabline.desktop. Writing a second
+    per-user entry would list Grabline twice in the app grid and in search."""
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", "/opt/grabline/grabline", raising=False)
+    assert launcher.packaged_install() is True
+    assert launcher.install_menu_entry(icon_png=b"png") is None
+
+    # An AppImage or tarball run from anywhere else still gets its own entry.
+    monkeypatch.setattr(sys, "executable", "/home/someone/Apps/grabline", raising=False)
+    monkeypatch.setattr(launcher.Path, "is_file", lambda self: False)
+    assert launcher.packaged_install() is False

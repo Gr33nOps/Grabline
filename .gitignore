@@ -11,6 +11,9 @@ packaging/grabline.png
 packaging/grabline.ico
 packaging/grabline.icns
 packaging/grabline.iconset/
+packaging/grabline-wizard.bmp
+packaging/grabline-wizard-small.bmp
+packaging/grabline-dmg-background.png
 
 # Environments
 .venv/

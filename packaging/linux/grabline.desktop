@@ -2,10 +2,12 @@
 Type=Application
 Name=Grabline
 GenericName=Download Manager
-Comment=Fast, free, open-source download manager with a browser button
-Exec=grabline
+Comment=Download manager with browser integration, video and torrent support
+Exec=grabline %u
 Icon=grabline
 Terminal=false
-Categories=Network;FileTransfer;Utility;
-Keywords=download;downloader;video;youtube;idm;manager;
+Categories=Network;FileTransfer;Qt;
+Keywords=download;downloader;torrent;video;manager;
+MimeType=application/x-bittorrent;x-scheme-handler/magnet;
+StartupNotify=false
 StartupWMClass=Grabline
