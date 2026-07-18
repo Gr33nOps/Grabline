@@ -71,6 +71,32 @@ def test_export_then_import_roundtrip(db: Database, tmp_path: Path):
         fresh.close()
 
 
+def test_export_strips_session_cookies(db: Database, tmp_path: Path):
+    """A browser-handoff download stores the tab's Cookie header in its
+    options; exporting the list must not write those live session cookies to
+    the shareable JSON file (CWE-312)."""
+    db.create_job(
+        "https://x.test/gated.bin",
+        "/tmp",
+        "gated.bin",
+        options={
+            "http_headers": {"Cookie": "session=SECRET-TOKEN", "Referer": "https://x.test/"},
+            "cookie_file": "/home/me/cookies.txt",
+            "quality_label": "1080p",  # a non-secret option that must survive
+        },
+    )
+    out = tmp_path / "list.json"
+    listio.write_file(db, out)
+    text = out.read_text()
+    assert "SECRET-TOKEN" not in text
+    assert "http_headers" not in text
+    assert "cookie_file" not in text
+    assert "1080p" in text  # ordinary options are preserved
+
+    data = listio.export_jobs(db)
+    assert data["items"][0]["options"] == {"quality_label": "1080p"}
+
+
 def test_import_rejects_foreign_and_bad_entries(db: Database, tmp_path: Path):
     good = {
         "format": "grabline-downloads",

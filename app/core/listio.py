@@ -18,6 +18,20 @@ from app.db.database import Database
 FORMAT = "grabline-downloads"
 VERSION = 1
 
+#: Per-job options that carry secrets and must never be written to an export.
+#: http_headers holds the Cookie/Referer/User-Agent a browser handoff passed
+#: through - live session cookies. An export is a file the user may share (a
+#: backup, a bug report, a move to another machine), so these are stripped
+#: (CWE-312). They are session-specific and re-derived by the browser anyway,
+#: so a re-imported download simply re-acquires them if it still needs them.
+_SECRET_OPTION_KEYS = ("http_headers", "cookie_file")
+
+
+def _safe_options(options: dict[str, Any] | None) -> dict[str, Any]:
+    if not options:
+        return {}
+    return {k: v for k, v in options.items() if k not in _SECRET_OPTION_KEYS}
+
 
 def export_jobs(db: Database) -> dict[str, Any]:
     items = [
@@ -27,7 +41,7 @@ def export_jobs(db: Database) -> dict[str, Any]:
             "dest_dir": job.dest_dir,
             "kind": job.kind.value,
             "title": job.title,
-            "options": job.options,
+            "options": _safe_options(job.options),
         }
         for job in db.list_jobs()
     ]
