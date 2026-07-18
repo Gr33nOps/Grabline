@@ -423,7 +423,9 @@ def test_a_crashing_engine_marks_the_job_failed(db: Database, dest: Path):
     """A bug in an engine must never strand a job at 'Downloading' - the exact
     aftermath of the HLS finalizer raising on Windows: thread dead, row stuck,
     the user watching a 100% download that never completes."""
-    manager = DownloadManager(db, max_concurrent=1)
+    # max_concurrent=0 keeps the scheduler idle: this test drives _run_job
+    # itself, and a live scheduler would re-dispatch the job underneath it.
+    manager = DownloadManager(db, max_concurrent=0)
     try:
         job = db.create_job("https://example.invalid/x.bin", str(dest), "x.bin")
         db.set_job_status(job.id, JobStatus.DOWNLOADING)
