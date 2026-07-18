@@ -193,6 +193,14 @@ class HlsDownload:
         if self._stop_event.is_set():
             return self._settle_stopped(part)
         if stalled:
+            # A stall at the very end is usually not a failure: the CDN holds
+            # a trailing connection open after the last segment, the file stops
+            # growing at 99%, and the guard fires. Everything is muxed - and
+            # FFmpeg writes the MP4 trailer on the SIGTERM we just sent - so
+            # keep the result instead of throwing away a finished download.
+            if self._looks_complete(part):
+                log.info("hls job %s: stalled after the last segment - keeping", self.job.id)
+                return self._finalize(part)
             _discard(part)
             self._failure = (
                 f"the stream stalled (no data for {self.stall_timeout:.0f}s) - "

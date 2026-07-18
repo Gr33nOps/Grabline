@@ -228,3 +228,27 @@ def test_finalize_survives_a_failing_fsync(
     fresh = db.get_job(job.id)
     assert fresh is not None and fresh.status is JobStatus.COMPLETED
     assert (dest / fresh.filename).exists()
+
+
+def test_tail_stall_keeps_a_fully_muxed_stream(db: Database, dest: Path):
+    """A CDN holding a trailing connection open stalls the guard at 99% - but
+    when ~all of the playlist's duration is muxed the download is done, and
+    discarding 900 MB to retry from scratch would be self-harm."""
+    job = _hls_job(db, "https://x/s.m3u8", dest)
+    task = HlsDownload(db, job, ffmpeg_path="ffmpeg")
+    task._duration = 100.0
+    task._out_time = 99.5  # >= 98% muxed
+    part = job.part_path
+    part.parent.mkdir(parents=True, exist_ok=True)
+    part.write_bytes(b"x" * 4096)
+
+    assert task._looks_complete(part)
+    status = task._finalize(part)
+    assert status is JobStatus.COMPLETED
+
+    # And the true stall (nothing near the end muxed) still discards.
+    fresh = _hls_job(db, "https://x/s2.m3u8", dest)
+    task2 = HlsDownload(db, fresh, ffmpeg_path="ffmpeg")
+    task2._duration = 100.0
+    task2._out_time = 30.0
+    assert not task2._looks_complete(part)
