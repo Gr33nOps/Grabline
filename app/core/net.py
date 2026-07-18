@@ -8,15 +8,71 @@ in the app is built here so one proxy setting covers all of them.
 
 from __future__ import annotations
 
+import logging
 import socket
+import threading
+import time
 from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
 
+log = logging.getLogger(__name__)
+
 #: Proxy schemes Grabline accepts.
 PROXY_SCHEMES = ("http", "https", "socks5", "socks5h", "socks4", "socks4a")
 _SOCKS4 = ("socks4", "socks4a")
+
+#: Dual-stacked host the v6 health probe handshakes against. It must be a
+#: destination the app actually talks to: v6 brokenness is per-route (peering,
+#: tunnels), so a generic anycast host can answer fine while this one's v6
+#: packets vanish - the exact case observed in the wild.
+_V6_PROBE_HOST = "www.youtube.com"
+_V6_PROBE_TIMEOUT = 1.5
+_V6_RECHECK = 600.0  # networks change (wifi roaming, VPN up/down)
+_v6_lock = threading.Lock()
+_v6_state: tuple[float, bool] | None = None  # (checked at, force IPv4?)
+
+
+def _handshakes(host: str, family: socket.AddressFamily) -> bool:
+    """Can a TCP handshake to ``host`` complete over this address family?"""
+    try:
+        infos = socket.getaddrinfo(host, 443, family, socket.SOCK_STREAM)
+        with socket.socket(family, socket.SOCK_STREAM) as probe:
+            probe.settimeout(_V6_PROBE_TIMEOUT)
+            probe.connect(infos[0][4])
+        return True
+    except OSError:
+        return False
+
+
+def ipv6_broken() -> bool:
+    """True when connections should be forced onto IPv4.
+
+    The failure this exists for: the OS resolves AAAA records and routes v6,
+    but the v6 SYNs to a host vanish into a black hole. Neither httpx nor
+    yt-dlp's urllib handler do happy-eyeballs, so each request serially times
+    out per v6 address before reaching v4 - measured 62s for one YouTube page
+    fetch on such a network, which is what "analysis is stuck" turns out to be.
+
+    One ~1.5s handshake probe answers it. Broken means: v6 to the probe host
+    fails while v4 to the same host succeeds - so a machine with no v6 at all
+    (v6 fails instantly, but so would any app; the OS skips it) still counts,
+    harmlessly, and a v6-only network (v4 fails too) is left alone. Cached;
+    never raises.
+    """
+    global _v6_state
+    with _v6_lock:
+        now = time.monotonic()
+        if _v6_state is not None and now - _v6_state[0] < _V6_RECHECK:
+            return _v6_state[1]
+        broken = not _handshakes(_V6_PROBE_HOST, socket.AF_INET6) and _handshakes(
+            _V6_PROBE_HOST, socket.AF_INET
+        )
+        if broken:
+            log.info("IPv6 to %s is unusable - forcing IPv4 connections", _V6_PROBE_HOST)
+        _v6_state = (now, broken)
+        return broken
 
 
 def validate_proxy(url: str) -> str | None:
@@ -63,6 +119,13 @@ def build_client(
             mounts[f"all://{host}"] = httpx.HTTPTransport()
             mounts[f"all://*.{host}"] = httpx.HTTPTransport()
         client_kwargs["mounts"] = mounts
+    if not proxy and ipv6_broken():
+        # Direct connections on a black-holed-v6 network: bind IPv4 so no
+        # request waits out a v6 timeout first. (With a proxy, the proxy does
+        # the onward connecting and this is its problem, not ours.)
+        client_kwargs["transport"] = httpx.HTTPTransport(
+            local_address="0.0.0.0", http2=bool(kwargs.pop("http2", False))
+        )
     if user_agent:
         headers = dict(kwargs.pop("headers", None) or {})
         headers.setdefault("User-Agent", user_agent)

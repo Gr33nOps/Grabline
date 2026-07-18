@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from app.core import naming
+from app.core import naming, net
 from app.core.errors import DownloadError
 from app.core.models import Job, JobStatus
 from app.db.database import Database
@@ -131,6 +131,21 @@ _RUNTIME_MARKERS = (
     "unable to download video data",
     "unable to download webpage: http error 403",
 )
+
+
+def _apply_network_guards(opts: dict[str, Any], proxy: str | None) -> None:
+    """Bound and route every yt-dlp network operation.
+
+    ``socket_timeout`` turns a dead connection into a retryable error instead
+    of a job that sits at "Fetching metadata" forever. Forcing IPv4 on a
+    network whose IPv6 is black-holed (see net.ipv6_broken) is the difference
+    between a ~3s analysis and a ~80s one: without it every request serially
+    times out on the v6 addresses before touching v4. A proxy connects onward
+    itself, so no source binding then.
+    """
+    opts["socket_timeout"] = 20
+    if not proxy and net.ipv6_broken():
+        opts["source_address"] = "0.0.0.0"  # how --force-ipv4 is spelled internally
 
 
 def _looks_like_auth_wall(message: str) -> bool:
@@ -606,6 +621,7 @@ class SmartEngine:
             "extract_flat": "in_playlist",
             "skip_download": True,
         }
+        _apply_network_guards(opts, proxy)
         if force_generic:
             # Scrape the page itself for <video>/og:video/JSON-LD/m3u8 links.
             opts["force_generic_extractor"] = True
@@ -781,6 +797,7 @@ class SmartDownload:
             "fragment_retries": 5,
             "continuedl": True,
         }
+        _apply_network_guards(ydl_opts, self.proxy)
         if self.ffmpeg_path:
             ydl_opts["ffmpeg_location"] = self.ffmpeg_path
         if with_runtime and self._js_runtime:

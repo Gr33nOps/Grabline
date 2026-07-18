@@ -181,3 +181,89 @@ def test_host_limits_setting_roundtrip(db: Database):
     settings.host_limits = {"CDN.Example.com": 500, "bad": 0, "": 5}
     fresh = Settings(db)
     assert fresh.host_limits == {"cdn.example.com": 500}  # lowercased, positive-only
+
+
+# ------------------------------------------------------- IPv6 health probe
+
+
+def _reset_v6_cache():
+    net._v6_state = None
+
+
+def test_ipv6_broken_when_v6_fails_but_v4_works(monkeypatch: pytest.MonkeyPatch):
+    """The black-hole case: v6 handshake dies, v4 succeeds -> force IPv4."""
+    import socket as socket_mod
+
+    _reset_v6_cache()
+    monkeypatch.setattr(
+        net, "_handshakes", lambda host, family: family == socket_mod.AF_INET
+    )
+    assert net.ipv6_broken() is True
+
+
+def test_ipv6_fine_when_v6_handshakes(monkeypatch: pytest.MonkeyPatch):
+    _reset_v6_cache()
+    monkeypatch.setattr(net, "_handshakes", lambda host, family: True)
+    assert net.ipv6_broken() is False
+
+
+def test_ipv6_left_alone_when_network_is_down(monkeypatch: pytest.MonkeyPatch):
+    """Both families failing means the network is down, not that v6 is broken
+    - forcing IPv4 would mask the real problem (and break NAT64 setups)."""
+    _reset_v6_cache()
+    monkeypatch.setattr(net, "_handshakes", lambda host, family: False)
+    assert net.ipv6_broken() is False
+
+
+def test_ipv6_verdict_is_cached(monkeypatch: pytest.MonkeyPatch):
+    _reset_v6_cache()
+    calls: list[object] = []
+
+    def probe(host, family):
+        calls.append(family)
+        return True
+
+    monkeypatch.setattr(net, "_handshakes", probe)
+    net.ipv6_broken()
+    net.ipv6_broken()
+    assert len(calls) == 1  # one v6 probe, then the cache answers
+
+
+def test_build_client_forces_v4_only_when_broken(monkeypatch: pytest.MonkeyPatch):
+    _reset_v6_cache()
+    monkeypatch.setattr(net, "ipv6_broken", lambda: True)
+    client = net.build_client(timeout=1)
+    # The v4-bound transport replaces the default one.
+    assert isinstance(client._transport, httpx.HTTPTransport)
+    pool = client._transport._pool
+    assert pool._local_address == "0.0.0.0"
+    client.close()
+
+    monkeypatch.setattr(net, "ipv6_broken", lambda: False)
+    client = net.build_client(timeout=1)
+    assert getattr(client._transport._pool, "_local_address", None) is None
+    client.close()
+
+
+def test_proxied_client_never_forces_v4(monkeypatch: pytest.MonkeyPatch):
+    """The proxy connects onward itself - binding our socket family would
+    change nothing and risks breaking a v6-only proxy address."""
+    monkeypatch.setattr(net, "ipv6_broken", lambda: True)
+    client = net.build_client(proxy="http://127.0.0.1:9", timeout=1)
+    assert getattr(client._transport._pool, "_local_address", None) is None
+    client.close()
+
+
+def test_smart_network_guards(monkeypatch: pytest.MonkeyPatch):
+    from app.engines import smart
+
+    monkeypatch.setattr(net, "ipv6_broken", lambda: True)
+    opts: dict[str, object] = {}
+    smart._apply_network_guards(opts, None)
+    assert opts["socket_timeout"] == 20
+    assert opts["source_address"] == "0.0.0.0"
+
+    proxied: dict[str, object] = {}
+    smart._apply_network_guards(proxied, "socks5://127.0.0.1:1080")
+    assert proxied["socket_timeout"] == 20
+    assert "source_address" not in proxied

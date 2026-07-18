@@ -230,9 +230,12 @@ class MainWindow(QMainWindow):
         self._timer.timeout.connect(self.refresh)
         self._timer.start(500)
         # Grabline Connect drops URLs into the handoffs table; pick them up.
+        # 250ms, not 1s: this poll is the lag between a click in the browser
+        # and anything visibly happening, and the claim query is one indexed
+        # SELECT on an almost-always-empty table.
         self._handoff_timer = QTimer(self)
         self._handoff_timer.timeout.connect(self._poll_handoffs)
-        self._handoff_timer.start(1000)
+        self._handoff_timer.start(250)
         # RSS torrent feeds: poll on the configured interval (plus once soon
         # after launch so a restart doesn't wait half an hour).
         self._rss_timer = QTimer(self)

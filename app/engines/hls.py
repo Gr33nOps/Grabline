@@ -24,7 +24,7 @@ from typing import IO
 
 import httpx
 
-from app.core import naming, proc
+from app.core import naming, net, proc
 from app.core.models import Job, JobStatus
 from app.db.database import Database
 from app.engines.manifest import playlist_duration
@@ -285,7 +285,7 @@ class HlsDownload:
         Any fetch error is ignored so FFmpeg can report the real problem.
         """
         try:
-            with httpx.Client(follow_redirects=True, timeout=10) as client:
+            with net.build_client(proxy=self.proxy, follow_redirects=True, timeout=10) as client:
                 response = client.get(self._input_url)
                 if response.status_code != 200:
                     return None
