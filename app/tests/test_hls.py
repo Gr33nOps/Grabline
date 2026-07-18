@@ -299,9 +299,24 @@ def test_whitelist_blocks_local_file_read(dest: Path, tmp_path: Path):
     # A local manifest needs 'file' just to open the input; add it, and confirm
     # the whitelist still refuses the file:// *segment* inside it.
     subprocess.run(
-        [FFMPEG, "-y", "-loglevel", "error", "-protocol_whitelist", _INPUT_PROTOCOLS + ",file",
-         "-i", str(manifest), "-c", "copy", "-f", "mpegts", str(out)],
-        capture_output=True, text=True, timeout=30,
+        [
+            FFMPEG,
+            "-y",
+            "-loglevel",
+            "error",
+            "-protocol_whitelist",
+            _INPUT_PROTOCOLS + ",file",
+            "-i",
+            str(manifest),
+            "-c",
+            "copy",
+            "-f",
+            "mpegts",
+            str(out),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     got = out.read_bytes() if out.exists() else b""
     assert b"LOCAL-SECRET" not in got  # the nested file:// segment was refused
