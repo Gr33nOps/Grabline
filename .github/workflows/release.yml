@@ -178,7 +178,15 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref_type == 'tag'
+    # always(): publish whatever platforms built, even if one leg fails or is
+    # cancelled. GitHub's Intel macOS (macos-13) runners are often queue-
+    # starved and get auto-cancelled, and with a plain `needs: build` that one
+    # stuck leg silently sinks the entire release - three good installers and
+    # no download page. Here the release still runs; download-artifact pulls
+    # whatever succeeded, and fail_on_unmatched_files below turns a total
+    # wipeout (nothing built) into a failed job rather than an empty release.
+    # A late Intel build can be re-run and its artifact added to the release.
+    if: ${{ always() && github.ref_type == 'tag' }}
     steps:
       - uses: actions/download-artifact@v4
         with:
