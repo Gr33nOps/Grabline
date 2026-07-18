@@ -265,3 +265,15 @@ def test_smart_network_guards(monkeypatch: pytest.MonkeyPatch):
     smart._apply_network_guards(proxied, "socks5://127.0.0.1:1080")
     assert proxied["socket_timeout"] == 20
     assert "source_address" not in proxied
+
+
+# -------------------------------------------------- credential redaction (F5)
+
+
+def test_redact_credentials_strips_userinfo():
+    assert net.redact_credentials("socks5://user:pass@host:1080") == "socks5://host:1080"
+    assert net.redact_credentials("http://u:p@10.0.0.1:8080") == "http://10.0.0.1:8080"
+    # Nothing to redact -> unchanged.
+    assert net.redact_credentials("socks5://host:1080") == "socks5://host:1080"
+    assert net.redact_credentials("") == ""
+    assert net.redact_credentials("http://host/@path") == "http://host/@path"

@@ -88,6 +88,28 @@ def validate_proxy(url: str) -> str | None:
     return None
 
 
+def redact_credentials(url: str) -> str:
+    """Strip any ``user:pass@`` from a URL, keeping the rest intact.
+
+    A proxy address can embed credentials (``socks5://user:pass@host:1080``).
+    Those are a stored secret, so anything that leaves the machine - a settings
+    export, a diagnostics dump, a log line - must not carry them (CWE-522).
+    Returns the URL unchanged when there is no userinfo. Never raises.
+    """
+    if not url or "@" not in url:
+        return url
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return url
+    if not parts.username:
+        return url
+    host = parts.hostname or ""
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    return parts._replace(netloc=host).geturl()
+
+
 def _client_kwargs(proxy: str | None) -> dict[str, Any]:
     """httpx.Client kwargs that apply ``proxy``. SOCKS4/4a get an httpx-socks
     transport; everything else uses httpx's own proxy support."""

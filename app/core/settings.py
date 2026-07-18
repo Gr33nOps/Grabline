@@ -17,6 +17,21 @@ _AFTER_QUEUE_ACTIONS = ("nothing", "quit", "sleep", "shutdown", "hibernate", "lo
 #: Records of things already done to this machine, not preferences - see reset().
 _KEEP_ON_RESET = ("setup_seen", "host_registered")
 
+#: Settings keys dropped entirely from an export - plaintext API keys.
+_EXPORT_DROP = ("virustotal_key", "safebrowsing_key")
+
+
+def sanitized_export(raw: Mapping[str, str]) -> dict[str, str]:
+    """A settings dict safe to write to a shareable file: API keys removed and
+    any credentials embedded in the proxy URL redacted (CWE-312 / CWE-522).
+    Everything else is carried through unchanged."""
+    from app.core import net
+
+    out = {k: v for k, v in raw.items() if k not in _EXPORT_DROP}
+    if out.get("proxy"):
+        out["proxy"] = net.redact_credentials(out["proxy"])
+    return out
+
 
 class Settings:
     def __init__(self, db: Database) -> None:

@@ -180,3 +180,20 @@ def test_reset_leaves_downloads_and_stats_alone(db: Database, tmp_path: Path):
     assert Settings(db).max_concurrent == 3
     assert db.get_job(job.id) is not None
     assert db.stats_rows()
+
+
+def test_export_redacts_proxy_credentials(db: Database):
+    """A settings export must not carry the proxy password or the API keys
+    (CWE-312 / CWE-522)."""
+    from app.core.settings import sanitized_export
+
+    settings = Settings(db)
+    settings.proxy = "socks5://secretuser:secretpass@proxy.example:1080"
+    settings.virustotal_key = "VT-KEY"
+    settings.safebrowsing_key = "SB-KEY"
+
+    payload = sanitized_export(db.all_settings())
+    blob = str(payload)
+    assert "secretpass" not in blob and "secretuser" not in blob
+    assert payload["proxy"] == "socks5://proxy.example:1080"  # host kept, creds gone
+    assert "virustotal_key" not in payload and "safebrowsing_key" not in payload

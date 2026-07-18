@@ -925,14 +925,16 @@ class SettingsDialog(chrome.Dialog):
             return
         import json as _json
 
-        payload = self.settings.db.all_settings()
-        # Never export secrets in plain text.
-        for secret in ("virustotal_key", "safebrowsing_key"):
-            payload.pop(secret, None)
+        from app.core.settings import sanitized_export
+
+        # Never export secrets in plain text: API keys dropped, proxy creds redacted.
+        payload = sanitized_export(self.settings.db.all_settings())
         with open(path, "w", encoding="utf-8") as handle:
             _json.dump(payload, handle, indent=2, sort_keys=True)
         QMessageBox.information(
-            self, "Grabline", f"Settings exported to {path}\n(API keys are not included.)"
+            self,
+            "Grabline",
+            f"Settings exported to {path}\n(API keys and proxy credentials are not included.)",
         )
 
     def _import_settings(self) -> None:
