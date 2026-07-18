@@ -21,12 +21,18 @@ from PySide6.QtWidgets import QWidget
 from app.ui import theme
 from app.ui.format import human_bytes
 
-_FPS = 60
+#: Animation frame rate. 30, not 60: nothing here moves fast enough for the
+#: difference to be visible - a progress bar eases over ~200ms and the graphs
+#: scroll about two pixels a frame - while 60 cost twice the repaints and made
+#: the app the most expensive thing on screen during a download (measured
+#: 27.5% of a core with five running, against 17.8% at 30). Easing is defined
+#: in seconds and divides by _FPS, so timings are unchanged by this.
+_FPS = 30
 _FRAME_MS = 1000 // _FPS
 SPARK_HISTORY = 48
 
 #: How fast a graph's y-axis relaxes back down, per painted frame.
-_SCALE_EASE = 0.06
+_SCALE_EASE = 0.12
 
 
 def ease_scale(current: float, target: float) -> float:
