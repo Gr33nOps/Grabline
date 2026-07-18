@@ -551,11 +551,11 @@
         font-weight: 700;
         font-size: 16px;
       }
-      .plat .file {
-        font-family: var(--mono);
-        font-size: 12px;
+      .plat .hint {
+        font-size: 12.5px;
+        line-height: 1.5;
         color: var(--muted);
-        word-break: break-all;
+        min-height: 38px;
       }
       .plat .btn {
         margin-top: 10px;
@@ -964,18 +964,21 @@
           <div class="dl-grid" id="dlGrid">
             <div class="plat" data-os="windows">
               <span class="os">Windows</span>
-              <span class="file">Grabline-Setup-*.exe</span>
-              <a class="btn btn-primary" data-dl href="https://github.com/Gr33nOps/Grabline/releases/latest">Download</a>
+              <span class="hint">Installer, or a portable zip that needs no admin rights</span>
+              <a class="btn btn-primary" data-dl href="https://github.com/Gr33nOps/Grabline/releases/latest">Installer</a>
+              <a class="btn btn-ghost" data-dl-alt href="https://github.com/Gr33nOps/Grabline/releases/latest">Portable zip</a>
             </div>
             <div class="plat" data-os="mac">
               <span class="os">macOS</span>
-              <span class="file">Grabline-*.dmg</span>
-              <a class="btn btn-primary" data-dl href="https://github.com/Gr33nOps/Grabline/releases/latest">Download</a>
+              <span class="hint">Apple menu → About This Mac → Chip tells you which</span>
+              <a class="btn btn-primary" data-dl href="https://github.com/Gr33nOps/Grabline/releases/latest">Apple Silicon</a>
+              <a class="btn btn-ghost" data-dl-alt href="https://github.com/Gr33nOps/Grabline/releases/latest">Intel</a>
             </div>
             <div class="plat" data-os="linux">
               <span class="os">Linux</span>
-              <span class="file">Grabline-*.AppImage</span>
-              <a class="btn btn-primary" data-dl href="https://github.com/Gr33nOps/Grabline/releases/latest">Download</a>
+              <span class="hint">AppImage runs anywhere; the .deb adds a menu entry on Debian/Ubuntu/Mint</span>
+              <a class="btn btn-primary" data-dl href="https://github.com/Gr33nOps/Grabline/releases/latest">AppImage</a>
+              <a class="btn btn-ghost" data-dl-alt href="https://github.com/Gr33nOps/Grabline/releases/latest">.deb</a>
             </div>
           </div>
           <p class="note">
@@ -985,6 +988,7 @@
             AppImage won’t start, grab the
             <a id="tarballLink" href="https://github.com/Gr33nOps/Grabline/releases/latest" style="color: var(--accent)"><b>.tar.gz</b></a>
             (no FUSE needed) — extract it and run <code>./grabline/grabline</code>.
+            <a href="https://github.com/Gr33nOps/Grabline/blob/main/docs/install.md" style="color: var(--accent)">Full install guide →</a>
             <a href="https://github.com/Gr33nOps/Grabline/releases" style="color: var(--accent)">All releases →</a>
           </p>
         </div>
@@ -1063,8 +1067,17 @@
       function matchAsset(assets, os) {
         const by = (re) => assets.find((a) => re.test(a.name));
         if (os === "windows") return by(/setup.*\.exe$/i) || by(/\.exe$/i);
-        if (os === "mac") return by(/\.dmg$/i);
+        // Every browser reports "Intel Mac OS X" even on Apple Silicon, so the
+        // arch is never guessed here - both builds get their own button.
+        if (os === "mac") return by(/applesilicon.*\.dmg$/i) || by(/\.dmg$/i);
         return by(/\.appimage$/i);
+      }
+
+      function matchAltAsset(assets, os) {
+        const by = (re) => assets.find((a) => re.test(a.name));
+        if (os === "windows") return by(/portable\.zip$/i);
+        if (os === "mac") return by(/intel.*\.dmg$/i);
+        return by(/\.deb$/i);
       }
 
       // ---- pull the latest release and wire real download links ----
@@ -1088,15 +1101,21 @@
             const os = card.getAttribute("data-os");
             const asset = matchAsset(assets, os);
             const btn = card.querySelector("[data-dl]");
-            if (asset) {
-              btn.href = asset.browser_download_url;
-              btn.textContent = "Download " + asset.name.slice(asset.name.lastIndexOf("."));
-              card.querySelector(".file").textContent = asset.name;
+            if (asset) btn.href = asset.browser_download_url;
+            const alt = matchAltAsset(assets, os);
+            const altBtn = card.querySelector("[data-dl-alt]");
+            // An older release may not carry the second build; hide the button
+            // rather than point it at a file that isn't there.
+            if (altBtn) {
+              if (alt) altBtn.href = alt.browser_download_url;
+              else altBtn.style.display = "none";
             }
             if (os === osKey) card.classList.add("is-you");
           });
 
-          const mine = matchAsset(assets, osKey);
+          // Mac visitors pick their own chip below; everyone else gets the
+          // direct file.
+          const mine = osKey === "mac" ? null : matchAsset(assets, osKey);
           if (mine) heroBtn.href = mine.browser_download_url;
         })
         .catch(() => {

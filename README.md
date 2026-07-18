@@ -291,9 +291,14 @@ with your browsers on first launch.
 
 | System | File | How |
 |---|---|---|
-| **Windows** | `Grabline-Setup-*.exe` | Run it → Grabline installs and appears in the Start Menu |
-| **macOS** | `Grabline-*.dmg` | Open it, drag **Grabline** to Applications |
-| **Linux** | `Grabline-*-x86_64.AppImage` | `chmod +x` it and run; it adds itself to your app grid. No FUSE? Use the `.tar.gz` — extract and run `./grabline/grabline` |
+| **Windows** | `Grabline-Setup-*.exe` | Run it → Grabline installs and appears in the Start Menu. No admin rights? Take the `*-windows-portable.zip` instead |
+| **macOS** | `Grabline-*-applesilicon.dmg` or `*-intel.dmg` | Open it, drag **Grabline** to Applications. Apple menu → About This Mac tells you which |
+| **Linux** | `grabline_*_amd64.deb` | `sudo apt install ./grabline_*_amd64.deb` on Debian/Ubuntu/Mint |
+| **Linux (any distro)** | `Grabline-*-x86_64.AppImage` | `chmod +x` it and run; it adds itself to your app grid. No FUSE? Use the `.tar.gz` — extract and run `./grabline/grabline` |
+
+**[Full install guide →](docs/install.md)** — per-system steps, the exact
+click-through for the unsigned-app warnings, where your data lives, and how to
+uninstall.
 
 Then add the browser extension:
 
