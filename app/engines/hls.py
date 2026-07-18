@@ -60,6 +60,7 @@ class HlsDownload:
         self._downloaded = 0
         self._out_time = 0.0  # seconds muxed so far, from -progress
         self._size_ema: float | None = None  # smoothed total-size estimate
+        self._est_ref: tuple[int, float] | None = None  # (bytes, out_time) anchor
         self._duration: float | None = None
         self._failure = "FFmpeg could not process this stream"
         options = job.options or {}
@@ -232,30 +233,40 @@ class HlsDownload:
         stream.close()
 
     def _persist_estimate(self, last_estimate: int) -> int:
-        """Total-size estimate: bytes so far scaled by muxed/total duration.
+        """Total-size estimate from the stream's steady-state bitrate.
 
-        Two things kept the old version jumpy: the raw estimate rode every
-        bitrate wobble, and it was only rewritten on a >2% move - so the
-        downloaded bytes ran ahead of a stale total and the percentage lurched.
-        Now the estimate is EMA-smoothed (it converges instead of jumping), it
-        never drops below what's already on disk (the bar can't exceed 100%),
-        and it is persisted in step with the downloaded bytes so both progress
-        bars read the same steadily-rising fraction. The real size replaces it
-        at finalize.
+        Scaling bytes-so-far by muxed/total duration reads absurdly high at the
+        start: FFmpeg writes the container header and reads several segments
+        ahead before out_time has moved, so a few MB over a fraction of a second
+        extrapolates to hundreds of GB (the '500 GB that became 2 GB' report).
+        Instead we anchor a reference point once past that startup, measure the
+        bitrate only over what's muxed *after* it, and extrapolate the bytes
+        still to come. That is accurate from the first estimate; an EMA irons
+        out VBR wobble, it never drops below what's on disk, and it is persisted
+        in step with the downloaded bytes so both progress bars agree. The real
+        size replaces it at finalize.
         """
-        if not self._duration or self._out_time < _ESTIMATE_MIN_SECONDS:
+        if not self._duration or self._downloaded <= 0 or self._out_time >= self._duration:
             return last_estimate
-        if self._out_time >= self._duration or self._downloaded <= 0:
+        # Anchor once the container startup is behind us; measure from there.
+        if self._est_ref is None:
+            if self._out_time >= _ESTIMATE_MIN_SECONDS:
+                self._est_ref = (self._downloaded, self._out_time)
             return last_estimate
-        raw = self._downloaded * self._duration / self._out_time
+        ref_bytes, ref_time = self._est_ref
+        span = self._out_time - ref_time
+        if span < _ESTIMATE_MIN_SECONDS:  # need a window to read a steady rate
+            return last_estimate
+        rate = (self._downloaded - ref_bytes) / span  # bytes per muxed second
+        estimate = self._downloaded + (self._duration - self._out_time) * rate
         if self._size_ema is None:
-            self._size_ema = raw
+            self._size_ema = estimate
         else:
-            self._size_ema += (raw - self._size_ema) * 0.15
-        estimate = max(int(self._size_ema), self._downloaded)
-        if estimate != last_estimate:
-            self.db.update_job_total(self.job.id, estimate)
-        return estimate
+            self._size_ema += (estimate - self._size_ema) * 0.2
+        published = max(int(self._size_ema), self._downloaded)
+        if published != last_estimate:
+            self.db.update_job_total(self.job.id, published)
+        return published
 
     @staticmethod
     def _terminate(process: subprocess.Popen[str]) -> None:

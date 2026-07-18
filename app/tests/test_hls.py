@@ -169,3 +169,37 @@ def test_live_playlist_is_refused_clearly(server: MediaServer, db: Database, des
     fresh = db.get_job(job.id)
     assert fresh is not None
     assert fresh.error is not None and "live" in fresh.error.lower()
+
+
+def test_estimate_does_not_read_absurdly_high_early():
+    """The early size estimate used to extrapolate the container header over a
+    fraction of a second into hundreds of GB. Anchored from a steady window,
+    it stays near the true size once it appears."""
+    import tempfile
+    from pathlib import Path
+
+    from app.core.models import JobKind
+    from app.db.database import Database
+    from app.engines.hls import HlsDownload
+
+    tmp = Path(tempfile.mkdtemp())
+    db = Database(tmp / "t.db")
+    job = db.create_job("https://x/s.m3u8", str(tmp), "s.mp4", kind=JobKind.HLS, title="s")
+    task = HlsDownload(db, job, ffmpeg_path=None)
+    task._duration = 7200.0  # 2-hour video
+    header, bitrate = 2_000_000, (2_000_000_000 - 2_000_000) / 7200.0  # ~2 GB total
+
+    last = 0
+    seen: list[int] = []
+    for out in (0.5, 2.0, 5.0, 8.0, 12.0, 60.0, 600.0, 3600.0):
+        task._downloaded = int(header + bitrate * out)
+        task._out_time = out
+        last = task._persist_estimate(last)
+        total = db.get_job(job.id).total_size
+        if total:
+            seen.append(total)
+
+    assert seen, "an estimate should eventually be published"
+    # Every published estimate is within 20% of the true ~2 GB - never 500 GB.
+    assert all(1.6e9 <= t <= 2.4e9 for t in seen), [t / 1e9 for t in seen]
+    db.close()

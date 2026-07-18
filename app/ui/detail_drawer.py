@@ -28,14 +28,18 @@ from app.ui.format import human_bytes
 from app.ui.icons import svg_icon, type_icon_name
 
 #: Long URLs and paths have no spaces, so a word-wrapping label can't break
-#: them - it demands its full width and pushes the panel past its edge. Inserting
-#: zero-width spaces after the usual boundaries lets them wrap. The value shown
-#: to the user is unchanged (copy actions use the real url/path, not this).
-_BREAK_AFTER = re.compile(r"([/\\._\-?&=:])")
+#: them - it demands its full width and pushes the panel (and the graph card
+#: beside it) past the edge. Insert zero-width spaces after the usual
+#: boundaries AND inside any long unbroken run (base64 tokens have no
+#: boundaries at all), so the label can wrap to the panel width. The value the
+#: user sees is unchanged; copy actions use the real url/path, not this.
+_BREAK_AFTER = re.compile(r"([/\\._\-?&=:@])")
+_LONG_RUN = re.compile(r"(\S{18})")
 
 
 def _wrappable(text: str) -> str:
-    return _BREAK_AFTER.sub("\\1​", text)
+    text = _BREAK_AFTER.sub("\\1​", text)
+    return _LONG_RUN.sub("\\1​", text)
 
 
 class DetailDrawer(QFrame):
