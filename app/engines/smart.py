@@ -1002,20 +1002,25 @@ class SmartDownload:
         if self._wants_ffmpeg():
             self._ensure_ffmpeg()
 
-        prefer_cookies = (
-            bool(self.job.options.get("use_session")) and self._cookie_browser() is not None
-        )
-        runtime_first = prefer_cookies or bool(self.job.options.get("hq_first"))
+        # Cookies and the JS runtime are NEVER used up front. The runtime costs
+        # 26-87s per extraction (and can fetch Deno), and cookies push yt-dlp
+        # onto JS-dependent clients that are slower and more failure-prone - so
+        # forcing them on every video (which is what enabling "browser session"
+        # used to do) made every YouTube download slow, and sometimes stall
+        # before it started. The first attempt is always plain jsless yt-dlp:
+        # it starts in seconds for virtually every public video. The runtime
+        # and cookies are added only when a specific video fails in a way they
+        # would fix. Quality-first (Settings) is the sole opt-in that pays for
+        # the runtime up front, to reach the full 4K ladder.
+        runtime_first = bool(self.job.options.get("hq_first"))
         if runtime_first:
-            # Cookies push yt-dlp onto JS-dependent clients; quality-first
-            # wants the complete ladder. Both need the runtime up front.
             if self._js_runtime is None:
                 self._js_runtime = jsruntime.detect_js_runtime()
             if self._js_runtime is None:
                 self._ensure_js_runtime()  # may download Deno once; no-op off YouTube
         try:
             return self._download(
-                with_cookies=prefer_cookies,
+                with_cookies=False,
                 with_runtime=runtime_first and self._js_runtime is not None,
             )
         except yt_dlp.utils.DownloadError as exc:
@@ -1023,9 +1028,10 @@ class SmartDownload:
                 raise
             message = str(exc)
             browser = self._cookie_browser()
-            add_login = (
-                browser is not None and not prefer_cookies and _looks_like_auth_wall(message)
-            )
+            # Age/members walls escalate to the browser login automatically -
+            # only for that video, and always with the runtime the signed-in
+            # client needs, so a login never slows or breaks a normal video.
+            add_login = browser is not None and _looks_like_auth_wall(message)
             add_runtime = not runtime_first and _runtime_might_help(message)
             if not (add_login or add_runtime):
                 raise  # unrecoverable (removed, geo-blocked, ...) - fail fast, no slow retry
@@ -1040,7 +1046,7 @@ class SmartDownload:
             if self._js_runtime is None:
                 self._ensure_js_runtime()  # may download Deno once; no-op off YouTube
             return self._download(
-                with_cookies=prefer_cookies or add_login,
+                with_cookies=add_login,
                 with_runtime=self._js_runtime is not None,
             )
 

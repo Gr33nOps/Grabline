@@ -239,13 +239,10 @@ class SettingsDialog(chrome.Dialog):
         pairing_layout.addWidget(setup_button)
         browser_layout.addWidget(pairing)
 
-        session = QGroupBox("Browser session (advanced)")
+        session = QGroupBox("Browser login (advanced)")
         session_layout = QVBoxLayout(session)
-        self.session_check = QCheckBox("Let Grabline use my browser's login session")
-        self.session_check.setChecked(settings.use_browser_session)
-        session_layout.addWidget(self.session_check)
         browser_row = QHBoxLayout()
-        browser_row.addWidget(QLabel("Browser:"))
+        browser_row.addWidget(QLabel("Read login from:"))
         self.browser_combo = QComboBox()
         for browser in SESSION_BROWSERS:
             self.browser_combo.addItem(browser.capitalize(), browser)
@@ -254,8 +251,9 @@ class SettingsDialog(chrome.Dialog):
         session_layout.addLayout(browser_row)
         session_layout.addWidget(
             _note(
-                "Grabline reads your browser login only when a video requires it; this forces "
-                "it on. It's read per download, kept in memory, and never stored."
+                "Age- or members-restricted videos need a login. Grabline reads it from this "
+                "browser automatically, only for the video that asks - per download, kept in "
+                "memory, never stored. Normal videos never touch it, so downloads stay fast."
             )
         )
         browser_layout.addWidget(session)
@@ -1215,7 +1213,6 @@ class SettingsDialog(chrome.Dialog):
         )
         self.settings.categories_enabled = self.categories_check.isChecked()
         self.settings.clipboard_watcher = self.clipboard_check.isChecked()
-        self.settings.use_browser_session = self.session_check.isChecked()
         self.settings.session_browser = self.browser_combo.currentData()
         self.settings.max_concurrent = self.concurrent_spin.value()
         self.settings.connections = self.connections_spin.value()

@@ -620,3 +620,23 @@ def test_http_403_escalates_to_the_runtime_retry(db: Database, dest: Path, monke
     monkeypatch.setattr(task, "_download", fake_download)
     assert task._download_smart() == {"title": "ok"}
     assert calls == [(False, False), (False, True)]  # jsless first, runtime retry after 403
+
+
+def test_browser_session_does_not_force_the_slow_path(db: Database, dest: Path, monkeypatch):
+    # Enabling "browser session" must NOT push cookies + the JS runtime onto a
+    # normal video up front - that was what made every YouTube download slow.
+    # The first attempt stays plain jsless; it succeeds and there is no retry.
+    _no_runtime(monkeypatch)
+    job = _smart_job(
+        db, "https://youtu.be/x", dest, "v.mp4", use_session=True, session_browser="firefox"
+    )
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    calls: list[tuple[bool, bool]] = []
+
+    def fake_download(*, with_cookies: bool, with_runtime: bool):
+        calls.append((with_cookies, with_runtime))
+        return {"title": "ok"}
+
+    monkeypatch.setattr(task, "_download", fake_download)
+    assert task._download_smart() == {"title": "ok"}
+    assert calls == [(False, False)]  # fast, cookie-free, no runtime, no retry

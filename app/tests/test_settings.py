@@ -41,7 +41,6 @@ def test_roundtrip(db: Database, tmp_path: Path):
     settings.download_dir = tmp_path / "dl"
     settings.categories_enabled = False
     settings.clipboard_watcher = False
-    settings.use_browser_session = True
     settings.session_browser = "firefox"
     settings.max_concurrent = 5
     settings.connections = 4
@@ -51,7 +50,7 @@ def test_roundtrip(db: Database, tmp_path: Path):
     assert fresh.download_dir == tmp_path / "dl"
     assert fresh.categories_enabled is False
     assert fresh.clipboard_watcher is False
-    assert fresh.use_browser_session is True
+    assert fresh.use_browser_session is False  # deprecated: always off now
     assert fresh.session_browser == "firefox"
     assert fresh.max_concurrent == 5
     assert fresh.connections == 4

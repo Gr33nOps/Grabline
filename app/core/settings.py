@@ -84,12 +84,13 @@ class Settings:
 
     @property
     def use_browser_session(self) -> bool:
-        """F0.8: off by default; plain-language consent lives in the settings UI."""
-        return self._get_bool("use_browser_session", False)
-
-    @use_browser_session.setter
-    def use_browser_session(self, value: bool) -> None:
-        self._set_bool("use_browser_session", value)
+        """Deprecated - always off. This used to force browser cookies and the
+        JS runtime onto every YouTube download up front, which made them slow
+        and sometimes stalled them before they started. Cookies are now used
+        automatically only for a video that needs a login (age/members), so
+        there is nothing to force on. Returns False regardless of any old
+        stored value so existing users get the fast path too."""
+        return False
 
     @property
     def session_browser(self) -> str:

@@ -287,6 +287,13 @@ def main() -> int:
             from app.core import jsruntime
 
             jsruntime.detect_js_runtime()
+            # YouTube merges separate video+audio, so it needs FFmpeg. Fetch it
+            # now, in the background, so the *first* video download doesn't stall
+            # waiting on a one-time ~30 MB download.
+            from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
+
+            if find_ffmpeg(settings) is None:
+                ensure_ffmpeg(proxy=settings.proxy)
         except Exception:  # never let warm-up break startup
             log.debug("yt-dlp warm-up failed", exc_info=True)
 
