@@ -55,6 +55,7 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 - **A real accelerator** — up to 128 connections per file, dynamic segmentation, HTTP/2, crash-proof resume, retry-forever reconnect, mirror failover
 - **A browser button that just works** — hover ⬇ on videos, quality picked on the page, everything over Native Messaging (no open ports)
 - **Video & audio without the terminal** — yt-dlp inside: 4K → 144p, MP3/M4A/FLAC with cover art, subtitles, playlists, SponsorBlock
+- **Light on your machine** — ~1% CPU sitting idle, half a second to start; [the numbers](docs/performance.md)
 - **A full torrent client** — libtorrent (the qBittorrent engine): magnets, DHT, sequential streaming, seeding ratios, RSS auto-queue
 - **Cloud & file servers** — SFTP/FTP/S3/WebDAV with resume, public Drive/Dropbox share links at full speed
 - **A queue *manager*** — named queues with schedules, priorities, dependencies, category auto-assign

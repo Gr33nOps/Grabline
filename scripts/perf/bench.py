@@ -200,7 +200,7 @@ def render(results: dict) -> str:
     if startup and "error" not in startup:
         lines += [
             "",
-            "STARTUP (to first paint, median of %d)" % startup["runs"],
+            f"STARTUP (to first paint, median of {startup['runs']})",
             f"  import app.__main__      {_fmt(startup['import_ms_median'], 'ms')}",
             f"  total to interactive     {_fmt(startup['total_ms_median'], 'ms')}"
             f"   (best {_fmt(startup['total_ms_min'], 'ms')})",
