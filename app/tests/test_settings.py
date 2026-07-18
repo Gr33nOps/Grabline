@@ -144,3 +144,39 @@ def test_favorite_folders_and_rename_rules_roundtrip(db: Database):
 
     db.set_setting("rename_rules", "not json")
     assert Settings(db).rename_rules == ()
+
+
+def test_reset_restores_defaults_but_keeps_machine_state(db: Database, tmp_path: Path):
+    settings = Settings(db)
+    settings.max_concurrent = 9
+    settings.theme = "dark"
+    settings.close_to_tray = False
+    settings.download_dir = str(tmp_path / "elsewhere")
+    settings.virustotal_key = "secret"
+    # Not preferences: these record what already happened to this machine.
+    settings.setup_seen = True
+    settings.host_registered = True
+
+    settings.reset()
+
+    fresh = Settings(db)
+    assert fresh.max_concurrent == 3
+    assert fresh.theme == "system"
+    assert fresh.close_to_tray is True
+    assert fresh.download_dir == default_download_dir()
+    assert fresh.virustotal_key == ""
+    assert fresh.setup_seen is True  # the wizard does not come back
+    assert fresh.host_registered is True  # nor does silent re-pairing
+
+
+def test_reset_leaves_downloads_and_stats_alone(db: Database, tmp_path: Path):
+    settings = Settings(db)
+    settings.max_concurrent = 7
+    job = db.create_job("https://example.com/a.bin", str(tmp_path), "a.bin")
+    db.record_download("Programs", "example.com", 1024)
+
+    settings.reset()
+
+    assert Settings(db).max_concurrent == 3
+    assert db.get_job(job.id) is not None
+    assert db.stats_rows()

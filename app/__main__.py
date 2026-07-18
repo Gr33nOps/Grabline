@@ -236,6 +236,7 @@ def main() -> int:
         tray.show()
         app.setQuitOnLastWindowClosed(False)
         window.close_to_tray = True
+        window.tray = tray
 
     watcher = ClipboardWatcher(app, settings)
     window.clipboard_suppressor = watcher.suppress

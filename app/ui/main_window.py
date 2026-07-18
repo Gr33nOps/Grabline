@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QStackedWidget,
+    QSystemTrayIcon,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -139,6 +140,7 @@ class MainWindow(QMainWindow):
         self.settings = settings
         self.resolver = Resolver()
         self.close_to_tray = False
+        self.tray: QSystemTrayIcon | None = None
         self.setWindowTitle("Grabline")
         self.resize(1040, 600)
         self.setMinimumSize(760, 420)
@@ -1199,7 +1201,9 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.settings.download_dir)))
 
     def _open_settings(self) -> None:
-        if SettingsDialog(self.settings, self).exec() == SettingsDialog.DialogCode.Accepted:
+        dialog = SettingsDialog(self.settings, self)
+        dialog.settings_reset.connect(self.manager.reload_settings)
+        if dialog.exec() == SettingsDialog.DialogCode.Accepted:
             self.manager.reload_settings()
             app = QApplication.instance()
             if isinstance(app, QApplication):
@@ -2312,6 +2316,19 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self.hide)
         super().changeEvent(event)
 
+    def _hint_still_running(self) -> None:
+        """Say so, once, the first time closing the window only hides it -
+        otherwise Grabline looks like it quit and downloads look lost."""
+        if self.tray is None or self.settings.tray_hint_shown:
+            return
+        self.settings.tray_hint_shown = True
+        self.tray.showMessage(
+            "Grabline is still running",
+            "Downloads keep going. Click the tray icon to bring the window back.",
+            QSystemTrayIcon.MessageIcon.Information,
+            6000,
+        )
+
     def _active_download_count(self) -> int:
         return sum(1 for v in self._last_views.values() if v.status is JobStatus.DOWNLOADING)
 
@@ -2319,13 +2336,15 @@ class MainWindow(QMainWindow):
         if self.close_to_tray and self.settings.close_to_tray and self.isVisible():
             event.ignore()
             self.hide()
+            self._hint_still_running()
             return
         active = self._active_download_count()
         if active and self.settings.confirm_exit_active:
+            noun = "download is" if active == 1 else "downloads are"
             answer = QMessageBox.question(
                 self,
                 "Grabline",
-                f"{active} download(s) are still running - quit anyway?\n"
+                f"{active} {noun} still running - quit anyway?\n"
                 "(Progress is saved; they resume next launch.)",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,

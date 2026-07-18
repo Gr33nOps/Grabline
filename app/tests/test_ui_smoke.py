@@ -884,3 +884,67 @@ def test_toolbar_has_one_torrent_dropdown(db: Database, tmp_path: Path):
         assert {"Add torrent…", "Search torrents…", "Create torrent…"} <= labels
     finally:
         manager.shutdown()
+
+
+def test_reset_reloads_every_field_in_place(db: Database, monkeypatch):
+    """Reset wipes the stored preferences and the open page shows the defaults
+    straight away - no reopen, no restart."""
+    from PySide6.QtWidgets import QMessageBox
+
+    from app.core import launcher
+    from app.ui.settings_dialog import SettingsDialog
+
+    _qapp()
+    settings = Settings(db)
+    dialog = SettingsDialog(settings)
+    monkeypatch.setattr(launcher, "set_autostart", lambda enabled: None)
+    monkeypatch.setattr(launcher, "autostart_enabled", lambda: False)
+
+    # Move a field of each kind away from its default, then save.
+    dialog.concurrent_spin.setValue(9)  # spin
+    dialog.tray_close_check.setChecked(False)  # check
+    dialog.theme_combo.setCurrentIndex(dialog.theme_combo.findData("dark"))  # combo
+    dialog.ua_edit.setText("Grabline/UA")  # line edit
+    dialog.host_limits_edit.setPlainText("cdn.example.com = 500")  # plain text
+    dialog.toast_spin.setValue(20)
+    assert dialog.apply()
+    assert Settings(db).max_concurrent == 9
+
+    emitted: list[int] = []
+    dialog.settings_reset.connect(lambda: emitted.append(1))
+    monkeypatch.setattr(
+        "app.ui.settings_dialog.QMessageBox.question",
+        lambda *a, **k: QMessageBox.StandardButton.Yes,
+    )
+    dialog._reset_settings()
+
+    assert emitted == [1]  # the window is told to re-read the store
+    assert dialog.concurrent_spin.value() == 3
+    assert dialog.tray_close_check.isChecked() is True
+    assert dialog.theme_combo.currentData() == "system"
+    assert dialog.ua_edit.text() == ""
+    assert dialog.host_limits_edit.toPlainText() == ""
+    assert dialog.toast_spin.value() == 4
+
+
+def test_reset_is_cancelable(db: Database, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from app.core import launcher
+    from app.ui.settings_dialog import SettingsDialog
+
+    _qapp()
+    settings = Settings(db)
+    dialog = SettingsDialog(settings)
+    monkeypatch.setattr(launcher, "set_autostart", lambda enabled: None)
+    dialog.concurrent_spin.setValue(9)
+    assert dialog.apply()
+
+    monkeypatch.setattr(
+        "app.ui.settings_dialog.QMessageBox.question",
+        lambda *a, **k: QMessageBox.StandardButton.No,
+    )
+    dialog._reset_settings()
+
+    assert Settings(db).max_concurrent == 9
+    assert dialog.concurrent_spin.value() == 9

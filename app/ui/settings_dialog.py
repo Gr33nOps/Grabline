@@ -13,6 +13,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QThread, QTime, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialogButtonBox,
@@ -40,7 +41,7 @@ from app.core import launcher, paths
 from app.core.errors import DownloadError
 from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
 from app.core.settings import SESSION_BROWSERS, Settings
-from app.ui import chrome, components, design, threads
+from app.ui import chrome, components, design, theme, threads
 from app.ui.format import human_bytes
 
 _PROJECT_URL = "https://github.com/Gr33nOps/Grabline"
@@ -100,6 +101,9 @@ class _FfmpegInstaller(QThread):
 
 
 class SettingsDialog(chrome.Dialog):
+    #: Emitted after "Reset all settings" so the window reloads what it caches.
+    settings_reset = Signal()
+
     def __init__(self, settings: Settings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.settings = settings
@@ -113,34 +117,27 @@ class SettingsDialog(chrome.Dialog):
         # ---- General ---------------------------------------------------------
         general_form = self._add_form_tab(tabs, "General")
         self.autostart_check = QCheckBox("Start Grabline when I log in (minimized to the tray)")
-        self.autostart_check.setChecked(launcher.autostart_enabled())
         general_form.addRow(self.autostart_check)
         self.updates_check = QCheckBox("Check for Grabline updates on startup")
-        self.updates_check.setChecked(settings.check_updates)
         general_form.addRow(self.updates_check)
         self.start_min_check = QCheckBox("Start minimized to the tray")
-        self.start_min_check.setChecked(settings.start_minimized)
         general_form.addRow(self.start_min_check)
         self.tray_min_check = QCheckBox("Minimize to the tray instead of the taskbar")
-        self.tray_min_check.setChecked(settings.minimize_to_tray)
         general_form.addRow(self.tray_min_check)
         self.tray_close_check = QCheckBox("Closing the window keeps Grabline in the tray")
-        self.tray_close_check.setChecked(settings.close_to_tray)
         general_form.addRow(self.tray_close_check)
         self.confirm_exit_check = QCheckBox("Confirm exit while downloads are running")
-        self.confirm_exit_check.setChecked(settings.confirm_exit_active)
         general_form.addRow(self.confirm_exit_check)
         self.new_dl_combo = QComboBox()
         self.new_dl_combo.addItem("Start automatically", True)
         self.new_dl_combo.addItem("Add paused (start by hand)", False)
-        self.new_dl_combo.setCurrentIndex(0 if settings.auto_start_downloads else 1)
         general_form.addRow("New downloads:", self.new_dl_combo)
         general_form.addRow(_note("Grabline runs as a single instance. English only for now."))
 
         # ---- Downloads -------------------------------------------------------
         downloads_form = self._add_form_tab(tabs, "Downloads")
         folder_row = QHBoxLayout()
-        self.folder_edit = QLineEdit(str(settings.download_dir))
+        self.folder_edit = QLineEdit()
         browse = QPushButton("Browse…")
         browse.clicked.connect(self._browse_folder)
         folder_row.addWidget(self.folder_edit, 1)
@@ -149,21 +146,17 @@ class SettingsDialog(chrome.Dialog):
         self.categories_check = QCheckBox(
             "Sort into Video / Music / Images / Documents / Archives / Programs / Games / Torrents"
         )
-        self.categories_check.setChecked(settings.categories_enabled)
         downloads_form.addRow(self.categories_check)
         self.ask_save_check = QCheckBox("Ask where to save each download")
-        self.ask_save_check.setChecked(settings.ask_save_dir)
         downloads_form.addRow(self.ask_save_check)
         self.concurrent_spin = QSpinBox()
         self.concurrent_spin.setRange(1, 10)
-        self.concurrent_spin.setValue(settings.max_concurrent)
         downloads_form.addRow("Simultaneous downloads:", self.concurrent_spin)
         self.free_mb_spin = QSpinBox()
         self.free_mb_spin.setRange(0, 1_000_000)
         self.free_mb_spin.setSingleStep(100)
         self.free_mb_spin.setSuffix(" MB")
         self.free_mb_spin.setSpecialValueText("Off")
-        self.free_mb_spin.setValue(settings.min_free_mb)
         downloads_form.addRow("Low disk space warning:", self.free_mb_spin)
         downloads_form.addRow(
             _note(
@@ -176,22 +169,19 @@ class SettingsDialog(chrome.Dialog):
         engine_form = self._add_form_tab(tabs, "Download Engine")
         self.connections_spin = QSpinBox()
         self.connections_spin.setRange(1, 128)
-        self.connections_spin.setValue(settings.connections)
         engine_form.addRow("Connections per download:", self.connections_spin)
         self.speed_spin = QSpinBox()
         self.speed_spin.setRange(0, 1_000_000)
         self.speed_spin.setSingleStep(256)
         self.speed_spin.setSuffix(" KB/s")
         self.speed_spin.setSpecialValueText("Unlimited")
-        self.speed_spin.setValue(settings.speed_limit_kbps)
         engine_form.addRow("Speed limit:", self.speed_spin)
         schedule_row = QHBoxLayout()
         schedule_row.setSpacing(10)
         self.schedule_check = QCheckBox("Full speed between")
-        self.schedule_check.setChecked(settings.speed_schedule_enabled)
-        self.full_from = QTimeEdit(QTime.fromString(settings.speed_full_from, "HH:mm"))
+        self.full_from = QTimeEdit()
         self.full_from.setDisplayFormat("HH:mm")
-        self.full_to = QTimeEdit(QTime.fromString(settings.speed_full_to, "HH:mm"))
+        self.full_to = QTimeEdit()
         self.full_to.setDisplayFormat("HH:mm")
         schedule_row.addWidget(self.schedule_check)
         schedule_row.addWidget(self.full_from)
@@ -201,10 +191,8 @@ class SettingsDialog(chrome.Dialog):
         engine_form.addRow("Speed schedule:", schedule_row)
         retry_row = QHBoxLayout()
         self.retry_check = QCheckBox("Auto-retry failed downloads, up to")
-        self.retry_check.setChecked(settings.auto_retry)
         self.retry_spin = QSpinBox()
         self.retry_spin.setRange(0, 99)
-        self.retry_spin.setValue(settings.auto_retry_max)
         self.retry_spin.setSuffix(" times")
         self.retry_spin.setSpecialValueText("Forever")
         retry_row.addWidget(self.retry_check)
@@ -247,7 +235,6 @@ class SettingsDialog(chrome.Dialog):
         self.browser_combo = QComboBox()
         for browser in SESSION_BROWSERS:
             self.browser_combo.addItem(browser.capitalize(), browser)
-        self.browser_combo.setCurrentIndex(SESSION_BROWSERS.index(settings.session_browser))
         browser_row.addWidget(self.browser_combo, 1)
         session_layout.addLayout(browser_row)
         session_layout.addWidget(
@@ -261,7 +248,6 @@ class SettingsDialog(chrome.Dialog):
         self.clipboard_check = QCheckBox(
             "URL catcher: offer to download links copied to the clipboard"
         )
-        self.clipboard_check.setChecked(settings.clipboard_watcher)
         browser_layout.addWidget(self.clipboard_check)
         browser_layout.addWidget(
             _note(
@@ -287,30 +273,24 @@ class SettingsDialog(chrome.Dialog):
         playlist_form = QFormLayout()
         self.playlist_cap_spin = QSpinBox()
         self.playlist_cap_spin.setRange(1, 500)
-        self.playlist_cap_spin.setValue(settings.playlist_batch_cap)
         playlist_form.addRow("Preselect playlist entries:", self.playlist_cap_spin)
         video_layout.addLayout(playlist_form)
         self.hq_first_check = QCheckBox(
             "Prefer highest quality over a fast start (solves YouTube's JS "
             "challenge up front; can add minutes before a download begins)"
         )
-        self.hq_first_check.setChecked(settings.video_hq_first)
         video_layout.addWidget(self.hq_first_check)
         defaults_form = QFormLayout()
         self.default_quality_combo = QComboBox()
         for label in ("Best", "2160p", "1440p", "1080p", "720p", "480p", "MP3", "M4A", "FLAC"):
             self.default_quality_combo.addItem(label)
-        self.default_quality_combo.setCurrentText(settings.video_default_quality)
         defaults_form.addRow("Default quality:", self.default_quality_combo)
         self.bitrate_combo = QComboBox()
         for rate in ("128", "192", "256", "320"):
             self.bitrate_combo.addItem(f"{rate} kbps", rate)
-        self.bitrate_combo.setCurrentIndex(
-            max(0, self.bitrate_combo.findData(settings.audio_bitrate))
-        )
         defaults_form.addRow("MP3 bitrate:", self.bitrate_combo)
         cookies_row = QHBoxLayout()
-        self.cookies_edit = QLineEdit(settings.cookies_file)
+        self.cookies_edit = QLineEdit()
         self.cookies_edit.setPlaceholderText("cookies.txt (Netscape format) - blank = off")
         cookies_browse = QPushButton("Browse…")
         cookies_browse.clicked.connect(self._browse_cookies)
@@ -339,25 +319,19 @@ class SettingsDialog(chrome.Dialog):
         torrent_form = self._add_form_tab(tabs, "Torrent")
         self.torrent_port_spin = QSpinBox()
         self.torrent_port_spin.setRange(1024, 65535)
-        self.torrent_port_spin.setValue(settings.torrent_port)
         torrent_form.addRow("Listen port:", self.torrent_port_spin)
         self.dht_check = QCheckBox("DHT (find peers without trackers; needed for magnets)")
-        self.dht_check.setChecked(settings.torrent_dht)
         torrent_form.addRow(self.dht_check)
         self.upnp_check = QCheckBox("UPnP port mapping")
-        self.upnp_check.setChecked(settings.torrent_upnp)
         torrent_form.addRow(self.upnp_check)
         self.natpmp_check = QCheckBox("NAT-PMP port mapping")
-        self.natpmp_check.setChecked(settings.torrent_natpmp)
         torrent_form.addRow(self.natpmp_check)
         seed_row = QHBoxLayout()
         self.seed_check = QCheckBox("Seed after downloading, up to ratio")
-        self.seed_check.setChecked(settings.torrent_seed)
         self.ratio_spin = QDoubleSpinBox()
         self.ratio_spin.setRange(0.0, 100.0)
         self.ratio_spin.setSingleStep(0.5)
         self.ratio_spin.setSpecialValueText("Forever")
-        self.ratio_spin.setValue(settings.torrent_ratio_limit)
         seed_row.addWidget(self.seed_check)
         seed_row.addWidget(self.ratio_spin)
         seed_row.addStretch(1)
@@ -367,31 +341,27 @@ class SettingsDialog(chrome.Dialog):
         self.upload_spin.setSingleStep(64)
         self.upload_spin.setSuffix(" KB/s")
         self.upload_spin.setSpecialValueText("Unlimited")
-        self.upload_spin.setValue(settings.torrent_upload_kbps)
         torrent_form.addRow("Upload limit:", self.upload_spin)
         self.sequential_check = QCheckBox("Sequential download by default (stream-friendly)")
-        self.sequential_check.setChecked(settings.torrent_sequential)
         torrent_form.addRow(self.sequential_check)
         torrent_dir_row = QHBoxLayout()
-        self.torrent_dir_edit = QLineEdit(str(settings.torrent_dir) if settings.torrent_dir else "")
+        self.torrent_dir_edit = QLineEdit()
         self.torrent_dir_edit.setPlaceholderText("blank = the download folder")
         torrent_browse = QPushButton("Browse…")
         torrent_browse.clicked.connect(self._browse_torrent_folder)
         torrent_dir_row.addWidget(self.torrent_dir_edit, 1)
         torrent_dir_row.addWidget(torrent_browse)
         torrent_form.addRow("Save torrents to:", torrent_dir_row)
-        self.search_url_edit = QLineEdit(settings.torrent_search_url)
+        self.search_url_edit = QLineEdit()
         self.search_url_edit.setPlaceholderText("https://example.com/search?q=%s")
         torrent_form.addRow("Search URL:", self.search_url_edit)
         self.rss_edit = QPlainTextEdit()
-        self.rss_edit.setPlainText("\n".join(settings.rss_feeds))
         self.rss_edit.setPlaceholderText("feed URL, or:  feed URL | filter text\none per line")
         self.rss_edit.setFixedHeight(72)
         torrent_form.addRow("RSS feeds:", self.rss_edit)
         self.rss_interval_spin = QSpinBox()
         self.rss_interval_spin.setRange(5, 1440)
         self.rss_interval_spin.setSuffix(" min")
-        self.rss_interval_spin.setValue(settings.rss_interval_minutes)
         torrent_form.addRow("Check feeds every:", self.rss_interval_spin)
         self.encryption_combo = QComboBox()
         for label, value in (
@@ -400,18 +370,13 @@ class SettingsDialog(chrome.Dialog):
             ("Plaintext only", "off"),
         ):
             self.encryption_combo.addItem(label, value)
-        self.encryption_combo.setCurrentIndex(
-            max(0, self.encryption_combo.findData(settings.torrent_encryption))
-        )
         torrent_form.addRow("Encryption:", self.encryption_combo)
         self.seed_minutes_spin = QSpinBox()
         self.seed_minutes_spin.setRange(0, 100_000)
         self.seed_minutes_spin.setSuffix(" min")
         self.seed_minutes_spin.setSpecialValueText("No time limit")
-        self.seed_minutes_spin.setValue(settings.torrent_seed_minutes)
         torrent_form.addRow("Seeding time limit:", self.seed_minutes_spin)
         self.trackers_default_edit = QPlainTextEdit()
-        self.trackers_default_edit.setPlainText("\n".join(settings.torrent_trackers))
         self.trackers_default_edit.setPlaceholderText(
             "default tracker URLs for Create Torrent, one per line"
         )
@@ -454,21 +419,16 @@ class SettingsDialog(chrome.Dialog):
         self.extract_check = QCheckBox(
             "Extract archives automatically (zip/tar/gz/bz2/xz; rar/7z with 7z installed)"
         )
-        self.extract_check.setChecked(settings.auto_extract)
         archive_form.addRow(self.extract_check)
         self.scan_check = QCheckBox("Virus-scan archives before extracting")
-        self.scan_check.setChecked(settings.scan_before_extract)
         archive_form.addRow(self.scan_check)
         self.passwords_edit = QPlainTextEdit()
-        self.passwords_edit.setPlainText("\n".join(settings.archive_passwords))
         self.passwords_edit.setPlaceholderText("one password per line")
         self.passwords_edit.setFixedHeight(72)
         archive_form.addRow("Archive passwords:", self.passwords_edit)
         self.extract_subfolder_check = QCheckBox("Extract into a folder named after the archive")
-        self.extract_subfolder_check.setChecked(settings.extract_to_subfolder)
         archive_form.addRow(self.extract_subfolder_check)
         self.delete_archive_check = QCheckBox("Delete the archive after a clean extraction")
-        self.delete_archive_check.setChecked(settings.delete_archive_after_extract)
         archive_form.addRow(self.delete_archive_check)
         archive_form.addRow(
             _note(
@@ -480,18 +440,14 @@ class SettingsDialog(chrome.Dialog):
         # ---- File Management ---------------------------------------------------
         files_form = self._add_form_tab(tabs, "File Management")
         self.favorites_edit = QPlainTextEdit()
-        self.favorites_edit.setPlainText("\n".join(settings.favorite_folders))
         self.favorites_edit.setPlaceholderText("one folder per line, e.g. /home/me/Movies")
         self.favorites_edit.setFixedHeight(72)
         files_form.addRow("Favorite folders:", self.favorites_edit)
         self.rename_edit = QPlainTextEdit()
-        self.rename_edit.setPlainText(
-            "\n".join(f"{find} -> {replace}" for find, replace in settings.rename_rules)
-        )
         self.rename_edit.setPlaceholderText("find -> replace   (one rule per line)")
         self.rename_edit.setFixedHeight(72)
         files_form.addRow("Rename rules:", self.rename_edit)
-        self.default_tags_edit = QLineEdit(settings.default_tags)
+        self.default_tags_edit = QLineEdit()
         self.default_tags_edit.setPlaceholderText("tags for every new download, comma separated")
         files_form.addRow("Default tags:", self.default_tags_edit)
         files_form.addRow(
@@ -508,8 +464,6 @@ class SettingsDialog(chrome.Dialog):
         self.default_queue_combo.addItem("(the global default)", 0)
         for queue_row in settings.db.list_queues():
             self.default_queue_combo.addItem(queue_row.name, queue_row.id)
-        idx = self.default_queue_combo.findData(settings.default_queue_id)
-        self.default_queue_combo.setCurrentIndex(max(0, idx))
         queue_form.addRow("Default queue:", self.default_queue_combo)
         queue_form.addRow(
             _note(
@@ -522,10 +476,9 @@ class SettingsDialog(chrome.Dialog):
         scheduler_form = self._add_form_tab(tabs, "Scheduler")
         window_row = QHBoxLayout()
         self.download_schedule_check = QCheckBox("Only download between")
-        self.download_schedule_check.setChecked(settings.download_schedule_enabled)
-        self.download_start = QTimeEdit(QTime.fromString(settings.download_start, "HH:mm"))
+        self.download_start = QTimeEdit()
         self.download_start.setDisplayFormat("HH:mm")
-        self.download_stop = QTimeEdit(QTime.fromString(settings.download_stop, "HH:mm"))
+        self.download_stop = QTimeEdit()
         self.download_stop.setDisplayFormat("HH:mm")
         window_row.addWidget(self.download_schedule_check)
         window_row.addWidget(self.download_start)
@@ -536,28 +489,23 @@ class SettingsDialog(chrome.Dialog):
         days_row = QHBoxLayout()
         days_row.setSpacing(12)  # keep each day's box clear of the next day's label
         self.day_checks: list[QCheckBox] = []
-        enabled_days = set(settings.download_days)
-        for index, label in enumerate(("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")):
+        for label in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"):
             check = QCheckBox(label)
-            check.setChecked(index in enabled_days)
             self.day_checks.append(check)
             days_row.addWidget(check)
         days_row.addStretch(1)
         scheduler_form.addRow("Days:", days_row)
         battery_row = QHBoxLayout()
         self.battery_check = QCheckBox("Pause downloads on battery, below")
-        self.battery_check.setChecked(settings.pause_on_battery)
         self.battery_pct_spin = QSpinBox()
         self.battery_pct_spin.setRange(0, 100)
         self.battery_pct_spin.setSuffix(" %")
         self.battery_pct_spin.setSpecialValueText("any charge")
-        self.battery_pct_spin.setValue(settings.battery_min_percent)
         battery_row.addWidget(self.battery_check)
         battery_row.addWidget(self.battery_pct_spin)
         battery_row.addStretch(1)
         scheduler_form.addRow(battery_row)
         self.network_check = QCheckBox("Wait for internet - resume the moment it reconnects")
-        self.network_check.setChecked(settings.wait_for_network)
         scheduler_form.addRow(self.network_check)
         self.after_combo = QComboBox()
         for label, value in (
@@ -569,9 +517,6 @@ class SettingsDialog(chrome.Dialog):
             ("Lock the computer", "lock"),
         ):
             self.after_combo.addItem(label, value)
-        self.after_combo.setCurrentIndex(
-            max(0, self.after_combo.findData(settings.after_queue_action))
-        )
         scheduler_form.addRow("When the queue empties:", self.after_combo)
         scheduler_form.addRow(
             _note(
@@ -584,7 +529,7 @@ class SettingsDialog(chrome.Dialog):
         net_tab = QWidget()
         net_layout = QVBoxLayout(net_tab)
         proxy_form = QFormLayout()
-        self.proxy_edit = QLineEdit(settings.proxy or "")
+        self.proxy_edit = QLineEdit()
         self.proxy_edit.setPlaceholderText(
             "http(s):// · socks5:// · socks4:// host:port  (blank = direct)"
         )
@@ -596,17 +541,14 @@ class SettingsDialog(chrome.Dialog):
         throttle_layout = QFormLayout(throttle_group)
         throttle_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         self.auto_throttle_check = QCheckBox("Slow downloads when other apps are using the network")
-        self.auto_throttle_check.setChecked(settings.auto_throttle)
         throttle_layout.addRow(self.auto_throttle_check)
         self.throttle_limit_spin = QSpinBox()
         self.throttle_limit_spin.setRange(1, 1_000_000)
         self.throttle_limit_spin.setSuffix(" KB/s")
-        self.throttle_limit_spin.setValue(settings.auto_throttle_kbps)
         throttle_layout.addRow("Slow down to:", self.throttle_limit_spin)
         self.throttle_threshold_spin = QSpinBox()
         self.throttle_threshold_spin.setRange(1, 1_000_000)
         self.throttle_threshold_spin.setSuffix(" KB/s")
-        self.throttle_threshold_spin.setValue(settings.auto_throttle_threshold_kbps)
         throttle_layout.addRow("When others use over:", self.throttle_threshold_spin)
         net_layout.addWidget(throttle_group)
 
@@ -614,18 +556,15 @@ class SettingsDialog(chrome.Dialog):
         host_layout = QVBoxLayout(host_group)
         host_layout.addWidget(QLabel("One 'host = KB/s' per line, e.g.  cdn.example.com = 500"))
         self.host_limits_edit = QPlainTextEdit()
-        self.host_limits_edit.setPlainText(
-            "\n".join(f"{host} = {kbps}" for host, kbps in settings.host_limits.items())
-        )
         self.host_limits_edit.setPlaceholderText("cdn.example.com = 500")
         self.host_limits_edit.setFixedHeight(90)
         host_layout.addWidget(self.host_limits_edit)
         net_layout.addWidget(host_group)
         extras_form = QFormLayout()
-        self.bypass_edit = QLineEdit(", ".join(settings.proxy_bypass))
+        self.bypass_edit = QLineEdit()
         self.bypass_edit.setPlaceholderText("hosts that skip the proxy, comma separated")
         extras_form.addRow("Proxy bypass:", self.bypass_edit)
-        self.ua_edit = QLineEdit(settings.user_agent)
+        self.ua_edit = QLineEdit()
         self.ua_edit.setPlaceholderText("custom User-Agent for plain downloads (blank = default)")
         extras_form.addRow("User-Agent:", self.ua_edit)
         net_layout.addLayout(extras_form)
@@ -646,16 +585,14 @@ class SettingsDialog(chrome.Dialog):
         self.scan_downloads_check = QCheckBox(
             "Security-check every finished download (local virus scan + VirusTotal if set)"
         )
-        self.scan_downloads_check.setChecked(settings.scan_downloads)
         security_form.addRow(self.scan_downloads_check)
         self.enforce_https_check = QCheckBox("Warn before downloading over unencrypted HTTP")
-        self.enforce_https_check.setChecked(settings.enforce_https)
         security_form.addRow(self.enforce_https_check)
-        self.virustotal_edit = QLineEdit(settings.virustotal_key)
+        self.virustotal_edit = QLineEdit()
         self.virustotal_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.virustotal_edit.setPlaceholderText("your VirusTotal API key (optional)")
         security_form.addRow("VirusTotal key:", self.virustotal_edit)
-        self.safebrowsing_edit = QLineEdit(settings.safebrowsing_key)
+        self.safebrowsing_edit = QLineEdit()
         self.safebrowsing_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.safebrowsing_edit.setPlaceholderText("your Google Safe Browsing API key (optional)")
         security_form.addRow("Safe Browsing key:", self.safebrowsing_edit)
@@ -666,11 +603,8 @@ class SettingsDialog(chrome.Dialog):
             ("ClamAV", "clamav"),
         ):
             self.scanner_combo.addItem(label, value)
-        self.scanner_combo.setCurrentIndex(
-            max(0, self.scanner_combo.findData(settings.scanner_pref))
-        )
         security_form.addRow("Virus scanner:", self.scanner_combo)
-        self.scan_ext_edit = QLineEdit(settings.scan_extensions)
+        self.scan_ext_edit = QLineEdit()
         self.scan_ext_edit.setPlaceholderText(
             "only scan these types, e.g. exe, msi, zip (blank = all)"
         )
@@ -685,12 +619,10 @@ class SettingsDialog(chrome.Dialog):
         # ---- Notifications -----------------------------------------------------
         notify_form = self._add_form_tab(tabs, "Notifications")
         self.notify_check = QCheckBox("Show a notification when a download completes")
-        self.notify_check.setChecked(settings.notify_on_complete)
         notify_form.addRow(self.notify_check)
         sound_row = QHBoxLayout()
         self.sound_check = QCheckBox("Play a sound")
-        self.sound_check.setChecked(settings.sound_on_complete)
-        self.sound_file_edit = QLineEdit(settings.sound_file)
+        self.sound_file_edit = QLineEdit()
         self.sound_file_edit.setPlaceholderText("blank = system sound")
         sound_browse = QPushButton("Browse…")
         sound_browse.clicked.connect(self._browse_sound)
@@ -699,25 +631,20 @@ class SettingsDialog(chrome.Dialog):
         sound_row.addWidget(sound_browse)
         notify_form.addRow("On completion:", sound_row)
         self.open_folder_check = QCheckBox("Open the folder when a download completes")
-        self.open_folder_check.setChecked(settings.auto_open_folder)
         notify_form.addRow(self.open_folder_check)
         self.notify_failed_check = QCheckBox("Notify when a download fails")
-        self.notify_failed_check.setChecked(settings.notify_on_failed)
         notify_form.addRow(self.notify_failed_check)
         self.notify_queue_check = QCheckBox("Notify when the whole queue finishes")
-        self.notify_queue_check.setChecked(settings.notify_queue_done)
         notify_form.addRow(self.notify_queue_check)
         self.toast_spin = QSpinBox()
         self.toast_spin.setRange(1, 30)
         self.toast_spin.setSuffix(" s")
-        self.toast_spin.setValue(settings.toast_seconds)
         notify_form.addRow("Notification duration:", self.toast_spin)
         quiet_row = QHBoxLayout()
         self.quiet_check = QCheckBox("Quiet hours between")
-        self.quiet_check.setChecked(settings.quiet_enabled)
-        self.quiet_from_edit = QTimeEdit(QTime.fromString(settings.quiet_from, "HH:mm"))
+        self.quiet_from_edit = QTimeEdit()
         self.quiet_from_edit.setDisplayFormat("HH:mm")
-        self.quiet_to_edit = QTimeEdit(QTime.fromString(settings.quiet_to, "HH:mm"))
+        self.quiet_to_edit = QTimeEdit()
         self.quiet_to_edit.setDisplayFormat("HH:mm")
         quiet_row.addWidget(self.quiet_check)
         quiet_row.addWidget(self.quiet_from_edit)
@@ -743,19 +670,16 @@ class SettingsDialog(chrome.Dialog):
         )
         stats_form = QFormLayout()
         self.stats_enabled_check = QCheckBox("Record download statistics (always local-only)")
-        self.stats_enabled_check.setChecked(settings.stats_enabled)
         stats_form.addRow(self.stats_enabled_check)
         self.retention_spin = QSpinBox()
         self.retention_spin.setRange(0, 3650)
         self.retention_spin.setSuffix(" days")
         self.retention_spin.setSpecialValueText("Keep forever")
-        self.retention_spin.setValue(settings.stats_retention_days)
         stats_form.addRow("Keep daily data for:", self.retention_spin)
         self.refresh_spin = QSpinBox()
         self.refresh_spin.setRange(100, 5000)
         self.refresh_spin.setSingleStep(100)
         self.refresh_spin.setSuffix(" ms")
-        self.refresh_spin.setValue(settings.dashboard_refresh_ms)
         stats_form.addRow("Dashboard refresh:", self.refresh_spin)
         stats_layout.addLayout(stats_form)
         clear_row = QHBoxLayout()
@@ -775,21 +699,17 @@ class SettingsDialog(chrome.Dialog):
         self.theme_combo = QComboBox()
         for label, value in (("Match system", "system"), ("Light", "light"), ("Dark", "dark")):
             self.theme_combo.addItem(label, value)
-        self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(settings.theme)))
         appearance_form.addRow("Theme:", self.theme_combo)
         self.accent_combo = QComboBox()
         for label, value in design.ACCENT_PRESETS:
             self.accent_combo.addItem(label, value)
-        self.accent_combo.setCurrentIndex(max(0, self.accent_combo.findData(settings.accent_color)))
         appearance_form.addRow("Accent color:", self.accent_combo)
         self.density_combo = QComboBox()
         self.density_combo.addItem("Comfortable", "comfortable")
         self.density_combo.addItem("Compact", "compact")
-        self.density_combo.setCurrentIndex(max(0, self.density_combo.findData(settings.ui_density)))
         appearance_form.addRow("List density:", self.density_combo)
         columns_row = QHBoxLayout()
         self.column_checks: dict[str, QCheckBox] = {}
-        hidden_now = set(settings.hidden_columns)
         for key, label in (
             ("size", "Size"),
             ("progress", "Progress"),
@@ -798,7 +718,6 @@ class SettingsDialog(chrome.Dialog):
             ("status", "Status"),
         ):
             check = QCheckBox(label)
-            check.setChecked(key not in hidden_now)
             self.column_checks[key] = check
             columns_row.addWidget(check)
         columns_row.addStretch(1)
@@ -807,10 +726,10 @@ class SettingsDialog(chrome.Dialog):
 
         # ---- Advanced ----------------------------------------------------------
         advanced_form = self._add_form_tab(tabs, "Advanced")
-        self.script_edit = QLineEdit(settings.script_on_complete)
+        self.script_edit = QLineEdit()
         self.script_edit.setPlaceholderText("e.g. /usr/bin/my-script --scan")
         advanced_form.addRow("Run command:", self.script_edit)
-        self.ffmpeg_override_edit = QLineEdit(settings.ffmpeg_path or "")
+        self.ffmpeg_override_edit = QLineEdit()
         self.ffmpeg_override_edit.setPlaceholderText("blank = found automatically")
         advanced_form.addRow("FFmpeg path override:", self.ffmpeg_override_edit)
         data_label = QLabel(str(paths.data_dir()))
@@ -822,10 +741,8 @@ class SettingsDialog(chrome.Dialog):
         self.log_combo = QComboBox()
         for level in ("debug", "info", "warning", "error"):
             self.log_combo.addItem(level.capitalize(), level)
-        self.log_combo.setCurrentIndex(max(0, self.log_combo.findData(settings.log_level)))
         advanced_form.addRow("Logging level:", self.log_combo)
         self.logfile_check = QCheckBox("Also write the log to grabline.log in the data folder")
-        self.logfile_check.setChecked(settings.log_to_file)
         advanced_form.addRow(self.logfile_check)
         io_row = QHBoxLayout()
         export_btn = QPushButton("Export settings…")
@@ -904,6 +821,8 @@ class SettingsDialog(chrome.Dialog):
         )
         about_layout.addStretch(1)
         tabs.addTab(about_tab, "About")
+
+        self._load_values()
 
         # Enum-ish fields hug a sane width instead of stretching form-wide.
         components.cap_field_widths(self)
@@ -1034,13 +953,19 @@ class SettingsDialog(chrome.Dialog):
         answer = QMessageBox.question(
             self,
             "Grabline",
-            "Reset every setting to its default? Downloads and statistics are kept.",
+            "Reset all settings to their defaults? Your downloads and history "
+            "are not touched.",
         )
-        if answer == QMessageBox.StandardButton.Yes:
-            self.settings.db.reset_settings()
-            QMessageBox.information(
-                self, "Grabline", "Settings reset. Restart Grabline to apply everywhere."
-            )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.settings.reset()
+        # Re-read every field so the page shows the defaults immediately, and
+        # repaint - a reset that needs a restart to be believed isn't one.
+        self._load_values()
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            theme.apply_theme(app, self.settings.theme, self.settings.accent_color)
+        self.settings_reset.emit()
 
     def _vacuum_db(self) -> None:
         self.settings.db.vacuum()
@@ -1196,6 +1121,149 @@ class SettingsDialog(chrome.Dialog):
         # dialog close never destroys a running thread. See app/ui/threads.
         threads.retain(installer)
         installer.start()
+
+    def _load_values(self) -> None:
+        """Fill every field from the stored settings. Called once while
+        building, and again after Reset so the page updates without a restart.
+        The mirror image of ``apply()`` - keep the two in step."""
+        s = self.settings
+
+        # General. Autostart is an OS registration, not a stored setting, so it
+        # reads back from the system and a reset leaves it alone.
+        self.autostart_check.setChecked(launcher.autostart_enabled())
+        self.updates_check.setChecked(s.check_updates)
+        self.start_min_check.setChecked(s.start_minimized)
+        self.tray_min_check.setChecked(s.minimize_to_tray)
+        self.tray_close_check.setChecked(s.close_to_tray)
+        self.confirm_exit_check.setChecked(s.confirm_exit_active)
+        self.new_dl_combo.setCurrentIndex(0 if s.auto_start_downloads else 1)
+
+        # Downloads.
+        self.folder_edit.setText(str(s.download_dir))
+        self.categories_check.setChecked(s.categories_enabled)
+        self.ask_save_check.setChecked(s.ask_save_dir)
+        self.concurrent_spin.setValue(s.max_concurrent)
+        self.free_mb_spin.setValue(s.min_free_mb)
+
+        # Download engine.
+        self.connections_spin.setValue(s.connections)
+        self.speed_spin.setValue(s.speed_limit_kbps)
+        self.schedule_check.setChecked(s.speed_schedule_enabled)
+        self.full_from.setTime(QTime.fromString(s.speed_full_from, "HH:mm"))
+        self.full_to.setTime(QTime.fromString(s.speed_full_to, "HH:mm"))
+        self.retry_check.setChecked(s.auto_retry)
+        self.retry_spin.setValue(s.auto_retry_max)
+
+        # Browser integration.
+        self.browser_combo.setCurrentIndex(SESSION_BROWSERS.index(s.session_browser))
+        self.clipboard_check.setChecked(s.clipboard_watcher)
+
+        # Video downloader.
+        self.playlist_cap_spin.setValue(s.playlist_batch_cap)
+        self.hq_first_check.setChecked(s.video_hq_first)
+        self.default_quality_combo.setCurrentText(s.video_default_quality)
+        self.bitrate_combo.setCurrentIndex(max(0, self.bitrate_combo.findData(s.audio_bitrate)))
+        self.cookies_edit.setText(s.cookies_file)
+
+        # Torrent.
+        self.torrent_port_spin.setValue(s.torrent_port)
+        self.dht_check.setChecked(s.torrent_dht)
+        self.upnp_check.setChecked(s.torrent_upnp)
+        self.natpmp_check.setChecked(s.torrent_natpmp)
+        self.seed_check.setChecked(s.torrent_seed)
+        self.ratio_spin.setValue(s.torrent_ratio_limit)
+        self.upload_spin.setValue(s.torrent_upload_kbps)
+        self.sequential_check.setChecked(s.torrent_sequential)
+        self.torrent_dir_edit.setText(str(s.torrent_dir) if s.torrent_dir else "")
+        self.search_url_edit.setText(s.torrent_search_url)
+        self.rss_edit.setPlainText("\n".join(s.rss_feeds))
+        self.rss_interval_spin.setValue(s.rss_interval_minutes)
+        self.encryption_combo.setCurrentIndex(
+            max(0, self.encryption_combo.findData(s.torrent_encryption))
+        )
+        self.seed_minutes_spin.setValue(s.torrent_seed_minutes)
+        self.trackers_default_edit.setPlainText("\n".join(s.torrent_trackers))
+
+        # Archive manager.
+        self.extract_check.setChecked(s.auto_extract)
+        self.scan_check.setChecked(s.scan_before_extract)
+        self.passwords_edit.setPlainText("\n".join(s.archive_passwords))
+        self.extract_subfolder_check.setChecked(s.extract_to_subfolder)
+        self.delete_archive_check.setChecked(s.delete_archive_after_extract)
+
+        # File management.
+        self.favorites_edit.setPlainText("\n".join(s.favorite_folders))
+        self.rename_edit.setPlainText(
+            "\n".join(f"{find} -> {replace}" for find, replace in s.rename_rules)
+        )
+        self.default_tags_edit.setText(s.default_tags)
+
+        # Queue manager.
+        self.default_queue_combo.setCurrentIndex(
+            max(0, self.default_queue_combo.findData(s.default_queue_id))
+        )
+
+        # Scheduler.
+        self.download_schedule_check.setChecked(s.download_schedule_enabled)
+        self.download_start.setTime(QTime.fromString(s.download_start, "HH:mm"))
+        self.download_stop.setTime(QTime.fromString(s.download_stop, "HH:mm"))
+        enabled_days = set(s.download_days)
+        for index, check in enumerate(self.day_checks):
+            check.setChecked(index in enabled_days)
+        self.battery_check.setChecked(s.pause_on_battery)
+        self.battery_pct_spin.setValue(s.battery_min_percent)
+        self.network_check.setChecked(s.wait_for_network)
+        self.after_combo.setCurrentIndex(max(0, self.after_combo.findData(s.after_queue_action)))
+
+        # Network.
+        self.proxy_edit.setText(s.proxy or "")
+        self.auto_throttle_check.setChecked(s.auto_throttle)
+        self.throttle_limit_spin.setValue(s.auto_throttle_kbps)
+        self.throttle_threshold_spin.setValue(s.auto_throttle_threshold_kbps)
+        self.host_limits_edit.setPlainText(
+            "\n".join(f"{host} = {kbps}" for host, kbps in s.host_limits.items())
+        )
+        self.bypass_edit.setText(", ".join(s.proxy_bypass))
+        self.ua_edit.setText(s.user_agent)
+
+        # Security.
+        self.scan_downloads_check.setChecked(s.scan_downloads)
+        self.enforce_https_check.setChecked(s.enforce_https)
+        self.virustotal_edit.setText(s.virustotal_key)
+        self.safebrowsing_edit.setText(s.safebrowsing_key)
+        self.scanner_combo.setCurrentIndex(max(0, self.scanner_combo.findData(s.scanner_pref)))
+        self.scan_ext_edit.setText(s.scan_extensions)
+
+        # Notifications.
+        self.notify_check.setChecked(s.notify_on_complete)
+        self.sound_check.setChecked(s.sound_on_complete)
+        self.sound_file_edit.setText(s.sound_file)
+        self.open_folder_check.setChecked(s.auto_open_folder)
+        self.notify_failed_check.setChecked(s.notify_on_failed)
+        self.notify_queue_check.setChecked(s.notify_queue_done)
+        self.toast_spin.setValue(s.toast_seconds)
+        self.quiet_check.setChecked(s.quiet_enabled)
+        self.quiet_from_edit.setTime(QTime.fromString(s.quiet_from, "HH:mm"))
+        self.quiet_to_edit.setTime(QTime.fromString(s.quiet_to, "HH:mm"))
+
+        # Statistics.
+        self.stats_enabled_check.setChecked(s.stats_enabled)
+        self.retention_spin.setValue(s.stats_retention_days)
+        self.refresh_spin.setValue(s.dashboard_refresh_ms)
+
+        # Appearance.
+        self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(s.theme)))
+        self.accent_combo.setCurrentIndex(max(0, self.accent_combo.findData(s.accent_color)))
+        self.density_combo.setCurrentIndex(max(0, self.density_combo.findData(s.ui_density)))
+        hidden_now = set(s.hidden_columns)
+        for key, check in self.column_checks.items():
+            check.setChecked(key not in hidden_now)
+
+        # Advanced.
+        self.script_edit.setText(s.script_on_complete)
+        self.ffmpeg_override_edit.setText(s.ffmpeg_path or "")
+        self.log_combo.setCurrentIndex(max(0, self.log_combo.findData(s.log_level)))
+        self.logfile_check.setChecked(s.log_to_file)
 
     def _save(self) -> None:
         if self.apply():

@@ -14,6 +14,9 @@ SESSION_BROWSERS = ("chrome", "firefox", "edge", "brave", "chromium", "opera", "
 
 _AFTER_QUEUE_ACTIONS = ("nothing", "quit", "sleep", "shutdown", "hibernate", "lock")
 
+#: Records of things already done to this machine, not preferences - see reset().
+_KEEP_ON_RESET = ("setup_seen", "host_registered")
+
 
 class Settings:
     def __init__(self, db: Database) -> None:
@@ -24,6 +27,20 @@ class Settings:
         """The backing database, for components that need their own store
         (e.g. the cloud CredentialStore) without re-opening the file."""
         return self._db
+
+    def reset(self) -> None:
+        """Drop every stored preference so the coded defaults apply again.
+
+        Downloads, history and statistics live in their own tables and are
+        untouched. Two keys survive because they record what has already
+        happened to this machine, not what the user prefers: the wizard would
+        otherwise reappear, and the browser host would be re-registered behind
+        a user who deliberately unpaired it."""
+        keep = {key: self._db.get_setting(key) for key in _KEEP_ON_RESET}
+        self._db.reset_settings()
+        for key, value in keep.items():
+            if value is not None:
+                self._db.set_setting(key, value)
 
     # ------------------------------------------------------------ helpers
 
@@ -722,6 +739,16 @@ class Settings:
     @close_to_tray.setter
     def close_to_tray(self, value: bool) -> None:
         self._set_bool("close_to_tray", value)
+
+    @property
+    def tray_hint_shown(self) -> bool:
+        """Whether the "still running in the tray" notice has been shown. The
+        first close hides the window, which otherwise looks like a quit."""
+        return self._get_bool("tray_hint_shown", False)
+
+    @tray_hint_shown.setter
+    def tray_hint_shown(self, value: bool) -> None:
+        self._set_bool("tray_hint_shown", value)
 
     @property
     def confirm_exit_active(self) -> bool:
