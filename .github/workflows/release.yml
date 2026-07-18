@@ -30,13 +30,8 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-          # Two macOS runners on purpose: macos-latest is Apple Silicon, so an
-          # Intel-only Mac cannot run what it builds (Rosetta translates the
-          # other direction). macos-13 covers those machines.
           - os: macos-latest
             mac_arch: applesilicon
-          - os: macos-13
-            mac_arch: intel
           - os: ubuntu-22.04
     runs-on: ${{ matrix.os }}
     steps:
@@ -175,17 +170,100 @@ jobs:
             dist/grabline_*_amd64.deb
           if-no-files-found: error
 
+  # Intel macOS lives in its own best-effort job, deliberately NOT in the
+  # release's `needs`. GitHub's macos-13 (Intel) runners are chronically queue-
+  # starved and can sit "waiting for a runner" for hours, then get cancelled -
+  # and when this was a leg of the gating `build` matrix, that one stuck job
+  # blocked the whole release (v1.22.0 built three good installers and never
+  # published; v1.23.0 hung the same way). Here it never blocks: the release
+  # publishes as soon as the three reliable builds finish, and this Intel .dmg
+  # joins the release only if its runner frees up in time. continue-on-error so
+  # a failure is not a red workflow; an Apple Silicon Mac needs the arm build
+  # anyway, and an Intel build can always be re-run and added afterward.
+  build-intel:
+    runs-on: macos-13
+    continue-on-error: true
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install app and build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller pillow
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="$(python -c 'import app; print(app.__version__)')"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Render icons
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python packaging/make_icons.py
+      - name: Build macOS .icns
+        run: iconutil -c icns packaging/grabline.iconset -o packaging/grabline.icns
+      - name: Freeze with PyInstaller
+        run: pyinstaller packaging/grabline.spec --noconfirm --distpath dist --workpath build
+      - name: Package macOS .dmg (Intel)
+        shell: bash
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          STAGE=dist/dmg
+          rm -rf "$STAGE"; mkdir -p "$STAGE/.background"
+          cp packaging/grabline-dmg-background.png "$STAGE/.background/background.png"
+          cp -R dist/Grabline.app "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname Grabline -srcfolder "$STAGE" -ov -format UDRW dist/rw.dmg
+          MOUNT="$(hdiutil attach -readwrite -noverify -noautoopen dist/rw.dmg |
+                   grep -o '/Volumes/.*' | head -1)"
+          osascript <<'APPLESCRIPT' || echo "Finder layout unavailable; shipping the plain layout"
+          tell application "Finder"
+            tell disk "Grabline"
+              open
+              set current view of container window to icon view
+              set toolbar visible of container window to false
+              set statusbar visible of container window to false
+              set the bounds of container window to {200, 120, 820, 540}
+              set opts to the icon view options of container window
+              set arrangement of opts to not arranged
+              set icon size of opts to 96
+              set background picture of opts to file ".background:background.png"
+              set position of item "Grabline.app" of container window to {150, 190}
+              set position of item "Applications" of container window to {470, 190}
+              close
+              open
+              update without registering applications
+              delay 2
+            end tell
+          end tell
+          APPLESCRIPT
+          sync
+          hdiutil detach "$MOUNT" || true
+          hdiutil convert dist/rw.dmg -format UDZO -ov -o "dist/Grabline-$V-intel.dmg"
+          rm -f dist/rw.dmg
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grabline-macos-13
+          path: dist/Grabline-*-intel.dmg
+          if-no-files-found: error
+
   release:
+    # Only the three reliable builds gate the release; the flaky Intel job
+    # (build-intel) is intentionally absent, so a stuck macos-13 runner can
+    # never hold up publishing. always() keeps the release running even if one
+    # of the three fails, and download-artifact pulls in whatever finished -
+    # including the Intel .dmg when its runner freed up in time.
     needs: build
     runs-on: ubuntu-latest
-    # always(): publish whatever platforms built, even if one leg fails or is
-    # cancelled. GitHub's Intel macOS (macos-13) runners are often queue-
-    # starved and get auto-cancelled, and with a plain `needs: build` that one
-    # stuck leg silently sinks the entire release - three good installers and
-    # no download page. Here the release still runs; download-artifact pulls
-    # whatever succeeded, and fail_on_unmatched_files below turns a total
-    # wipeout (nothing built) into a failed job rather than an empty release.
-    # A late Intel build can be re-run and its artifact added to the release.
     if: ${{ always() && github.ref_type == 'tag' }}
     steps:
       - uses: actions/download-artifact@v4
