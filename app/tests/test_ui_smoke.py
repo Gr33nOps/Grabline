@@ -1127,3 +1127,36 @@ def test_hidden_window_skips_refresh(db: Database, tmp_path: Path):
         assert window.table.rowCount() == 1
     finally:
         manager.shutdown()
+
+
+def test_heavy_pages_are_built_on_first_visit(db: Database, tmp_path: Path):
+    """Settings is ~500ms of widget construction and most sessions never open
+    it, so it must not be on the path to the first painted window."""
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        window.show()
+        # Downloads and Dashboard exist up front (the dashboard samples history).
+        assert set(window._page_index) == {"downloads", "dashboard"}
+        assert not hasattr(window, "_settings_view")
+
+        window._switch_view("settings")
+        assert window._pages.currentWidget() is window._settings_view
+        assert "settings" in window._page_index
+
+        # Built once, then reused - switching away and back keeps the same page
+        # (and any half-typed field on it).
+        built = window._settings_view
+        window._switch_view("downloads")
+        window._switch_view("settings")
+        assert window._settings_view is built
+
+        window._switch_view("queue")
+        assert window._pages.currentWidget() is window._queue_view
+        window._switch_view("nonsense")  # unknown key stays a no-op
+        assert window._pages.currentWidget() is window._queue_view
+    finally:
+        manager.shutdown()

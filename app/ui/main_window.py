@@ -97,10 +97,7 @@ from app.ui.link_panel import LinkPanel
 from app.ui.playlist_panel import PlaylistPanel
 from app.ui.quality_panel import QualityPanel
 from app.ui.queue_dialog import QueueManagerDialog
-from app.ui.queue_view import QueueView
 from app.ui.security_dialog import SecurityDialog
-from app.ui.settings_dialog import SettingsDialog
-from app.ui.settings_view import SettingsView
 from app.ui.setup_dialog import SetupDialog
 from app.ui.torrent_dialog import AddTorrentDialog, CreateTorrentDialog
 
@@ -175,13 +172,19 @@ class MainWindow(QMainWindow):
         # Shell: a 48px icon rail on the left, the stacked content on the right.
         self._pages = QStackedWidget()
         self._pages.addWidget(self._build_downloads_page())  # index 0
+        # The Dashboard is built now, not on demand: its sampler is what gives
+        # the graphs their rolling history, and starting that at first visit
+        # would show an empty minute. It costs ~40ms.
         self._dashboard_view = DashboardView(self.manager)
         self._pages.addWidget(self._dashboard_view)  # index 1
-        self._queue_view = QueueView(self.manager)
-        self._pages.addWidget(self._queue_view)  # index 2
-        self._settings_view = SettingsView(self.settings, self._on_settings_applied)
-        self._pages.addWidget(self._settings_view)  # index 3
-        self._page_index = {"downloads": 0, "dashboard": 1, "queue": 2, "settings": 3}
+        self._page_index = {"downloads": 0, "dashboard": 1}
+        # Queue and Settings are built the first time they are opened. Settings
+        # alone is ~500ms of widget construction (18 sections, ~100 fields) and
+        # most sessions never open it.
+        self._page_factories: dict[str, Callable[[], QWidget]] = {
+            "queue": self._make_queue_page,
+            "settings": self._make_settings_page,
+        }
         shell = QWidget()
         row = QHBoxLayout(shell)
         row.setContentsMargins(0, 0, 0, 0)
@@ -540,13 +543,36 @@ class MainWindow(QMainWindow):
         for key, column in toggles.items():
             self.table.setColumnHidden(column, key in hidden)
 
+    def _make_queue_page(self) -> QWidget:
+        from app.ui.queue_view import QueueView
+
+        return QueueView(self.manager)
+
+    def _make_settings_page(self) -> QWidget:
+        from app.ui.settings_view import SettingsView
+
+        return SettingsView(self.settings, self._on_settings_applied)
+
+    def _page_for(self, key: str) -> int | None:
+        """This page's index in the stack, building it on first use."""
+        if key in self._page_index:
+            return self._page_index[key]
+        factory = self._page_factories.pop(key, None)
+        if factory is None:
+            return None
+        widget = factory()
+        setattr(self, f"_{key}_view", widget)  # _queue_view / _settings_view
+        self._page_index[key] = self._pages.addWidget(widget)
+        return self._page_index[key]
+
     def _switch_view(self, key: str) -> None:
         """Sidebar navigation between the embedded pages."""
-        if key not in self._page_index:
+        index = self._page_for(key)
+        if index is None:
             return
         for nav_key, btn in self._nav.items():
             btn.set_active(nav_key == key)
-        self._pages.setCurrentIndex(self._page_index[key])
+        self._pages.setCurrentIndex(index)
 
     def _on_settings_applied(self) -> None:
         """Live-apply after the Settings page saves: theme (may have changed),
@@ -1215,6 +1241,8 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.settings.download_dir)))
 
     def _open_settings(self) -> None:
+        from app.ui.settings_dialog import SettingsDialog
+
         dialog = SettingsDialog(self.settings, self)
         dialog.settings_reset.connect(self.manager.reload_settings)
         if dialog.exec() == SettingsDialog.DialogCode.Accepted:
