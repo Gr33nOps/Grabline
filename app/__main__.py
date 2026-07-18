@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import sys
 import threading
@@ -10,7 +11,7 @@ from types import TracebackType
 from typing import TextIO
 
 from PySide6.QtCore import QBuffer, QIODevice, QTimer
-from PySide6.QtWidgets import QApplication, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 
 from app.core import alerts, instance, launcher, paths, power, scripts
 from app.core.ffmpeg import find_ffmpeg
@@ -123,6 +124,21 @@ def _install_crash_hooks(crash_log: TextIO | None) -> None:
     threading.excepthook = _thread_excepthook
 
 
+def _set_windows_app_id() -> None:
+    """Give Windows an explicit application id.
+
+    Without one, a frozen Python app is grouped in the taskbar under the host
+    executable, its icon can be wrong, and pinning a running window creates a
+    second entry. The id must match the Start-menu shortcut's target for
+    pinning to behave, and must be set before the first window exists."""
+    if sys.platform != "win32":  # pragma: no cover - windows-only
+        return
+    import ctypes
+
+    with contextlib.suppress(AttributeError, OSError):
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Grabline")
+
+
 def main() -> int:
     # A native-crash trace (faulthandler) to the data folder: if anything
     # segfaults, crash.log says where instead of a silent vanish.
@@ -148,9 +164,31 @@ def main() -> int:
         handoff_db.add_handoff(source, source=kind)
         handoff_db.close()
         return 0
+    _set_windows_app_id()  # before any window exists, or the taskbar ignores it
     app = QApplication([arg for arg in sys.argv if arg != "--minimized"])
     app.setApplicationName("Grabline")
     app.setOrganizationName("Grabline")
+    app.setApplicationDisplayName("Grabline")
+    # Ties windows to grabline.desktop on Wayland and modern X11 shells, so the
+    # dock shows the real name and icon instead of a generic placeholder.
+    app.setDesktopFileName("grabline")
+
+    data_dir = paths.data_dir()
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        probe = data_dir / ".write-test"
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError as exc:
+        # Nothing works without this folder - say which one, and why, instead
+        # of failing later with a confusing database error.
+        QMessageBox.critical(
+            None,
+            "Grabline",
+            f"Grabline cannot use its data folder:\n\n{data_dir}\n\n{exc}\n\n"
+            "Check the folder's permissions, or that the drive is available.",
+        )
+        return 1
 
     try:
         # IDM-style install-less integration: first run puts Grabline in the
@@ -159,8 +197,6 @@ def main() -> int:
     except OSError:
         log.warning("could not write the application-menu entry", exc_info=True)
 
-    data_dir = paths.data_dir()
-    data_dir.mkdir(parents=True, exist_ok=True)
     db = Database(data_dir / "grabline.db")
     interrupted = db.mark_interrupted()
     if interrupted:

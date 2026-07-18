@@ -30,9 +30,8 @@ class SetupDialog(chrome.Dialog):
         layout = QVBoxLayout(self)
 
         intro = QLabel(
-            "Two quick steps connect Grabline to your browser. Everything here "
-            "is free; Chrome and Brave need one manual 'Load unpacked' until the "
-            "extension is on the Chrome Web Store."
+            "Two steps connect Grabline to your browser, so a download button "
+            "appears on videos and links."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -60,7 +59,7 @@ class SetupDialog(chrome.Dialog):
         self._add_hint: QLabel | None = None
         if browser is not None:
             add_button = QPushButton(f"Add Grabline to {browser[1]}")
-            add_button.setStyleSheet("font-weight: 600; padding: 6px;")
+            add_button.setProperty("accent", "true")
             add_button.clicked.connect(self._add_to_browser)
             layout.addWidget(add_button)
             self._add_hint = QLabel(
@@ -71,7 +70,7 @@ class SetupDialog(chrome.Dialog):
                 "<b>Developer mode</b> and <b>Load unpacked</b> it (one time)."
             )
             self._add_hint.setWordWrap(True)
-            self._add_hint.setStyleSheet("color: gray; font-size: 11px;")
+            self._add_hint.setProperty("role", "muted")
             layout.addWidget(self._add_hint)
 
         folder_row = QHBoxLayout()
@@ -99,19 +98,18 @@ class SetupDialog(chrome.Dialog):
         layout.addLayout(chrome_row)
 
         firefox_hint = QLabel(
-            "Firefox: install Grabline Connect straight from Firefox Add-ons "
-            "(addons.mozilla.org — search “Grabline Connect”). It is reviewed "
-            "and signed by Mozilla, and survives restarts."
+            "Firefox: install Grabline Connect from addons.mozilla.org. It is "
+            "reviewed and signed by Mozilla, so it survives restarts."
         )
         firefox_hint.setWordWrap(True)
-        firefox_hint.setStyleSheet("color: gray; font-size: 11px;")
+        firefox_hint.setProperty("role", "muted")
         layout.addWidget(firefox_hint)
 
         # Detected browsers, for reassurance.
         detected = [b.name for b in browser_setup.detect_browsers() if b.installed]
         if detected:
             found = QLabel("Detected: " + ", ".join(detected))
-            found.setStyleSheet("color: gray; font-size: 11px;")
+            found.setProperty("role", "muted")
             layout.addWidget(found)
 
         # Verify.
@@ -134,8 +132,10 @@ class SetupDialog(chrome.Dialog):
 
     @staticmethod
     def _heading(text: str) -> QLabel:
-        label = QLabel(text)
-        label.setStyleSheet("font-weight: 600; margin-top: 8px;")
+        from app.ui import components, design
+
+        label = components.role_label(text, "strong", size=design.FONT["h2"], bold=True)
+        label.setContentsMargins(0, 8, 0, 0)
         return label
 
     def _prepare_extension(self) -> None:
