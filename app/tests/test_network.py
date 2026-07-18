@@ -195,9 +195,7 @@ def test_ipv6_broken_when_v6_fails_but_v4_works(monkeypatch: pytest.MonkeyPatch)
     import socket as socket_mod
 
     _reset_v6_cache()
-    monkeypatch.setattr(
-        net, "_handshakes", lambda host, family: family == socket_mod.AF_INET
-    )
+    monkeypatch.setattr(net, "_handshakes", lambda host, family: family == socket_mod.AF_INET)
     assert net.ipv6_broken() is True
 
 

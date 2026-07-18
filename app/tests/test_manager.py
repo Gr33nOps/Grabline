@@ -417,3 +417,30 @@ def test_move_job_file_refuses_unfinished_downloads(db: Database, dest: Path, tm
             manager.move_job_file(job.id, tmp_path / "Movies")
     finally:
         manager.shutdown()
+
+
+def test_a_crashing_engine_marks_the_job_failed(db: Database, dest: Path):
+    """A bug in an engine must never strand a job at 'Downloading' - the exact
+    aftermath of the HLS finalizer raising on Windows: thread dead, row stuck,
+    the user watching a 100% download that never completes."""
+    manager = DownloadManager(db, max_concurrent=1)
+    try:
+        job = db.create_job("https://example.invalid/x.bin", str(dest), "x.bin")
+        db.set_job_status(job.id, JobStatus.DOWNLOADING)
+
+        class ExplodingTask:
+            def run(self):
+                raise RuntimeError("engine bug")
+
+            def pause(self):
+                pass
+
+            def cancel(self):
+                pass
+
+        manager._run_job(job, ExplodingTask())  # must not raise out
+        assert _status(db, job.id) is JobStatus.FAILED
+        fresh = db.get_job(job.id)
+        assert fresh is not None and "internal error" in (fresh.error or "")
+    finally:
+        manager.shutdown()

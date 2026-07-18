@@ -203,3 +203,28 @@ def test_estimate_does_not_read_absurdly_high_early():
     # Every published estimate is within 20% of the true ~2 GB - never 500 GB.
     assert all(1.6e9 <= t <= 2.4e9 for t in seen), [t / 1e9 for t in seen]
     db.close()
+
+
+def test_finalize_survives_a_failing_fsync(
+    db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The Windows regression: FlushFileBuffers rejects a read-only handle, the
+    raise skipped the COMPLETED write, and a fully-downloaded stream sat at
+    "Downloading" forever. The flush is best-effort; completion is not."""
+    import os as os_mod
+
+    job = _hls_job(db, "https://x/s.m3u8", dest)
+    task = HlsDownload(db, job, ffmpeg_path="ffmpeg")
+    part = job.part_path
+    part.parent.mkdir(parents=True, exist_ok=True)
+    part.write_bytes(b"x" * 1024)
+
+    def refuse(fd):
+        raise PermissionError(9, "The handle is invalid")  # what Windows raises
+
+    monkeypatch.setattr(os_mod, "fsync", refuse)
+    status = task._finalize(part)
+    assert status is JobStatus.COMPLETED
+    fresh = db.get_job(job.id)
+    assert fresh is not None and fresh.status is JobStatus.COMPLETED
+    assert (dest / fresh.filename).exists()

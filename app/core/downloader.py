@@ -422,21 +422,6 @@ class SegmentedDownload:
             raise _Retry("server closed the connection early")
 
     @staticmethod
-    def _fsync_file(path: Path) -> None:
-        """Flush the finished part file to disk before the rename, so a crash
-        or power loss can't leave a correctly-named file with unwritten tail
-        bytes. Opened read/write ("r+b"): Windows' FlushFileBuffers - which
-        os.fsync calls - rejects a read-only handle with EBADF (errno 9).
-        Best-effort: the segment writers already flushed on close, so if the
-        platform still refuses the sync we log it and let the rename proceed
-        rather than fail a download whose bytes are all on disk."""
-        try:
-            with open(path, "r+b") as handle:
-                os.fsync(handle.fileno())
-        except OSError as exc:
-            log.warning("could not fsync %s before rename: %s", path, exc)
-
-    @staticmethod
     def _write_at(handle: IO[bytes], data: bytes, position: int) -> None:
         handle.seek(position)
         view = memoryview(data)
@@ -454,7 +439,7 @@ class SegmentedDownload:
                 f"{len(incomplete)} segment(s) ended incomplete; please retry"
             )
         part = job.part_path
-        self._fsync_file(part)
+        naming.fsync_before_rename(part)
         actual_size = part.stat().st_size
         if job.total_size is None:
             job.total_size = actual_size

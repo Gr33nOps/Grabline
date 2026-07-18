@@ -313,8 +313,10 @@ class HlsDownload:
     # ------------------------------------------------------------- outcomes
 
     def _finalize(self, part: Path) -> JobStatus:
-        with open(part, "rb") as handle:
-            os.fsync(handle.fileno())
+        # Never a raw read-only fsync here: on Windows that raises, and the
+        # raise used to skip everything below - the downloaded stream sat at
+        # "Downloading" forever with its .gl-part never renamed.
+        naming.fsync_before_rename(part)
         size = part.stat().st_size
         if size == 0:
             _discard(part)

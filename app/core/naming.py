@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import mimetypes
-import os.path
+import os
 import posixpath
 import re
 from collections.abc import Sequence
@@ -92,6 +93,23 @@ def apply_rename_rules(name: str, rules: Sequence[tuple[str, str]]) -> str:
         if find:
             root = root.replace(find, replace)
     return sanitize_filename((root or FALLBACK_NAME) + ext)
+
+
+def fsync_before_rename(path: Path) -> None:
+    """Flush a finished file to disk before renaming it into place, so a crash
+    or power loss can't leave a correctly-named file with unwritten tail bytes.
+
+    Opened read/write ("r+b"), never read-only: Windows' FlushFileBuffers -
+    which os.fsync calls - rejects a read-only handle. That exact mistake once
+    left every finished stream stuck at "Downloading": the raised error
+    skipped the completed-status write. Best-effort by design - the writers
+    already flushed on close, so if the platform still refuses, log and let
+    the rename proceed rather than fail a download whose bytes are on disk."""
+    try:
+        with open(path, "r+b") as handle:
+            os.fsync(handle.fileno())
+    except OSError as exc:
+        logging.getLogger(__name__).warning("could not fsync %s before rename: %s", path, exc)
 
 
 def unique_path(path: Path) -> Path:

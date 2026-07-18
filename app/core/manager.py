@@ -1118,6 +1118,15 @@ class DownloadManager:
         try:
             status = task.run()
             log.info("job %s (%s) finished with status %s", job.id, job.filename, status.value)
+        except Exception:
+            # A bug in an engine must never strand a job: without this, the
+            # thread died mid-flight and the row stayed "Downloading" forever
+            # (the Windows fsync crash in the HLS finalizer did exactly that).
+            log.exception("job %s (%s) crashed", job.id, job.filename)
+            with contextlib.suppress(Exception):
+                self.db.set_job_status(
+                    job.id, JobStatus.FAILED, error="unexpected internal error (see log)"
+                )
         finally:
             with self._cond:
                 self._active.pop(job.id, None)
