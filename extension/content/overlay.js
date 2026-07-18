@@ -77,15 +77,27 @@
 
   // Which corner of the hovered element the ⬇ sits in (popup setting).
   let corner = "top-right";
+  // The on-page progress pill is off by default - the app window and tray
+  // already show progress. Opt in from the popup.
+  let pagePillEnabled = false;
 
-  api.storage.local.get(["disabledSites", "overlayImages", "buttonCorner", "hoverButtons"]).then(
-    ({ disabledSites = [], overlayImages = false, buttonCorner = "top-right", hoverButtons = true }) => {
-      if (disabledSites.includes(location.hostname)) enabled = false;
-      imagesEnabled = overlayImages;
-      corner = buttonCorner;
-      hoverGlobal = hoverButtons;
-    },
-  );
+  api.storage.local
+    .get(["disabledSites", "overlayImages", "buttonCorner", "hoverButtons", "pagePill"])
+    .then(
+      ({
+        disabledSites = [],
+        overlayImages = false,
+        buttonCorner = "top-right",
+        hoverButtons = true,
+        pagePill = false,
+      }) => {
+        if (disabledSites.includes(location.hostname)) enabled = false;
+        imagesEnabled = overlayImages;
+        corner = buttonCorner;
+        hoverGlobal = hoverButtons;
+        pagePillEnabled = pagePill;
+      },
+    );
   api.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes.disabledSites) {
@@ -102,6 +114,12 @@
     }
     if (changes.buttonCorner) {
       corner = changes.buttonCorner.newValue ?? "top-right";
+    }
+    if (changes.pagePill) {
+      pagePillEnabled = Boolean(changes.pagePill.newValue);
+      if (!pagePillEnabled) {
+        for (const url of [...pillRows.keys()]) dropPill(url, 0);
+      }
     }
   });
 
@@ -344,6 +362,7 @@
   }
 
   function renderProgress(items) {
+    if (!pagePillEnabled) return; // opt-in; the app + tray already show progress
     if (document.body && !pillHost.isConnected) document.body.appendChild(pillHost);
     for (const job of items) {
       if (job.status === "cancelled") {

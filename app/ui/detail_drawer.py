@@ -6,6 +6,7 @@ rebuild - so nothing flickers or doubles up, and it stays cheap to keep live.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable
 from urllib.parse import urlsplit
 
@@ -25,6 +26,16 @@ from app.core.models import JobStatus
 from app.ui import components, design, motion, theme
 from app.ui.format import human_bytes
 from app.ui.icons import svg_icon, type_icon_name
+
+#: Long URLs and paths have no spaces, so a word-wrapping label can't break
+#: them - it demands its full width and pushes the panel past its edge. Inserting
+#: zero-width spaces after the usual boundaries lets them wrap. The value shown
+#: to the user is unchanged (copy actions use the real url/path, not this).
+_BREAK_AFTER = re.compile(r"([/\\._\-?&=:])")
+
+
+def _wrappable(text: str) -> str:
+    return _BREAK_AFTER.sub("\\1​", text)
 
 
 class DetailDrawer(QFrame):
@@ -66,6 +77,9 @@ class DetailDrawer(QFrame):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        # The panel is a fixed 324px; its content must wrap to that, never push
+        # a horizontal scrollbar or spill past the edge.
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         body = QWidget()
         self._body = QVBoxLayout(body)
         self._body.setContentsMargins(14, 12, 14, 12)
@@ -216,8 +230,8 @@ class DetailDrawer(QFrame):
             self._name.setText(view.display_name)
             self._meta_queue.setText(self._queue_name(view.queue_id))
             self._meta_server.setText(urlsplit(view.url).hostname or "—")
-            self._meta_dest.setText(view.dest_dir)
-            self._meta_url.setText(view.url)
+            self._meta_dest.setText(_wrappable(view.dest_dir))
+            self._meta_url.setText(_wrappable(view.url))
             self._rebuild_tags(view)
         # Notes and errors live here, not in row tooltips.
         self._meta_notes.setText(view.notes or "")

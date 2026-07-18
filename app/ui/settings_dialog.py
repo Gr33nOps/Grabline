@@ -186,6 +186,7 @@ class SettingsDialog(chrome.Dialog):
         self.speed_spin.setValue(settings.speed_limit_kbps)
         engine_form.addRow("Speed limit:", self.speed_spin)
         schedule_row = QHBoxLayout()
+        schedule_row.setSpacing(10)
         self.schedule_check = QCheckBox("Full speed between")
         self.schedule_check.setChecked(settings.speed_schedule_enabled)
         self.full_from = QTimeEdit(QTime.fromString(settings.speed_full_from, "HH:mm"))
@@ -533,6 +534,7 @@ class SettingsDialog(chrome.Dialog):
         window_row.addStretch(1)
         scheduler_form.addRow("Download times:", window_row)
         days_row = QHBoxLayout()
+        days_row.setSpacing(12)  # keep each day's box clear of the next day's label
         self.day_checks: list[QCheckBox] = []
         enabled_days = set(settings.download_days)
         for index, label in enumerate(("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")):

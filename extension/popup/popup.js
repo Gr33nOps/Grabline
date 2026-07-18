@@ -259,6 +259,13 @@ async function wireToggles(tab) {
     void api.storage.local.set({ overlayImages: images.checked });
   });
 
+  const pill = document.getElementById("toggle-pill");
+  const { pagePill = false } = await api.storage.local.get("pagePill");
+  pill.checked = pagePill;
+  pill.addEventListener("change", () => {
+    void api.storage.local.set({ pagePill: pill.checked });
+  });
+
   const cornerSelect = document.getElementById("button-corner");
   const { buttonCorner = "top-right" } = await api.storage.local.get("buttonCorner");
   cornerSelect.value = buttonCorner;

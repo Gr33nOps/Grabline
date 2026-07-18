@@ -48,4 +48,7 @@ Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]
+; Refresh Windows' shell icon cache so an update shows the new icon instead of
+; the one it cached from a previous version.
+Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden skipifdoesntexist
 Filename: "{app}\{#AppExe}"; Description: "Launch Grabline"; Flags: nowait postinstall skipifsilent

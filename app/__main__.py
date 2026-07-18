@@ -175,7 +175,9 @@ def main() -> int:
     manager = DownloadManager(db, settings=settings)
 
     window = MainWindow(manager, settings)
-    window.setWindowIcon(make_app_icon())
+    app_icon = make_app_icon()
+    app.setWindowIcon(app_icon)  # dialogs' native title bars show the logo too
+    window.setWindowIcon(app_icon)
 
     # Warm yt-dlp's extractor list off the UI thread so the first paste/grab
     # doesn't stall for a second while 1000+ extractors are enumerated.

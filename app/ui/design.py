@@ -292,7 +292,7 @@ def stylesheet(p: Palette) -> str:
     }}
 
     /* --- checkboxes / radios --- */
-    QCheckBox, QRadioButton {{ spacing: 9px; color: {p.text}; padding: 1px 0; }}
+    QCheckBox, QRadioButton {{ spacing: 8px; color: {p.text}; }}
     QCheckBox::indicator, QRadioButton::indicator {{
         width: 15px; height: 15px;
         border: 1px solid {p.border}; background: {p.surface};
@@ -424,8 +424,8 @@ def stylesheet(p: Palette) -> str:
         border-radius: {RADIUS["md"]}px;
     }}
     QLabel#QueueBadge {{
-        background: {p.accent_dim}; color: {p.accent};
-        border-radius: {RADIUS["md"]}px; font-weight: 700;
+        background: transparent; color: {p.accent};
+        font-size: {FONT["h1"]}pt; font-weight: 700;
     }}
     QLabel#VpnBanner {{
         color: {p.text2}; background: {p.surface2}; border: 1px solid {p.border};

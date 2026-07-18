@@ -1,11 +1,9 @@
-"""Custom window chrome: the frameless title bar that replaces the native one
-on the main window and on Grabline's dialogs.
+"""Custom window chrome for the frameless main window.
 
-``TitleBar`` is the bar itself (logo, title, min/max/close, drag-to-move,
-double-click-to-maximize). ``Dialog`` is a drop-in QDialog base class - the
-first ``exec``/``show`` wraps the dialog's existing layout under a close-only
-title bar, so dialog code needs no other change. ``EdgeResizer`` restores
-edge-drag resizing that the frameless hint takes away.
+``TitleBar`` is the caption bar (logo, title, min/max/close, drag-to-move,
+double-click-to-maximize). ``EdgeResizer`` restores edge/corner drag-resizing
+that the frameless hint takes away. ``Dialog`` is a plain QDialog base that
+keeps the native OS title bar - only the main window uses custom chrome.
 """
 
 from __future__ import annotations
@@ -17,7 +15,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QPushButton,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -211,45 +208,11 @@ class EdgeResizer(QWidget):
         super().leaveEvent(event)  # type: ignore[arg-type]
 
 
-def wrap_dialog(dialog: QDialog) -> None:
-    """Give a dialog the custom chrome: frameless, with its existing layout
-    re-hosted under a close-only TitleBar. Call before the first show."""
-    dialog.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
-    old = dialog.layout()
-    outer = QVBoxLayout()
-    outer.setContentsMargins(1, 1, 1, 1)  # room for the border to show
-    outer.setSpacing(0)
-    bar = TitleBar(dialog, dialog=True)
-    outer.addWidget(bar)
-    if old is not None:
-        holder = QWidget()
-        holder.setLayout(old)  # transfers the layout (and margins) intact
-        outer.addWidget(holder, 1)
-    dialog.setLayout(outer)
-    p = theme.current()
-    dialog.setStyleSheet(dialog.styleSheet() + f"\nQDialog {{ border: 1px solid {p.border}; }}")
-
-
 class Dialog(QDialog):
-    """QDialog with Grabline's chrome. Subclass instead of QDialog - the
-    wrap happens lazily on first exec/show/open, after __init__ built the
-    layout, so existing dialog code needs no other change."""
+    """A plain QDialog that keeps the native OS title bar.
 
-    _chromed = False
-
-    def _apply_chrome(self) -> None:
-        if not self._chromed:
-            self._chromed = True
-            wrap_dialog(self)
-
-    def exec(self) -> int:
-        self._apply_chrome()
-        return super().exec()
-
-    def show(self) -> None:
-        self._apply_chrome()
-        super().show()
-
-    def open(self) -> None:
-        self._apply_chrome()
-        super().open()
+    Dialogs used to be wrapped in the same frameless custom bar as the main
+    window, but the native bar is cleaner, already carries the app icon and
+    the standard window controls, and is properly movable everywhere. Only the
+    main window keeps custom chrome now. Subclasses need no change - this is a
+    thin alias so the ``chrome.Dialog`` base can stay in place."""
