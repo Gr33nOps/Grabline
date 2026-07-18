@@ -640,3 +640,50 @@ def test_browser_session_does_not_force_the_slow_path(db: Database, dest: Path, 
     monkeypatch.setattr(task, "_download", fake_download)
     assert task._download_smart() == {"title": "ok"}
     assert calls == [(False, False)]  # fast, cookie-free, no runtime, no retry
+
+
+def test_hook_adopts_the_real_title_for_placeholder_jobs(db: Database, dest: Path):
+    """A hover-button add carries the tab title ("(93) YouTube") until the
+    download's own extraction knows better - the first progress event renames
+    the row instead of waiting for completion."""
+    job = _smart_job(db, "https://x/v", dest, "v.mp4", name_from_metadata=True)
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    task._hook(
+        {
+            "status": "downloading",
+            "filename": "v.mp4",
+            "downloaded_bytes": 1,
+            "info_dict": {"title": "The Real Title"},
+        }
+    )
+    fresh = db.get_job(job.id)
+    assert fresh is not None and fresh.title == "The Real Title"
+
+    # Later events never rename again (the first verdict stands).
+    task._hook(
+        {
+            "status": "downloading",
+            "filename": "v.mp4",
+            "downloaded_bytes": 2,
+            "info_dict": {"title": "Different"},
+        }
+    )
+    fresh = db.get_job(job.id)
+    assert fresh is not None and fresh.title == "The Real Title"
+
+
+def test_hook_leaves_analyzed_titles_alone(db: Database, dest: Path):
+    """A job named by a real analysis keeps its name - yt-dlp's title can
+    differ in casing/decoration and must not fight the quality panel's."""
+    job = _smart_job(db, "https://x/v", dest, "v.mp4")  # title="v", no placeholder
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    task._hook(
+        {
+            "status": "downloading",
+            "filename": "v.mp4",
+            "downloaded_bytes": 1,
+            "info_dict": {"title": "Metadata Title"},
+        }
+    )
+    fresh = db.get_job(job.id)
+    assert fresh is not None and fresh.title == "v"

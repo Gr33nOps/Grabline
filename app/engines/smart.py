@@ -725,6 +725,7 @@ class SmartDownload:
         self._last_persist = 0.0
         self._known_files: set[str] = set()
         self._js_runtime: tuple[str, str] | None = None  # (yt-dlp name, path)
+        self._title_adopted = False
 
     # ------------------------------------------------------------ control
 
@@ -1067,9 +1068,32 @@ class SmartDownload:
                 with_runtime=self._js_runtime is not None,
             )
 
+    def _adopt_title(self, event: dict[str, Any]) -> None:
+        """Show the real video title the moment yt-dlp knows it.
+
+        A hover-button add is queued on the tab title ("(93) YouTube",
+        "Fetching title…") and normally corrected by the oEmbed lookup - but
+        that lookup is best-effort, and when it loses the race or fails the
+        placeholder used to sit in the list for the whole download. The
+        progress hook carries the extracted metadata, so the first event
+        renames the row; jobs named by a real analysis are left alone."""
+        if self._title_adopted:
+            return
+        info = event.get("info_dict") or {}
+        title = info.get("title")
+        if not title:
+            return
+        placeholder = bool(self.job.options.get("name_from_metadata"))
+        if self.job.title and not placeholder:
+            return
+        self._title_adopted = True
+        self.job.title = str(title)
+        self.db.update_job_title(self.job.id, self.job.title)
+
     def _hook(self, event: dict[str, Any]) -> None:
         if self._stop_event.is_set():
             raise _StopRequested
+        self._adopt_title(event)
         status = event.get("status")
         filename = event.get("tmpfilename") or event.get("filename") or ""
         if status == "downloading":
