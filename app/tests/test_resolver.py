@@ -87,6 +87,31 @@ def test_manifest_content_type_routes_to_hls(server: MediaServer):
     assert resolution.kind is JobKind.HLS
 
 
+def test_hls_master_playlist_forwards_headers(server: MediaServer):
+    """A referer-gated master playlist (many CDNs check this) must still
+    yield its variants when the browser handoff's headers are passed through -
+    without them the request 403s and the quality picker comes back empty."""
+    master = b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720\n720p.m3u8\n"
+    url = server.add(
+        "/gated.m3u8",
+        master,
+        content_type="application/vnd.apple.mpegurl",
+        required_headers={"Referer": "https://site.example/watch"},
+    )
+    resolver = Resolver(FakeSmart(match=False))
+
+    # Without the header: refused, so no variants (the pre-fix behavior).
+    resolution = resolver.resolve(url)
+    assert resolution.kind is JobKind.HLS
+    assert resolution.variants == ()
+
+    # With it forwarded: the master playlist is read and parsed.
+    resolution = resolver.resolve(url, headers={"Referer": "https://site.example/watch"})
+    assert resolution.kind is JobKind.HLS
+    assert len(resolution.variants) == 1
+    assert resolution.variants[0].url.endswith("720p.m3u8")
+
+
 def test_smart_match_wins(server: MediaServer):
     resolution = Resolver(FakeSmart(match=True)).resolve("https://tube.example/watch?v=1")
     assert resolution.kind is JobKind.SMART

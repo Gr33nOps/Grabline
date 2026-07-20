@@ -647,9 +647,14 @@ class DownloadManager:
         dest_dir: str | Path | None = None,
         title: str | None = None,
         variant: HlsVariant | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> Job:
         """Queue an HLS/DASH stream for FFmpeg reassembly; ``variant`` pins a
-        quality picked from the master playlist (F2.1)."""
+        quality picked from the master playlist (F2.1). ``headers``
+        (cookie/referer/user-agent from the browser handoff) are forwarded to
+        every request FFmpeg makes - many CDNs check the Referer against the
+        page that requested the stream and refuse it (or serve an HTML error
+        FFmpeg can't parse) without one."""
         stem = Path(naming.filename_from_url(url)).stem or "stream"
         base = naming.sanitize_filename(title) if title else stem
         filename = naming.apply_rename_rules(f"{base}.mp4", self.settings.rename_rules)
@@ -660,6 +665,8 @@ class DownloadManager:
                 "audio_url": variant.audio_url,
                 "quality_label": variant.label,
             }
+        if headers:
+            options["http_headers"] = dict(headers)
         job = self.db.create_job(
             url,
             self._dest_for(filename, dest_dir),

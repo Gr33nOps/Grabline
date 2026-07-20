@@ -73,6 +73,13 @@ class HlsDownload:
         self._input_url = str(options.get("variant_url") or job.url)
         audio = options.get("audio_url")
         self._audio_url = str(audio) if audio else None
+        # Cookie/Referer/User-Agent from a browser handoff. Many CDNs check
+        # Referer against the page that requested the stream and refuse it -
+        # or serve an HTML error page FFmpeg can't parse - without one, so
+        # these ride along into both the manifest fetch and every FFmpeg
+        # request (see _command).
+        raw_headers = options.get("http_headers")
+        self._headers: dict[str, str] = dict(raw_headers) if isinstance(raw_headers, dict) else {}
 
     def pause(self) -> None:
         self._stop_event.set()
@@ -119,8 +126,17 @@ class HlsDownload:
 
     # ------------------------------------------------------------ one attempt
 
+    def _ffmpeg_headers(self) -> str | None:
+        """The browser's headers as one CRLF-joined block, FFmpeg's -headers
+        format - or None when there aren't any, so the flag is omitted rather
+        than sent empty."""
+        if not self._headers:
+            return None
+        return "".join(f"{key}: {value}\r\n" for key, value in self._headers.items())
+
     def _command(self, part: Path) -> list[str]:
         assert self.ffmpeg_path is not None
+        header_block = self._ffmpeg_headers()
         command = [
             self.ffmpeg_path,
             "-y",
@@ -140,13 +156,17 @@ class HlsDownload:
             # so file is intentionally absent. Must precede -i to bind to it.
             "-protocol_whitelist",
             _INPUT_PROTOCOLS,
-            "-i",
-            self._input_url,
         ]
+        if header_block:
+            # Per-input option, like -protocol_whitelist: must precede each -i
+            # it applies to, or FFmpeg attaches it to the wrong stream.
+            command += ["-headers", header_block]
+        command += ["-i", self._input_url]
         if self._audio_url:
-            # Per-input option: bind the whitelist to the audio input too.
-            command += ["-protocol_whitelist", _INPUT_PROTOCOLS, "-i", self._audio_url]
-            command += ["-map", "0", "-map", "1"]
+            command += ["-protocol_whitelist", _INPUT_PROTOCOLS]
+            if header_block:
+                command += ["-headers", header_block]
+            command += ["-i", self._audio_url, "-map", "0", "-map", "1"]
         command += ["-c", "copy", "-f", "mp4", str(part)]
         return command
 
@@ -312,7 +332,7 @@ class HlsDownload:
         """
         try:
             with net.build_client(proxy=self.proxy, follow_redirects=True, timeout=10) as client:
-                response = client.get(self._input_url)
+                response = client.get(self._input_url, headers=self._headers or None)
                 if response.status_code != 200:
                     return None
                 return response.text

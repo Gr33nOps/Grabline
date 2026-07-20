@@ -280,6 +280,72 @@ def test_ffmpeg_protocol_whitelist(db: Database, dest: Path):
     assert {"http", "https", "tls", "crypto"} <= protocols
 
 
+def test_command_forwards_browser_headers_to_ffmpeg(db: Database, dest: Path):
+    """Cookie/Referer/User-Agent from a browser handoff must reach FFmpeg -
+    many CDNs check Referer against the requesting page and refuse the stream
+    (or serve an HTML error FFmpeg can't parse) without it. -headers is a
+    per-input option like -protocol_whitelist, so it must precede each -i."""
+    job = _hls_job(
+        db,
+        "https://cdn.example/master.m3u8",
+        dest,
+        options={
+            "audio_url": "https://cdn.example/audio.m3u8",
+            "http_headers": {"Referer": "https://site.example/watch", "Cookie": "sess=abc123"},
+        },
+    )
+    task = HlsDownload(db, job, ffmpeg_path="ffmpeg")
+    command = task._command(job.part_path)
+
+    for i, arg in enumerate(command):
+        if arg == "-i":
+            assert command[i - 2] == "-headers"
+            block = command[i - 1]
+            assert "Referer: https://site.example/watch\r\n" in block
+            assert "Cookie: sess=abc123\r\n" in block
+
+
+def test_command_omits_headers_flag_when_none_stored(db: Database, dest: Path):
+    """A plain paste (no browser handoff) has no headers to forward - the
+    flag must be absent entirely, not sent empty."""
+    job = _hls_job(db, "https://cdn.example/master.m3u8", dest)
+    task = HlsDownload(db, job, ffmpeg_path="ffmpeg")
+    command = task._command(job.part_path)
+    assert "-headers" not in command
+
+
+@pytest.mark.skipif(FFMPEG is None, reason="needs a real ffmpeg")
+def test_fetch_playlist_and_ffmpeg_both_send_the_headers(
+    server: MediaServer, db: Database, dest: Path, tmp_path: Path
+):
+    """End to end: a job carrying a browser Referer sends it both when Grabline
+    fetches the manifest itself (_fetch_playlist) and when FFmpeg fetches the
+    segments - proving the whole chain, not just the command string."""
+    files = make_hls(tmp_path / "hls", seconds=1)
+    for name, content in files.items():
+        content_type = "application/vnd.apple.mpegurl" if name.endswith(".m3u8") else "video/mp2t"
+        server.add(f"/gated/{name}", content, content_type=content_type)
+
+    job = _hls_job(
+        db,
+        server.url("/gated/index.m3u8"),
+        dest,
+        options={"http_headers": {"Referer": "https://site.example/watch"}},
+    )
+    status = HlsDownload(db, job, ffmpeg_path=FFMPEG).run()
+
+    assert status is JobStatus.COMPLETED
+    manifest_headers = server.received_headers("/gated/index.m3u8")
+    assert manifest_headers.get("referer") == "https://site.example/watch"
+    # At least one media segment must have carried it too (ffmpeg's own fetch).
+    segment_headers = {
+        name: server.received_headers(f"/gated/{name}")
+        for name in files
+        if not name.endswith(".m3u8")
+    }
+    assert any(h.get("referer") == "https://site.example/watch" for h in segment_headers.values())
+
+
 @pytest.mark.skipif(FFMPEG is None, reason="needs a real ffmpeg")
 def test_whitelist_blocks_local_file_read(dest: Path, tmp_path: Path):
     """End to end against real FFmpeg: a manifest pointing a segment at a local

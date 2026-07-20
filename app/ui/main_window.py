@@ -1156,7 +1156,11 @@ class MainWindow(QMainWindow):
             elif resolution.variants:
                 variant = resolution.variants[0]
             self.manager.add_hls(
-                resolution.url, dest_dir=dest or None, title=page_title, variant=variant
+                resolution.url,
+                dest_dir=dest or None,
+                title=page_title,
+                variant=variant,
+                headers=headers,
             )
         else:
             # F1.8 name fixer: prefer Content-Disposition, then rescue ugly

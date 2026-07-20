@@ -21,6 +21,33 @@ def _status(db: Database, job_id: int) -> JobStatus:
     return job.status
 
 
+def test_add_hls_stores_browser_headers_on_the_job(db: Database, dest: Path):
+    """add_hls must carry the browser handoff's headers into job.options, the
+    same convention add_url already uses - HlsDownload reads them from there
+    to forward Referer/Cookie to the CDN."""
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        job = manager.add_hls(
+            "https://cdn.example/master.m3u8",
+            dest_dir=str(dest),
+            headers={"Referer": "https://site.example/watch", "Cookie": "sess=abc"},
+        )
+        fresh = db.get_job(job.id)
+        assert fresh is not None
+        assert fresh.options.get("http_headers") == {
+            "Referer": "https://site.example/watch",
+            "Cookie": "sess=abc",
+        }
+
+        # No headers (a plain paste) -> no key at all, not an empty dict.
+        plain = manager.add_hls("https://cdn.example/other.m3u8", dest_dir=str(dest))
+        fresh_plain = db.get_job(plain.id)
+        assert fresh_plain is not None
+        assert "http_headers" not in fresh_plain.options
+    finally:
+        manager.shutdown()
+
+
 def test_queue_respects_concurrency_and_completes_all(
     server: MediaServer, db: Database, dest: Path
 ):

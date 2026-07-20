@@ -86,12 +86,20 @@ class Resolution:
     variants: tuple[HlsVariant, ...] = ()  # set for HLS master playlists (F2.1)
 
 
-def _hls_variants(url: str, proxy: str | None = None) -> tuple[HlsVariant, ...]:
+def _hls_variants(
+    url: str, proxy: str | None = None, headers: dict[str, str] | None = None
+) -> tuple[HlsVariant, ...]:
     """Quality choices from a master playlist; empty for media playlists
-    or when the manifest cannot be fetched (FFmpeg reports the real error)."""
+    or when the manifest cannot be fetched (FFmpeg reports the real error).
+
+    ``headers`` matters here: many stream CDNs check Referer/Cookie/User-Agent
+    against the page that requested them and 403 (or serve an HTML error page)
+    without it - the browser handoff already captured them, so they need to
+    ride along into the manifest fetch, not just the direct-file probe.
+    """
     try:
         with net.build_client(proxy=proxy, follow_redirects=True, http2=True, timeout=10) as client:
-            response = client.get(url)
+            response = client.get(url, headers=headers)
             if response.status_code != 200:
                 return ()
             return parse_master_playlist(response.text, str(response.url))
@@ -163,7 +171,7 @@ class Resolver:
 
         path = urlsplit(url).path.lower()
         if path.endswith(_MANIFEST_SUFFIXES):
-            variants = _hls_variants(url, proxy) if path.endswith(".m3u8") else ()
+            variants = _hls_variants(url, proxy, headers) if path.endswith(".m3u8") else ()
             return Resolution(url=url, kind=JobKind.HLS, variants=variants)
 
         try:
@@ -184,7 +192,9 @@ class Resolver:
         if content_type == "application/x-bittorrent":
             return Resolution(url=url, kind=JobKind.TORRENT)
         if content_type in _MANIFEST_CONTENT_TYPES:
-            variants = _hls_variants(url, proxy) if content_type in _HLS_CONTENT_TYPES else ()
+            variants = (
+                _hls_variants(url, proxy, headers) if content_type in _HLS_CONTENT_TYPES else ()
+            )
             return Resolution(url=url, kind=JobKind.HLS, probe=result, variants=variants)
         if content_type in _HTML_CONTENT_TYPES:
             # No site extractor claimed it and it's a web page, not a file. Before
