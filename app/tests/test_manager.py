@@ -250,15 +250,21 @@ def test_connection_budget_is_shared_across_active_jobs(db: Database, dest: Path
 
     def segmented(url: str, name: str) -> SegmentedDownload:
         job = db.create_job(url, str(dest), name)
-        # Park it: the manager's live scheduler thread must never claim these
-        # queued rows itself and mutate _active mid-assertion (that raced in
-        # CI). The budget math only needs the task objects.
+        # Park it defensively; the scheduler is already stopped below, so the
+        # budget math just needs the task objects.
         db.set_job_status(job.id, JobStatus.PAUSED)
         task = manager._create_task(job)
         assert isinstance(task, SegmentedDownload)
         return task
 
     manager = DownloadManager(db, max_concurrent=3)
+    # Stop the scheduler before creating any jobs. Otherwise it claims each row
+    # during the QUEUED window before segmented() pauses it, starts a phantom
+    # download thread, and mutates _active out from under the assertions - the
+    # race the original comment describes but pausing-after-create didn't close.
+    manager._running = False
+    manager._kick()
+    manager._scheduler.join(timeout=5)
     try:
         manager._connections_override = 16
         alone = segmented("https://x.test/a.bin", "a.bin")
@@ -431,6 +437,8 @@ def test_a_crashing_engine_marks_the_job_failed(db: Database, dest: Path):
         db.set_job_status(job.id, JobStatus.DOWNLOADING)
 
         class ExplodingTask:
+            bytes_downloaded = 0  # DownloadTask protocol member
+
             def run(self):
                 raise RuntimeError("engine bug")
 
