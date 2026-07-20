@@ -181,6 +181,8 @@ class MainWindow(QMainWindow):
         # Queue and Settings are built the first time they are opened. Settings
         # alone is ~500ms of widget construction (18 sections, ~100 fields) and
         # most sessions never open it.
+        self._queue_view: QWidget | None = None
+        self._settings_view: QWidget | None = None
         self._page_factories: dict[str, Callable[[], QWidget]] = {
             "queue": self._make_queue_page,
             "settings": self._make_settings_page,
@@ -561,7 +563,10 @@ class MainWindow(QMainWindow):
         if factory is None:
             return None
         widget = factory()
-        setattr(self, f"_{key}_view", widget)  # _queue_view / _settings_view
+        if key == "queue":
+            self._queue_view = widget
+        elif key == "settings":
+            self._settings_view = widget
         self._page_index[key] = self._pages.addWidget(widget)
         return self._page_index[key]
 

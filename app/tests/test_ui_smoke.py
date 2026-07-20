@@ -978,7 +978,7 @@ def test_close_to_tray_explains_itself_once(db: Database, tmp_path: Path):
             def showMessage(self, title, body, icon, msecs):
                 shown.append((title, body))
 
-        window.tray = FakeTray()
+        window.tray = FakeTray()  # type: ignore[assignment]  # duck-typed tray stub
         window.close_to_tray = True  # a tray exists
         window.show()
 
@@ -1141,7 +1141,7 @@ def test_heavy_pages_are_built_on_first_visit(db: Database, tmp_path: Path):
         window.show()
         # Downloads and Dashboard exist up front (the dashboard samples history).
         assert set(window._page_index) == {"downloads", "dashboard"}
-        assert not hasattr(window, "_settings_view")
+        assert window._settings_view is None  # declared, but not built yet
 
         window._switch_view("settings")
         assert window._pages.currentWidget() is window._settings_view

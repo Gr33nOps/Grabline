@@ -88,7 +88,9 @@ def test_external_traversal_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     bundle = tmp_path / "a.7z"
     import subprocess
 
-    subprocess.run([_seven_zip(), "a", str(bundle), str(payload)], capture_output=True, check=True)
+    sevenz = _seven_zip()
+    assert sevenz is not None  # skipif guards this; narrows str | None -> str
+    subprocess.run([sevenz, "a", str(bundle), str(payload)], capture_output=True, check=True)
 
     # Force the listing to include an escaping member.
     evil = (archive.ArchiveEntry("../../escaped.txt", 4), archive.ArchiveEntry("x.txt", 4))
@@ -106,6 +108,8 @@ def test_external_normal_still_extracts(tmp_path: Path):
     bundle = tmp_path / "b.7z"
     import subprocess
 
-    subprocess.run([_seven_zip(), "a", str(bundle), str(payload)], capture_output=True, check=True)
+    sevenz = _seven_zip()
+    assert sevenz is not None  # skipif guards this; narrows str | None -> str
+    subprocess.run([sevenz, "a", str(bundle), str(payload)], capture_output=True, check=True)
     out = archive.extract(bundle, tmp_path / "out")
     assert (out / "hello.txt").read_text() == "hi there"

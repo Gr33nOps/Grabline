@@ -25,6 +25,7 @@ import zipfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import IO
 
 from app.core import naming, proc
 from app.core.errors import DownloadError
@@ -54,7 +55,7 @@ class _LimitedWriter:
     """A file object that raises once more than ``limit`` bytes are written,
     so a lying archive can't stream past the declared-size check."""
 
-    def __init__(self, sink: object, limit: int) -> None:
+    def __init__(self, sink: IO[bytes], limit: int) -> None:
         self._sink = sink
         self._remaining = limit
 
@@ -62,7 +63,7 @@ class _LimitedWriter:
         self._remaining -= len(data)
         if self._remaining < 0:
             raise DownloadError(_BOMB_MESSAGE)
-        return self._sink.write(data)  # type: ignore[attr-defined]
+        return self._sink.write(data)
 
 
 class PasswordRequired(DownloadError):

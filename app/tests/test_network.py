@@ -186,7 +186,7 @@ def test_host_limits_setting_roundtrip(db: Database):
 # ------------------------------------------------------- IPv6 health probe
 
 
-def _reset_v6_cache():
+def _reset_v6_cache() -> None:
     net._v6_state = None
 
 
@@ -233,13 +233,16 @@ def test_build_client_forces_v4_only_when_broken(monkeypatch: pytest.MonkeyPatch
     client = net.build_client(timeout=1)
     # The v4-bound transport replaces the default one.
     assert isinstance(client._transport, httpx.HTTPTransport)
-    pool = client._transport._pool
-    assert pool._local_address == "0.0.0.0"
+    # _pool is a private httpx.HTTPTransport attribute, not on the BaseTransport
+    # type mypy sees, so reach it through getattr.
+    pool = getattr(client._transport, "_pool", None)
+    assert getattr(pool, "_local_address", None) == "0.0.0.0"
     client.close()
 
     monkeypatch.setattr(net, "ipv6_broken", lambda: False)
     client = net.build_client(timeout=1)
-    assert getattr(client._transport._pool, "_local_address", None) is None
+    pool = getattr(client._transport, "_pool", None)
+    assert getattr(pool, "_local_address", None) is None
     client.close()
 
 
@@ -248,7 +251,8 @@ def test_proxied_client_never_forces_v4(monkeypatch: pytest.MonkeyPatch):
     change nothing and risks breaking a v6-only proxy address."""
     monkeypatch.setattr(net, "ipv6_broken", lambda: True)
     client = net.build_client(proxy="http://127.0.0.1:9", timeout=1)
-    assert getattr(client._transport._pool, "_local_address", None) is None
+    pool = getattr(client._transport, "_pool", None)
+    assert getattr(pool, "_local_address", None) is None
     client.close()
 
 

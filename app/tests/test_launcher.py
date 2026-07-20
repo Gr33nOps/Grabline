@@ -87,5 +87,5 @@ def test_packaged_install_skips_the_per_user_menu_entry(monkeypatch: pytest.Monk
 
     # An AppImage or tarball run from anywhere else still gets its own entry.
     monkeypatch.setattr(sys, "executable", "/home/someone/Apps/grabline", raising=False)
-    monkeypatch.setattr(launcher.Path, "is_file", lambda self: False)
+    monkeypatch.setattr(Path, "is_file", lambda self: False)
     assert launcher.packaged_install() is False

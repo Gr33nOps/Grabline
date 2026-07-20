@@ -65,12 +65,21 @@ module = ["app.ui.*", "app.__main__"]
 disallow_untyped_defs = false
 disallow_subclassing_any = false
 check_untyped_defs = true
+# __main__ is the platform entry point, full of `sys.platform` guards. mypy
+# narrows sys.platform to the host it runs on (Linux in CI) and then flags the
+# Windows/macOS branches as unreachable - a false positive for cross-platform
+# code that is genuinely reached on those platforms.
+warn_unreachable = false
 
 [[tool.mypy.overrides]]
 module = "app.tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 check_untyped_defs = true
+# Tests assert runtime states mypy can't track (a bool flipped by a Qt signal,
+# a sys.platform branch), which warn_unreachable reports as dead code. Keep the
+# real type checks; drop the unreachable noise.
+warn_unreachable = false
 
 [[tool.mypy.overrides]]
 module = ["yt_dlp", "yt_dlp.*", "libtorrent", "paramiko", "paramiko.*", "boto3", "keyring", "pyftpdlib.*", "psutil", "httpx_socks"]

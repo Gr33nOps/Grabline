@@ -195,9 +195,10 @@ def test_estimate_does_not_read_absurdly_high_early():
         task._downloaded = int(header + bitrate * out)
         task._out_time = out
         last = task._persist_estimate(last)
-        total = db.get_job(job.id).total_size
-        if total:
-            seen.append(total)
+        fresh = db.get_job(job.id)
+        assert fresh is not None
+        if fresh.total_size:
+            seen.append(fresh.total_size)
 
     assert seen, "an estimate should eventually be published"
     # Every published estimate is within 20% of the true ~2 GB - never 500 GB.
@@ -288,6 +289,7 @@ def test_whitelist_blocks_local_file_read(dest: Path, tmp_path: Path):
 
     from app.engines.hls import _INPUT_PROTOCOLS
 
+    assert FFMPEG is not None  # skipif guards this; narrows str | None -> str
     secret = tmp_path / "secret.txt"
     secret.write_text("LOCAL-SECRET\n" * 4)
     manifest = tmp_path / "evil.m3u8"
