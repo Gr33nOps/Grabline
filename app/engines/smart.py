@@ -18,6 +18,7 @@ import copy
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -692,6 +693,71 @@ class _LiveProgress:
     totals: dict[str, int | None] = field(default_factory=dict)
 
 
+class _ProgressPersister:
+    """Writes a SMART job's progress to SQLite on its own background thread,
+    off yt-dlp's download thread.
+
+    yt-dlp calls ``progress_hooks`` synchronously and will not read the next
+    chunk until the hook returns - unlike the segmented engine, which already
+    decouples its checkpoint writes onto their own thread (see downloader.py's
+    _Checkpointer), a hook that writes to the database inline makes ANY delay
+    in that write (lock contention from a sibling download's own writes, or
+    just the UI's periodic queries sharing the same connection) a direct stall
+    in this job's actual network throughput - measured as a download that
+    craters to a trickle purely because something else was also busy with the
+    database, with no real bandwidth or server-side cause at all. The hook now
+    only updates an in-memory counter (see SmartDownload._hook); this thread
+    reads it and persists on its own schedule instead.
+    """
+
+    def __init__(
+        self,
+        db: Database,
+        job_id: int,
+        interval: float,
+        snapshot: Callable[[], tuple[int, int | None]],
+    ) -> None:
+        self._db = db
+        self._job_id = job_id
+        self._interval = interval
+        self._snapshot = snapshot
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(
+            target=self._loop, name=f"gl-smart-persist-{job_id}", daemon=True
+        )
+        self._stopped = False
+        self._last_downloaded = -1
+        self._last_total: int | None = None
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def flush(self) -> None:
+        downloaded, total = self._snapshot()
+        if downloaded != self._last_downloaded:
+            self._last_downloaded = downloaded
+            self._db.update_job_downloaded(self._job_id, downloaded)
+        if total is not None and total != self._last_total:
+            self._last_total = total
+            self._db.update_job_total(self._job_id, total)
+
+    def _loop(self) -> None:
+        while not self._stop_event.wait(self._interval):
+            self.flush()
+
+    def stop(self) -> None:
+        """Stop the thread and write one final, up-to-the-moment snapshot.
+        Idempotent - safe to call from every outcome path without tracking
+        which one actually ran first."""
+        if self._stopped:
+            return
+        self._stopped = True
+        self._stop_event.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=5)
+        self.flush()
+
+
 class SmartDownload:
     """Runs one smart job through yt-dlp. One-shot object, like SegmentedDownload.
 
@@ -722,10 +788,10 @@ class SmartDownload:
         self._stop_event = threading.Event()
         self._cancelled = False
         self._live = _LiveProgress()
-        self._last_persist = 0.0
         self._known_files: set[str] = set()
         self._js_runtime: tuple[str, str] | None = None  # (yt-dlp name, path)
         self._title_adopted = False
+        self._persister = _ProgressPersister(db, job.id, persist_interval, self._progress_snapshot)
 
     # ------------------------------------------------------------ control
 
@@ -746,6 +812,7 @@ class SmartDownload:
         import yt_dlp
 
         self.db.set_job_status(self.job.id, JobStatus.DOWNLOADING)
+        self._persister.start()
         try:
             info = self._download_smart()
         except _StopRequested:
@@ -1101,33 +1168,34 @@ class SmartDownload:
             self._live.per_file[filename] = int(event.get("downloaded_bytes") or 0)
             total = event.get("total_bytes") or event.get("total_bytes_estimate")
             self._live.totals[filename] = int(total) if total else None
-            self._persist_progress()
+            # In-memory only. yt-dlp calls this hook synchronously and won't
+            # read the next chunk until it returns - a database write here
+            # would make this job's throughput hostage to whatever else the
+            # database is doing at that instant. _persister reads this same
+            # state and writes it on its own thread, on its own schedule.
         elif status == "finished":
             final = event.get("total_bytes") or event.get("downloaded_bytes")
             if final:
                 self._live.per_file[filename] = int(final)
-            self._persist_progress(force=True)
 
     def _postprocessor_hook(self, event: dict[str, Any]) -> None:
         if self._stop_event.is_set() and event.get("status") == "started":
             raise _StopRequested
 
-    def _persist_progress(self, force: bool = False) -> None:
-        now = time.monotonic()
-        if not force and now - self._last_persist < self.persist_interval:
-            return
-        self._last_persist = now
-        self.db.update_job_downloaded(self.job.id, self.bytes_downloaded)
+    def _progress_snapshot(self) -> tuple[int, int | None]:
+        """The current (downloaded, total) for _persister to write - total is
+        None until every requested file has reported one (a merge's audio and
+        video tracks must both know their size before the sum means anything).
+        """
         totals = list(self._live.totals.values())
         if totals and all(t is not None for t in totals):
-            total = sum(t for t in totals if t is not None)
-            if total != self.job.total_size:
-                self.job.total_size = total
-                self.db.update_job_total(self.job.id, total)
+            return self.bytes_downloaded, sum(t for t in totals if t is not None)
+        return self.bytes_downloaded, None
 
     # ---------------------------------------------------------- completion
 
     def _finalize(self, info: dict[str, Any]) -> JobStatus:
+        self._persister.stop()
         filepath = self._final_filepath(info)
         if filepath is None or not filepath.exists():
             return self._finish_failed("yt-dlp finished but the output file was not found")
@@ -1161,7 +1229,10 @@ class SmartDownload:
         return max(candidates, key=lambda p: p.stat().st_mtime, default=None)
 
     def _settle_stopped(self) -> JobStatus:
-        self._persist_progress(force=True)
+        # Stop first: guarantees the background thread is dead before the
+        # explicit zero-write below, so a cancelled job can never have a stale
+        # non-zero snapshot land after it.
+        self._persister.stop()
         if self._cancelled:
             self._remove_partials()
             self.db.update_job_downloaded(self.job.id, 0)
@@ -1179,6 +1250,7 @@ class SmartDownload:
                 (dest / f"{stem}{suffix}").unlink(missing_ok=True)
 
     def _finish_failed(self, message: str) -> JobStatus:
+        self._persister.stop()
         log.warning("smart job %s failed: %s", self.job.id, message)
         self.db.set_job_status(self.job.id, JobStatus.FAILED, error=message)
         return JobStatus.FAILED

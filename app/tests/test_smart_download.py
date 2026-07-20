@@ -5,6 +5,7 @@ against the local media server - the full engine pipeline without YouTube.
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -687,3 +688,124 @@ def test_hook_leaves_analyzed_titles_alone(db: Database, dest: Path):
     )
     fresh = db.get_job(job.id)
     assert fresh is not None and fresh.title == "v"
+
+
+# --------------------------------------------------------- progress persister
+#
+# One reported symptom: a SECOND concurrent download crawling at ~1 B/s while
+# the first runs at full speed, with no server-side or network explanation.
+# The cause: yt-dlp calls progress_hooks synchronously and won't read the next
+# chunk until the hook returns, and the hook used to write straight to SQLite
+# - so any delay in that write (lock contention from a sibling job's own
+# writes, or the UI's periodic queries sharing the same connection) was a
+# direct stall in this job's actual network throughput, unrelated to the
+# stream or the network at all. The fix decouples the hook (in-memory only)
+# from persistence (a background thread on its own schedule) - the same
+# pattern the segmented engine's checkpointer already uses.
+
+
+def test_hook_makes_no_database_call(db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch):
+    """The hot path must issue zero database writes - that is the whole fix.
+    Any write here would run on yt-dlp's download thread and gate the next
+    chunk on the database. Spy on every write method and assert none fire."""
+    job = _smart_job(db, "https://x/v", dest, "v.mp4")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    writes: list[str] = []
+    for method in ("update_job_downloaded", "update_job_total", "update_job_filename"):
+        monkeypatch.setattr(db, method, lambda *a, _m=method, **k: writes.append(_m), raising=True)
+    for i in range(1, 6):
+        task._hook({"status": "downloading", "filename": "v.mp4", "downloaded_bytes": i * 1000})
+    task._hook({"status": "finished", "filename": "v.mp4", "downloaded_bytes": 5000})
+    assert writes == []  # the old, coupled _hook called update_job_downloaded here
+
+
+def test_persister_flush_writes_the_current_snapshot(db: Database, dest: Path):
+    job = _smart_job(db, "https://x/v", dest, "v.mp4")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    task._hook({"status": "downloading", "filename": "v.mp4", "downloaded_bytes": 4096})
+    task._persister.flush()
+    fresh = db.get_job(job.id)
+    assert fresh is not None
+    assert fresh.downloaded == 4096
+
+    # A second flush with no new bytes must not re-write (idempotent no-op).
+    task._persister._db = None  # type: ignore[assignment]  # would AttributeError if called
+    task._persister.flush()  # unchanged snapshot -> short-circuits before touching db
+
+
+def test_persister_stop_is_idempotent(db: Database, dest: Path):
+    job = _smart_job(db, "https://x/v", dest, "v.mp4")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    task._persister.start()
+    task._hook({"status": "downloading", "filename": "v.mp4", "downloaded_bytes": 2048})
+    task._persister.stop()
+    task._persister.stop()  # must not raise or double-join
+    fresh = db.get_job(job.id)
+    assert fresh is not None
+    assert fresh.downloaded == 2048
+
+
+def test_progress_snapshot_withholds_total_until_every_file_reports(db: Database, dest: Path):
+    """A merge's video+audio tracks must both know their size before the
+    combined total means anything - reporting early would show a wrong,
+    shrinking-then-growing total size mid-download."""
+    job = _smart_job(db, "https://x/v", dest, "v.mp4")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    task._hook(
+        {
+            "status": "downloading",
+            "filename": "v.f137.mp4",
+            "downloaded_bytes": 100,
+            "total_bytes": 500,
+        }
+    )
+    downloaded, total = task._progress_snapshot()
+    assert downloaded == 100 and total == 500  # one file, fully known
+
+    task._hook({"status": "downloading", "filename": "v.f140.m4a", "downloaded_bytes": 10})
+    downloaded, total = task._progress_snapshot()
+    assert downloaded == 110 and total is None  # second file's size not known yet
+
+    task._hook(
+        {
+            "status": "downloading",
+            "filename": "v.f140.m4a",
+            "downloaded_bytes": 50,
+            "total_bytes": 80,
+        }
+    )
+    downloaded, total = task._progress_snapshot()
+    assert downloaded == 150 and total == 580  # both known -> combined total
+
+
+def test_hook_does_not_block_when_the_database_lock_is_held(db: Database, dest: Path):
+    """The concrete stall: while another thread holds the DB lock (a sibling
+    job's write, the UI's poll), a progress hook must still return instantly.
+    The old hook wrote to the DB inline, so it blocked on this exact lock - and
+    because yt-dlp won't read the next chunk until the hook returns, that block
+    was a real pause in this download's network throughput."""
+    job = _smart_job(db, "https://x/v", dest, "v.mp4")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+
+    holder_ready = threading.Event()
+    release = threading.Event()
+
+    def hold_lock() -> None:
+        with db._lock:
+            holder_ready.set()
+            release.wait(timeout=5)
+
+    holder = threading.Thread(target=hold_lock, daemon=True)
+    holder.start()
+    assert holder_ready.wait(timeout=5)
+    try:
+        # The lock is held for the whole of this call. A hook that writes to the
+        # DB would block here until release; the decoupled hook returns at once.
+        t0 = time.monotonic()
+        task._hook({"status": "downloading", "filename": "v.mp4", "downloaded_bytes": 4096})
+        elapsed = time.monotonic() - t0
+    finally:
+        release.set()
+        holder.join(timeout=5)
+
+    assert elapsed < 0.5, f"_hook blocked {elapsed:.2f}s on the held DB lock"
