@@ -8,11 +8,20 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 
 import httpx
 
 from app import __version__
 from app.core import net
+from app.core.errors import DownloadError
+
+
+class UpdateCancelled(DownloadError):
+    """The user cancelled an in-progress installer download. Subclasses
+    DownloadError so the UI's file-op thread delivers it like any other
+    failure, and the caller tells a cancel apart from a real error."""
+
 
 log = logging.getLogger(__name__)
 
@@ -102,12 +111,20 @@ def download_installer(
     filename: str,
     proxy: str | None = None,
     progress: object = None,
+    cancel: threading.Event | None = None,
 ) -> str:
-    """Stream the installer to ``dest_dir`` and return its path. ``progress``
-    is an optional callable(received_bytes, total_bytes_or_None)."""
+    """Stream the installer to ``dest_dir`` and return its path. ``progress`` is
+    an optional callable(received_bytes, total_bytes_or_None).
+
+    Pass a ``cancel`` event to make the download interruptible: it is checked
+    once per chunk, and when set the partial file is removed and
+    :class:`UpdateCancelled` is raised, so pressing Cancel actually stops the
+    transfer instead of leaving it running and opening a half-written installer.
+    """
     from pathlib import Path
 
     target = Path(dest_dir) / filename
+    cancelled = False
     with (
         net.build_client(proxy=proxy, follow_redirects=True, timeout=30) as client,
         client.stream("GET", url) as response,
@@ -118,8 +135,16 @@ def download_installer(
         received = 0
         with open(target, "wb") as handle:
             for chunk in response.iter_bytes(65536):
+                if cancel is not None and cancel.is_set():
+                    cancelled = True
+                    break
                 handle.write(chunk)
                 received += len(chunk)
                 if callable(progress):
                     progress(received, total)
+    # Unlink only after every handle above is closed (Windows can't remove an
+    # open file), then raise so the caller never opens the partial installer.
+    if cancelled:
+        target.unlink(missing_ok=True)
+        raise UpdateCancelled("update download cancelled")
     return str(target)

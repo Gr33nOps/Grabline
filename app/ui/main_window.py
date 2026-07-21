@@ -4,6 +4,7 @@ routes it in a background thread, and Smart Engine hits get the quality panel.
 
 from __future__ import annotations
 
+import threading
 import time
 from collections import deque
 from collections.abc import Callable
@@ -833,6 +834,12 @@ class MainWindow(QMainWindow):
         proxy = self.settings.proxy
         dest = str(self.settings.download_dir)
 
+        # Cancel must actually stop the download, not just hide the dialog and
+        # then open the installer anyway. Signal the worker through an event its
+        # streaming loop checks each chunk; clicking Cancel (or Esc) sets it.
+        cancel_event = threading.Event()
+        progress.canceled.connect(cancel_event.set)
+
         relay = work_threads.ProgressRelay(self)
         relay.tick.connect(progress.setValue)
 
@@ -851,6 +858,9 @@ class MainWindow(QMainWindow):
 
         def failed(error: object) -> None:
             progress.close()
+            if isinstance(error, update.UpdateCancelled):
+                self.statusBar().showMessage("Update cancelled", 5000)
+                return
             answer = QMessageBox.question(
                 self,
                 "GrabLine",
@@ -860,7 +870,9 @@ class MainWindow(QMainWindow):
                 QDesktopServices.openUrl(QUrl(update.WEBSITE_DOWNLOAD_URL))
 
         self._run_file_op(
-            lambda: update.download_installer(url, dest, name, proxy=proxy, progress=report),
+            lambda: update.download_installer(
+                url, dest, name, proxy=proxy, progress=report, cancel=cancel_event
+            ),
             done,
             failed,
         )
