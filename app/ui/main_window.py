@@ -61,6 +61,7 @@ from PySide6.QtWidgets import (
 from app import __version__
 from app.core import (
     archive,
+    categories,
     convert,
     crawler,
     dupes,
@@ -83,7 +84,7 @@ from app.core.resolver import Resolution, Resolver
 from app.core.settings import Settings
 from app.engines import cloud as cloud_engine
 from app.engines import torrent as torrent_engine
-from app.engines.smart import option_for_label
+from app.engines.smart import generic_quality_options, option_for_label
 from app.ui import chrome, components, design, guard, icons, motion, theme, work_threads
 from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
@@ -680,6 +681,7 @@ class MainWindow(QMainWindow):
                     quality=handoff.quality,
                     fallbacks=handoff.payload,
                     headers=handoff.headers,
+                    from_browser=True,
                 )
 
     def _open_gallery(self, urls: list[str], page_title: str | None) -> None:
@@ -897,6 +899,7 @@ class MainWindow(QMainWindow):
         fallbacks: tuple[str, ...] = (),
         headers: dict[str, str] | None = None,
         allow_duplicate: bool = False,
+        from_browser: bool = False,
     ) -> None:
         """Entry point shared by the toolbar, tray, clipboard, and extension.
         A ``quality`` label (F1.3 in-page panel) skips the quality dialog;
@@ -951,11 +954,27 @@ class MainWindow(QMainWindow):
         if self.settings.enforce_https and scheme == "http" and not self._confirm_insecure(url):
             self.statusBar().showMessage("Ready")
             return
-        args = (page_title, quality, fallbacks, headers)
+        args = (page_title, quality, fallbacks, headers, from_browser)
         if self.settings.safebrowsing_key and scheme in ("http", "https"):
             self._safebrowsing_then_resolve(url, args)
             return
-        self._resolve_and_queue(url, *args)
+        self._finish_add(url, *args)
+
+    def _finish_add(
+        self,
+        url: str,
+        page_title: str | None,
+        quality: str | None,
+        fallbacks: tuple[str, ...],
+        headers: dict[str, str] | None,
+        from_browser: bool,
+    ) -> None:
+        # A download started in the browser opens the Download Info dialog; a
+        # paste/import goes straight through the resolver as before.
+        if from_browser:
+            self._browser_add(url, page_title, fallbacks, headers)
+        else:
+            self._resolve_and_queue(url, page_title, quality, fallbacks, headers)
 
     def _confirm_insecure(self, url: str) -> bool:
         answer = QMessageBox.warning(
@@ -969,7 +988,9 @@ class MainWindow(QMainWindow):
         return answer == QMessageBox.StandardButton.Yes
 
     def _safebrowsing_then_resolve(
-        self, url: str, args: tuple[str | None, str | None, tuple[str, ...], dict[str, str] | None]
+        self,
+        url: str,
+        args: tuple[str | None, str | None, tuple[str, ...], dict[str, str] | None, bool],
     ) -> None:
         key = self.settings.safebrowsing_key
         proxy = self.settings.proxy
@@ -988,13 +1009,109 @@ class MainWindow(QMainWindow):
                 if answer != QMessageBox.StandardButton.Yes:
                     self.statusBar().showMessage("Ready")
                     return
-            self._resolve_and_queue(url, *args)
+            self._finish_add(url, *args)
 
         self._run_file_op(
             lambda: reputation.safebrowsing_check(url, key, proxy=proxy),
             done,
-            lambda _e: self._resolve_and_queue(url, *args),  # a failed check never blocks
+            lambda _e: self._finish_add(url, *args),  # a failed check never blocks
         )
+
+    def _browser_add(
+        self,
+        url: str,
+        page_title: str | None,
+        fallbacks: tuple[str, ...],
+        headers: dict[str, str] | None,
+    ) -> None:
+        """A download started from the browser: show the Download Info dialog
+        (unless the user turned it off in Settings), then queue on Start. No
+        analysis, so it opens instantly - IDM-fast."""
+        is_video = self.resolver.smart.matches(url)
+        is_stream = urlsplit(url).path.lower().endswith((".m3u8", ".mpd"))
+        if not is_video and not is_stream and fallbacks:
+            # A blob-backed player: the sniffed stream the page loaded is the
+            # real media, so grab that instead of the page's HTML.
+            url = next(
+                (f for f in fallbacks if urlsplit(f).path.lower().endswith((".m3u8", ".mpd"))),
+                fallbacks[0],
+            )
+            is_stream = urlsplit(url).path.lower().endswith((".m3u8", ".mpd"))
+
+        if is_video or is_stream:
+            name = naming.clean_page_title(page_title) or Path(naming.filename_from_url(url)).stem
+            category = "Video"
+        else:
+            name = naming.improved_filename(url, page_title, None)
+            category = categories.category_for(name) or "Documents"
+
+        if not self.settings.confirm_downloads:
+            dest = str(categories.dest_dir_for(self.settings.download_dir, name, enabled=True))
+            self._queue_download(
+                url, name, dest, "Best" if is_video else None, is_video, is_stream, headers, False
+            )
+            return
+
+        from app.ui.add_download_dialog import AddDownloadDialog
+
+        dialog = AddDownloadDialog(
+            url,
+            suggested_name=name,
+            category=category,
+            download_dir=str(self.settings.download_dir),
+            with_quality=is_video,
+            parent=self,
+        )
+        # Bring GrabLine to the front so the dialog is right there, IDM-style.
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        if dialog.exec() != AddDownloadDialog.DialogCode.Accepted:
+            self.statusBar().showMessage("Ready")
+            return
+        if dialog.dont_ask_again():
+            self.settings.confirm_downloads = False
+        self._queue_download(
+            url,
+            dialog.chosen_name(),
+            dialog.chosen_directory() or None,
+            dialog.chosen_quality(),
+            is_video,
+            is_stream,
+            headers,
+            dialog.outcome() == "later",
+        )
+
+    def _queue_download(
+        self,
+        url: str,
+        name: str,
+        dest: str | None,
+        quality: str | None,
+        is_video: bool,
+        is_stream: bool,
+        headers: dict[str, str] | None,
+        paused: bool,
+    ) -> None:
+        if is_video:
+            option = option_for_label(quality or "Best") or generic_quality_options()[0]
+            job = self.manager.add_smart_entry(
+                url,
+                name or "video",
+                option,
+                dest_dir=dest,
+                use_session=self.settings.use_browser_session,
+                session_browser=self.settings.session_browser,
+                headers=headers,
+            )
+        elif is_stream:
+            job = self.manager.add_hls(url, dest_dir=dest, title=name or None, headers=headers)
+        else:
+            job = self.manager.add_url(url, dest_dir=dest, filename=name or None, headers=headers)
+        if paused:
+            self.manager.pause(job.id)
+        self.statusBar().showMessage(f"Queued {name}" if name else "Queued", 5000)
+        self.refresh()
 
     def _resolve_and_queue(
         self,

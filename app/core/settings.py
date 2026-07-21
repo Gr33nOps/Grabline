@@ -783,6 +783,16 @@ class Settings:
     def auto_start_downloads(self, value: bool) -> None:
         self._set_bool("auto_start_downloads", value)
 
+    @property
+    def confirm_downloads(self) -> bool:
+        """On = a browser download opens the Download Info dialog first (name,
+        category, save location, quality). Off = it starts immediately."""
+        return self._get_bool("confirm_downloads", True)
+
+    @confirm_downloads.setter
+    def confirm_downloads(self, value: bool) -> None:
+        self._set_bool("confirm_downloads", value)
+
     # -------------------------------------------------------- downloads
 
     @property

@@ -139,6 +139,10 @@ class SettingsDialog(chrome.Dialog):
         general_form.addRow(self.tray_close_check)
         self.confirm_exit_check = QCheckBox("Confirm exit while downloads are running")
         general_form.addRow(self.confirm_exit_check)
+        self.confirm_downloads_check = QCheckBox(
+            "Ask for name, folder and quality before each browser download"
+        )
+        general_form.addRow(self.confirm_downloads_check)
         self.new_dl_combo = QComboBox()
         self.new_dl_combo.addItem("Start automatically", True)
         self.new_dl_combo.addItem("Add paused (start by hand)", False)
@@ -1157,6 +1161,7 @@ class SettingsDialog(chrome.Dialog):
         self.tray_min_check.setChecked(s.minimize_to_tray)
         self.tray_close_check.setChecked(s.close_to_tray)
         self.confirm_exit_check.setChecked(s.confirm_exit_active)
+        self.confirm_downloads_check.setChecked(s.confirm_downloads)
         self.new_dl_combo.setCurrentIndex(0 if s.auto_start_downloads else 1)
 
         # Downloads.
@@ -1348,6 +1353,7 @@ class SettingsDialog(chrome.Dialog):
         self.settings.minimize_to_tray = self.tray_min_check.isChecked()
         self.settings.close_to_tray = self.tray_close_check.isChecked()
         self.settings.confirm_exit_active = self.confirm_exit_check.isChecked()
+        self.settings.confirm_downloads = self.confirm_downloads_check.isChecked()
         self.settings.auto_start_downloads = bool(self.new_dl_combo.currentData())
         self.settings.ask_save_dir = self.ask_save_check.isChecked()
         self.settings.min_free_mb = self.free_mb_spin.value()

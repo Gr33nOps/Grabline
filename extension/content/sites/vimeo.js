@@ -9,7 +9,6 @@
   const VIDEO_PATH = /^\/(\d{6,})(?:[/?#]|$)/;
 
   globalThis.grablineSiteButton({
-    qualityPanel: true,
     resolve(target) {
       const anchor = target.closest("a[href]");
       const href = anchor?.getAttribute("href");

@@ -21,7 +21,6 @@
     /^\/(discover|search|feed|library|you|stream|charts|upload|messages|notifications|settings|tags|popular|people|stations|pages)(\/|$)/;
 
   globalThis.grablineSiteButton({
-    qualityPanel: true, // MP3 / M4A / Best right in the page
     resolve(target) {
       const bar = target.closest(".playbackSoundBadge");
       const link = bar

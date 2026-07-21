@@ -18,7 +18,6 @@
   }
 
   globalThis.grablineSiteButton({
-    qualityPanel: true,
     resolve(target) {
       const anchor = target.closest("a[href]");
       if (anchor) {

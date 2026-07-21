@@ -35,7 +35,6 @@
   const MUSIC_PLAYER = "ytmusic-player-bar, ytmusic-player";
 
   globalThis.grablineSiteButton({
-    qualityPanel: true, // F1.3: pick a quality right in the page
     resolve(target) {
       if (IS_MUSIC) {
         const anchor = target.closest(MUSIC_ANCHORS);

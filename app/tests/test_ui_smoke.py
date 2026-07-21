@@ -1210,3 +1210,46 @@ def test_pause_shows_instantly_before_the_worker_settles(db: Database, tmp_path,
         assert job.id not in window._optimistic_status
     finally:
         manager.shutdown()
+
+
+def test_add_download_dialog_fields_category_and_outcomes(db: Database):
+    _qapp()
+    from app.ui.add_download_dialog import AddDownloadDialog
+
+    dialog = AddDownloadDialog(
+        "https://cdn.example/movie/index.m3u8",
+        suggested_name="The Odyssey",
+        category="Video",
+        download_dir=str(Path("/home/u/Downloads")),
+        with_quality=True,
+    )
+    assert dialog.chosen_name() == "The Odyssey"
+    assert dialog.chosen_category() == "Video"
+    assert dialog.chosen_directory() == str(Path("/home/u/Downloads/Video"))
+    assert dialog.chosen_quality() == "Best"
+    assert dialog.outcome() is None
+
+    # The save folder follows the category until the user edits it.
+    dialog._category.setCurrentText("Music")
+    assert dialog.chosen_directory() == str(Path("/home/u/Downloads/Music"))
+
+    # Start and Later are distinct outcomes; both accept the dialog.
+    dialog._start()
+    assert dialog.outcome() == "start"
+    dialog._later()
+    assert dialog.outcome() == "later"
+
+
+def test_add_download_dialog_file_has_no_quality(db: Database):
+    _qapp()
+    from app.ui.add_download_dialog import AddDownloadDialog
+
+    dialog = AddDownloadDialog(
+        "https://cdn.example/archive.zip",
+        suggested_name="archive.zip",
+        category="Archives",
+        download_dir=str(Path("/home/u/Downloads")),
+        with_quality=False,
+    )
+    assert dialog.chosen_quality() is None
+    assert not dialog.dont_ask_again()
