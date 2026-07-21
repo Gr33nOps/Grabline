@@ -407,20 +407,39 @@
     return null;
   }
 
+  // mouseover fires on every element boundary the pointer crosses, and each
+  // hit-test (elementsFromPoint) walks the stack at that spot - on a dense page
+  // that is a lot of work per pointer sweep. Coalesce to one hit-test per frame
+  // against the latest position: the settling spot is always the one processed,
+  // so the button is no less responsive.
+  let pendingHover = null;
+  let hoverScheduled = false;
+
+  function runHover() {
+    hoverScheduled = false;
+    const at = pendingHover;
+    pendingHover = null;
+    if (!at) return;
+    // Videos (incl. streams/reels) win, found even when covered; images stay
+    // opt-in and are only taken from the direct target (never through a layer).
+    let media = mediaUnderPointer(at.x, at.y);
+    if (!media && at.target instanceof HTMLImageElement) media = at.target;
+    if (media && eligible(media)) {
+      clearTimeout(hideTimer);
+      showButtonFor(media);
+    } else if (currentTarget && !currentTarget.contains(at.target)) {
+      scheduleHide();
+    }
+  }
+
   document.addEventListener(
     "mouseover",
     (event) => {
       if (!enabled || !hoverGlobal || event.target === host) return;
-      // Videos (incl. streams/reels) win, found even when covered; images stay
-      // opt-in and are only taken from the direct target (never through a layer).
-      let media = mediaUnderPointer(event.clientX, event.clientY);
-      if (!media && event.target instanceof HTMLImageElement) media = event.target;
-      if (media && eligible(media)) {
-        clearTimeout(hideTimer);
-        showButtonFor(media);
-      } else if (currentTarget && !currentTarget.contains(event.target)) {
-        scheduleHide();
-      }
+      pendingHover = { x: event.clientX, y: event.clientY, target: event.target };
+      if (hoverScheduled) return;
+      hoverScheduled = true;
+      requestAnimationFrame(runHover);
     },
     { passive: true },
   );
