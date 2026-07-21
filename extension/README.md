@@ -10,10 +10,12 @@ whole extension is meant to be readable in one sitting.
 - **Toolbar popup** styled like the app: pairing status, quick actions (open
   GrabLine, grab this tab, paste a link), the media detected in this tab, a
   live view of your recent downloads, and the interception and hover
-  preferences. A default-quality setting drives one-click grabs.
-- **In-page quality panel**: click the download button on a supported site
-  and pick Best / 1080p / 720p / 480p / MP3 / M4A right there. "More
-  options…" opens the app's full panel with subtitles and trimming.
+  preferences.
+- **Hover ⬇ hands off to the app**: click the button on a supported site and
+  the URL goes straight to GrabLine, which opens its **Download Info dialog**
+  (name, folder, category, and a quality choice for video) and starts. The
+  quality is picked in the app, not on the page, so there is no in-page panel
+  to keep in sync with the site's DOM.
 - **Live progress pill**: anything grabbed from a tab shows its percentage
   bottom-right in that tab, streamed from the app over Native Messaging.
 - **Right-click → "Download with GrabLine"** on any link, image, video,
@@ -78,7 +80,7 @@ moment it starts.
 ```
 right-click / ⬇ / popup → background.js → Native Messaging host
     → handoffs table (SQLite) → desktop app polls → resolver
-    → quality panel (Smart Engine) or straight into the queue
+    → Download Info dialog → the queue
 ```
 
 ## Site modules
@@ -89,10 +91,10 @@ out. The shared machinery - the shadow-root button, the show dwell, the
 logic - lives once in `content/sites/button.js`.
 
 - **youtube.js** - hover ⬇ on video thumbnails (home, search, channels,
-  Shorts shelf) *and on the player itself* on watch/Shorts pages; both
-  open the in-page quality panel. Also covers **YouTube Music** (song
-  links and the bottom player bar - MP3 is one hover away). The generic
-  overlay stands back on YouTube entirely.
+  Shorts shelf) *and on the player itself* on watch/Shorts pages; both hand
+  the watch URL to the app, which opens its Download Info dialog. Also covers
+  **YouTube Music** (song links and the bottom player bar - MP3 is one hover
+  and one click away). The generic overlay stands back on YouTube entirely.
 - **vimeo.js** - hover ⬇ on links to `vimeo.com/<id>` videos.
 - **x.js** - hover ⬇ on videos inside tweets; sends the tweet's
   permalink (timeline videos are blob-backed, so the permalink is the only
@@ -116,9 +118,9 @@ deno test --allow-read extension/test/
 
 Anything touching the DOM, `chrome.*`/`browser.*`, or the MV3 lifecycle still
 needs a manual pass: load the unpacked extension in **both** Firefox and Chrome
-and exercise the sniffer, hover button (generic + site modules), quality panel,
-context menus, interception, gallery/links/selection grab, progress pill, and
-popup.
+and exercise the sniffer, hover button (generic + site modules), the app's
+Download Info dialog, context menus, interception, gallery/links/selection grab,
+progress pill, and popup.
 
 ## Publishing to the stores
 

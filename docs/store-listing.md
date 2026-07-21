@@ -42,8 +42,9 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 > - **Optional download takeover** (off by default)
 >
 > On sites the Smart Engine knows (YouTube and 1000+ more), the app opens a
-> quality panel: 4K → 144p, MP3/M4A extraction, subtitles, clip trimming.
-> Everywhere else you get segmented, resumable multi-connection downloading.
+> Download Info dialog to confirm the file and pick quality (4K to 144p, MP3/M4A),
+> with subtitles and clip trimming available in the app. Everywhere else you get
+> segmented, resumable multi-connection downloading.
 >
 > **Requires the free GrabLine desktop app** (Windows/macOS/Linux):
 > https://github.com/Gr33nOps/GrabLine - the extension talks to it over
@@ -58,8 +59,9 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 | `nativeMessaging` | The single purpose of the extension: hand URLs to the local GrabLine app. Nothing else can do this. |
 | `contextMenus` | The "Download with GrabLine" / "Download all images" right-click entries. |
 | `storage` | User toggles (per-site overlay off-switch, interception opt-in) and the per-tab sniffed-media list (`storage.session`, gone when the tab closes). |
-| `webRequest` + `<all_urls>` | Observe-only response headers to list a tab's media/streams in the popup. No request is modified or blocked; nothing leaves the browser. |
-| `downloads` | The **opt-in** takeover feature cancels a starting browser download and re-dispatches it to the app. Off by default. |
+| `webRequest` + `<all_urls>` | Read response headers to list a tab's media and streams in the popup, and to recognize a starting media/archive download for the opt-in takeover. Nothing leaves the browser. |
+| `webRequestBlocking` (Firefox) | The **opt-in** takeover cancels a media/archive response at the network layer so the desktop app can fetch it instead, with no flash of a browser download. Chrome ignores blocking `webRequest` in MV3, so there the `downloads` API does the takeover. Off by default. |
+| `downloads` | The takeover path on Chrome: cancel a starting browser download and re-dispatch it to the app. Off by default. |
 | `tabs` | Page URL/title accompany a handed-off URL so the app can name files sensibly. |
 | Content scripts on `<all_urls>` | The hover ⬇ button and the image collector must run where the media is. They render one button in a closed shadow root and send nothing anywhere except the local app. |
 
@@ -82,6 +84,6 @@ host. See PRIVACY.md.
 
 ## Assets still needed before submission
 
-- [ ] 1-5 screenshots, 1280×800 (queue window + quality panel + popup)
+- [ ] 1-5 screenshots, 1280×800 (queue window + Download Info dialog + popup)
 - [ ] CWS promo tile 440×280 (optional but recommended)
 - [ ] Developer accounts: CWS one-time $5, AMO free

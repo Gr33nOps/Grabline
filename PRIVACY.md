@@ -1,13 +1,13 @@
-# Privacy Policy - Grabline & Grabline Connect
+# Privacy Policy — GrabLine & GrabLine Connect
 
-*Last updated: 2026-07-08*
+*Last updated: 2026-07-21*
 
-Grabline (the desktop app) and Grabline Connect (the browser extension) are
+GrabLine (the desktop app) and GrabLine Connect (the browser extension) are
 open-source software published under AGPL-3.0. Their privacy model is simple:
 
 **Nothing you do is collected, stored remotely, or transmitted to us or to
 any third party. There is no telemetry, no analytics, no accounts, and no
-advertising - in any part of the project, ever.**
+advertising, in any part of the project, ever.**
 
 ## What stays on your device
 
@@ -17,7 +17,7 @@ advertising - in any part of the project, ever.**
   stdio pipe between your browser and the app) into that same local database.
   No network service, port, or server is involved.
 
-## What touches the network - only at your request
+## What touches the network, only at your request
 
 - Downloading a URL contacts that URL's server (and, for Smart Engine sites,
   the pages yt-dlp needs to resolve it). This happens only when you start a
@@ -34,8 +34,8 @@ advertising - in any part of the project, ever.**
   in `storage.session` and is discarded when the tab closes. It never leaves
   the browser except as a URL you explicitly hand to your local app.
 - The extension makes no requests of its own, injects no remote code, and
-  talks to exactly one destination: the Grabline app on your machine.
+  talks to exactly one destination: the GrabLine app on your machine.
 
 ## Questions
 
-Open an issue: https://github.com/Gr33nOps/Grabline/issues
+Open an issue: https://github.com/Gr33nOps/GrabLine/issues

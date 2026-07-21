@@ -1,9 +1,10 @@
-# Packaging Grabline
+# Packaging GrabLine
 
 Turns the Python/PySide6 app into native desktop installers for Windows,
 macOS, and Linux. Releases are built by
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) on native
-GitHub runners — the reliable way to build cross-platform installers.
+GitHub runners, one per operating system, so each installer is built on the
+platform it targets.
 
 ## What gets built
 
@@ -21,7 +22,7 @@ Then, per OS:
 | OS | Tool | Output |
 |---|---|---|
 | Windows | Inno Setup ([`windows/grabline.iss`](windows/grabline.iss)) | `Grabline-Setup-<ver>.exe` |
-| macOS | `hdiutil` (from the `.app` the spec builds) | `Grabline-<ver>.dmg` |
+| macOS | `hdiutil` (from the `.app` the spec builds) | `Grabline-<ver>-applesilicon.dmg` |
 | Linux | `appimagetool` ([`linux/build_appimage.sh`](linux/build_appimage.sh)) | `Grabline-<ver>-x86_64.AppImage` |
 
 The app registers the Native Messaging host itself on first run of an

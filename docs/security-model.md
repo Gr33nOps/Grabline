@@ -61,7 +61,13 @@ what comes back over the wire.
   `http,https,tcp,tls,crypto,data`, so a remote manifest cannot reference
   `file://` (local read), `concat:`/`subfile:` or `gopher:` — the protocols
   behind FFmpeg's known local-file-disclosure and SSRF issues — regardless of
-  how old the system FFmpeg on `PATH` happens to be.
+  how old the system FFmpeg on `PATH` happens to be. When GrabLine fetches the
+  segments itself (the default path, so a gated CDN that rejects FFmpeg's own
+  requests still works), FFmpeg only remuxes local temp files the app wrote: the
+  manifest's remote URIs are rewritten to local filenames before FFmpeg sees
+  them, and the protocol list is narrowed to `file,crypto,data`, so `file` can
+  only reach the app's own temp directory, never a path the remote manifest
+  chose.
 - **TLS** — certificate verification is on for every HTTP client and is never
   disabled anywhere in the tree. A self-signed host fails closed.
 - **Provisioning** — the fetched FFmpeg and Deno binaries are verified against
