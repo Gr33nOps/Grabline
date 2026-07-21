@@ -67,6 +67,7 @@ from app.core import (
     listio,
     naming,
     reputation,
+    reveal,
     rss,
     security,
     update,
@@ -323,7 +324,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("URL copied", 3000)
 
     def _open_view_folder(self, view: JobView) -> None:
-        QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
+        if not reveal.open_folder(view.dest_dir):
+            self.statusBar().showMessage("Could not open the folder", 3000)
 
     def _remove_from_drawer(self, view: JobView) -> None:
         self.manager.remove(view.id, force=True)
@@ -1298,7 +1300,8 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def _open_folder(self) -> None:
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.settings.download_dir)))
+        if not reveal.open_folder(str(self.settings.download_dir)):
+            self.statusBar().showMessage("Could not open the folder", 3000)
 
     def _open_settings(self) -> None:
         from app.ui.settings_dialog import SettingsDialog
@@ -1443,7 +1446,8 @@ class MainWindow(QMainWindow):
         elif chosen is open_file:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path)))
         elif chosen is open_folder:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
+            if not reveal.open_folder(view.dest_dir):
+                self.statusBar().showMessage("Could not open the folder", 3000)
         elif chosen is copy_url:
             if self.clipboard_suppressor is not None:
                 self.clipboard_suppressor(view.url)  # don't offer our own copy back
