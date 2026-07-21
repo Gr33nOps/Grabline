@@ -34,6 +34,11 @@ SPARK_HISTORY = 48
 #: How fast a graph's y-axis relaxes back down, per painted frame.
 _SCALE_EASE = 0.12
 
+#: Fraction of the plot height the peak value fills. The rest is headroom at
+#: the top so a spike's line - which has real pen width - never touches or
+#: spills over the container's border (the "graph goes out of bounds" report).
+GRAPH_HEADROOM = 0.88
+
 
 def ease_scale(current: float, target: float) -> float:
     """The y-axis top for a live graph, eased so the curve doesn't jump.
@@ -373,7 +378,7 @@ class Sparkline(QWidget):
             pts = [
                 QPointF(
                     newest - (last - i) * step,
-                    base - min(1.0, v / peak) * rect.height(),
+                    base - min(1.0, v / peak) * rect.height() * GRAPH_HEADROOM,
                 )
                 for i, v in enumerate(self._samples)
             ]

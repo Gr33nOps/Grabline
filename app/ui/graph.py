@@ -135,7 +135,7 @@ class TimeGraph(QWidget):
                 points = [
                     QPointF(
                         newest_x - (last - i) * step,
-                        baseline - min(1.0, value / scale) * plot.height(),
+                        baseline - min(1.0, value / scale) * plot.height() * motion.GRAPH_HEADROOM,
                     )
                     for i, value in enumerate(serie.samples)
                 ]
