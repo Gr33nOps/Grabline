@@ -51,9 +51,7 @@ Windows; use the installer if you want those.
 
 ## macOS
 
-`Grabline-<version>-applesilicon.dmg` for M1/M2/M3/M4 Macs,
-`Grabline-<version>-intel.dmg` for Intel Macs. If you are unsure, click the
-Apple menu → **About This Mac** and look at **Chip**.
+`Grabline-<version>-applesilicon.dmg`, for Apple Silicon Macs (M1 and later).
 
 1. Open the `.dmg` and drag **Grabline** onto the **Applications** shortcut.
 2. Eject the disk image and open Grabline from Applications.
