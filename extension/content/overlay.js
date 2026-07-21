@@ -158,7 +158,13 @@
   shadow.appendChild(button);
 
   function attachHost() {
-    if (document.body && !host.isConnected) document.body.appendChild(host);
+    // Attach to <html>, not <body>. A `position: fixed` element is positioned
+    // relative to the nearest ancestor with a transform/filter/perspective, not
+    // the viewport - and many sites transform <body> (page transitions, zoom,
+    // reels feeds), which threw the button to wrong, "weird angle" positions.
+    // <html> is far less likely to be transformed, so fixed means fixed.
+    const root = document.documentElement;
+    if (root && !host.isConnected) root.appendChild(host);
   }
 
   function mediaUrlFor(element) {
@@ -179,6 +185,13 @@
   function eligible(element) {
     const rule = siteRule();
     if (element instanceof HTMLMediaElement) {
+      // A video with no source at all and no buffered data is a placeholder or
+      // an ad slot that isn't playing anything grabbable - showing the button
+      // there is the "appears on media but says not downloadable" complaint.
+      // A real player (including blob/MSE streaming) has a currentSrc or has
+      // loaded data (readyState >= HAVE_CURRENT_DATA), so this keeps those.
+      const hasMedia = Boolean(element.currentSrc || element.src) || element.readyState >= 2;
+      if (!hasMedia) return false;
       if (rule) return rule.videos.test(location.pathname);
       return true;
     }
