@@ -1,41 +1,44 @@
-"""Open a download's folder in the OS file manager.
+"""Open a download's folder in the OS file manager, selecting the file when it
+still exists.
 
-``QDesktopServices.openUrl`` on a ``file://`` URL is unreliable on Linux:
-xdg-open routes a ``file://`` argument through ``x-scheme-handler/file``, whose
-default handler is often the web browser - so "Open folder" opened the download
-in Firefox instead of the file manager (the reported bug). We drive the file
-manager directly, and on Linux hand it a plain directory path (resolved as
-``inode/directory``) rather than a URL, so the browser is never in the picture.
+Two platform bugs this exists to avoid:
+
+- On Linux, ``QDesktopServices.openUrl`` on a ``file://`` URL routes through
+  xdg-open to ``x-scheme-handler/file``, which is usually the web browser. We
+  pass a plain directory path instead, resolved as ``inode/directory``.
+- On Windows, launching ``explorer`` with the console-hiding startupinfo the app
+  uses for FFmpeg (``STARTF_USESHOWWINDOW`` / ``SW_HIDE``) opened the folder
+  window *hidden*, so "Open folder" looked like it did nothing. We use
+  ``os.startfile``, which never carries those flags.
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from app.core import proc
-
 # Linux file managers to try, best first: xdg-open honours the desktop's
 # default, gio is the GLib opener, and the rest are the common concrete apps.
-_LINUX_OPENERS = ("xdg-open", "gio", "nautilus", "dolphin", "thunar", "pcmanfm", "nemo")
+_LINUX_OPENERS = ("xdg-open", "gio", "nautilus", "dolphin", "nemo", "thunar", "pcmanfm", "caja")
 
 
-def folder_command(
+def unix_command(
     directory: Path,
     platform: str,
+    *,
+    reveal: Path | None = None,
     which: Callable[[str], str | None] | None = None,
 ) -> list[str] | None:
-    """The argv that opens *directory* in the file manager on *platform*, or
-    ``None`` if no opener is available. Pure - it never runs a subprocess, so
-    the per-platform choice is testable on any host."""
-    if platform == "win32":
-        return ["explorer", str(directory)]
+    """The argv that opens *directory* in the file manager on a non-Windows
+    *platform* (selecting *reveal* on macOS), or ``None`` if no opener is found.
+    Pure - it never runs a subprocess, so the choice is testable on any host."""
     if platform == "darwin":
-        return ["open", str(directory)]
-    # Linux / other X-Desktop unix: a plain path, never a file:// URL.
+        return ["open", "-R", str(reveal)] if reveal is not None else ["open", str(directory)]
+    # Linux / other X-Desktop unix: a plain directory path, never a file:// URL.
     resolve = which or shutil.which
     for tool in _LINUX_OPENERS:
         found = resolve(tool)
@@ -48,15 +51,28 @@ def folder_command(
 
 
 def open_folder(path: str | Path) -> bool:
-    """Open *path*'s folder in the OS file manager. A directory opens directly;
-    a file opens its parent. Returns ``True`` if a file manager was launched."""
+    """Open *path*'s folder in the OS file manager, selecting the file when
+    *path* is an existing file (Windows and macOS). A directory opens directly;
+    anything else opens its parent. Returns ``True`` if a manager was launched."""
     target = Path(path)
+    reveal = target if target.is_file() else None
     directory = target if target.is_dir() else target.parent
-    command = folder_command(directory, sys.platform)
+    if sys.platform == "win32":  # pragma: no cover - windows-only
+        try:
+            if reveal is not None:
+                # /select highlights the file inside its folder. No hidden
+                # startupinfo: it opened the window invisibly (the reported bug).
+                subprocess.Popen(["explorer", "/select,", str(reveal)])
+            else:
+                os.startfile(str(directory))
+        except OSError:
+            return False
+        return True
+    command = unix_command(directory, sys.platform, reveal=reveal)
     if command is None:
         return False
     try:
-        subprocess.Popen(command, **proc.hidden())  # arg list only, no shell (S1)
+        subprocess.Popen(command)  # arg list only, no shell (S1); GUI, not hidden
     except OSError:
         return False
     return True

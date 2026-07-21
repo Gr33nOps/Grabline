@@ -324,7 +324,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("URL copied", 3000)
 
     def _open_view_folder(self, view: JobView) -> None:
-        if not reveal.open_folder(view.dest_dir):
+        # The file path, so the manager highlights the download when it exists;
+        # open_folder falls back to the folder when it doesn't (a failed job).
+        if not reveal.open_folder(Path(view.dest_dir) / view.filename):
             self.statusBar().showMessage("Could not open the folder", 3000)
 
     def _remove_from_drawer(self, view: JobView) -> None:
@@ -1455,7 +1457,7 @@ class MainWindow(QMainWindow):
         elif chosen is open_file:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path)))
         elif chosen is open_folder:
-            if not reveal.open_folder(view.dest_dir):
+            if not reveal.open_folder(file_path):
                 self.statusBar().showMessage("Could not open the folder", 3000)
         elif chosen is copy_url:
             if self.clipboard_suppressor is not None:
