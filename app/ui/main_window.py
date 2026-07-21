@@ -617,7 +617,12 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def open_setup(self) -> None:
-        SetupDialog(self).exec()
+        # Reachable from both the first-run timer and the menu, so guard it: the
+        # two must never stack a second wizard on top of the first.
+        with guard.single_flight(self._in_flight, "setup") as go:
+            if not go:
+                return
+            SetupDialog(self).exec()
 
     def shutdown(self) -> None:
         """Quiesce the window before the app closes the database. Stop the
