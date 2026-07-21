@@ -1,4 +1,4 @@
-// Grabline Connect - SoundCloud site module (F2.6).
+// GrabLine Connect - SoundCloud site module (F2.6).
 //
 // SoundCloud plays through a hidden MSE audio element, so the generic
 // overlay has nothing to hover - and the page URL is wrong the moment you

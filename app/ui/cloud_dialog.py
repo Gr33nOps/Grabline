@@ -45,7 +45,7 @@ class CloudAccountsDialog(chrome.Dialog):
         layout.addWidget(
             QLabel(
                 "Saved logins for SFTP / FTP / WebDAV / S3. Passwords and key "
-                "passphrases are kept in your system keychain, never in Grabline."
+                "passphrases are kept in your system keychain, never in GrabLine."
             )
         )
         self.list = QListWidget()
@@ -79,7 +79,7 @@ class CloudAccountsDialog(chrome.Dialog):
             return
         account, secret = dialog.result_account()
         if not account.host:
-            QMessageBox.warning(self, "Grabline", "A host is required.")
+            QMessageBox.warning(self, "GrabLine", "A host is required.")
             return
         self.store.save_account(account, secret)
         self._reload()

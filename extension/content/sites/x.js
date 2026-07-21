@@ -1,4 +1,4 @@
-// Grabline Connect - X/Twitter site module (F2.6).
+// GrabLine Connect - X/Twitter site module (F2.6).
 //
 // Timeline videos play from blob: URLs, so the generic overlay could only
 // offer the *timeline* URL - useless. This module shows the ⬇ when the

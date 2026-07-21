@@ -1,7 +1,7 @@
-"""The Download Inspector: everything Grabline can learn about a URL from a
+"""The Download Inspector: everything GrabLine can learn about a URL from a
 single live probe plus a DNS lookup and a TLS handshake - all done locally.
 
-Deliberately no geo-IP: Grabline has no telemetry, so it does not send the
+Deliberately no geo-IP: GrabLine has no telemetry, so it does not send the
 server's address to a third-party location service. "Server location" is
 presented as the real, local-only signals instead - the resolved IP, its
 reverse-DNS name, and the CDN inferred from the response headers.

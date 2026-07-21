@@ -142,7 +142,7 @@ class MainWindow(QMainWindow):
         self.resolver = Resolver()
         self.close_to_tray = False
         self.tray: QSystemTrayIcon | None = None
-        self.setWindowTitle("Grabline")
+        self.setWindowTitle("GrabLine")
         self.resize(1040, 600)
         self.setMinimumSize(760, 420)
         self.setAcceptDrops(True)  # drop URLs (or text with URLs) onto the window
@@ -248,7 +248,7 @@ class MainWindow(QMainWindow):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(500)
-        # Grabline Connect drops URLs into the handoffs table; pick them up.
+        # GrabLine Connect drops URLs into the handoffs table; pick them up.
         # 250ms, not 1s: this poll is the lag between a click in the browser
         # and anything visibly happening, and the claim query is one indexed
         # SELECT on an almost-always-empty table.
@@ -655,7 +655,7 @@ class MainWindow(QMainWindow):
     def _drain_handoffs(self) -> None:
         for handoff in self.manager.db.claim_handoffs():
             if handoff.source == "focus":
-                # "Open Grabline" from the extension: raise the window, and jump
+                # "Open GrabLine" from the extension: raise the window, and jump
                 # to a named page (e.g. settings) when one was requested.
                 self.show()
                 self.raise_()
@@ -667,7 +667,7 @@ class MainWindow(QMainWindow):
             elif handoff.source == "links" and handoff.payload:
                 self._open_links(list(handoff.payload), handoff.page_title)
             elif handoff.source == "torrent" or torrent_engine.is_torrent_source(handoff.url):
-                # 'Open with Grabline' on a .torrent / magnet, from any source.
+                # 'Open with GrabLine' on a .torrent / magnet, from any source.
                 self.add_torrent_source(handoff.url)
             elif handoff.source == "cloud" or cloud_engine.is_cloud_scheme(handoff.url):
                 self.add_cloud_source(handoff.url)
@@ -744,7 +744,7 @@ class MainWindow(QMainWindow):
                 self._open_links(found, url)
             else:
                 QMessageBox.information(
-                    self, "Grabline", "No downloadable files found on that page."
+                    self, "GrabLine", "No downloadable files found on that page."
                 )
 
         self._run_file_op(partial(crawler.crawl, url, depth=depth, proxy=proxy), done)
@@ -758,7 +758,7 @@ class MainWindow(QMainWindow):
         try:
             count = listio.write_file(self.manager.db, Path(path))
         except OSError as exc:
-            QMessageBox.warning(self, "Grabline", f"Could not export: {exc}")
+            QMessageBox.warning(self, "GrabLine", f"Could not export: {exc}")
             return
         self.statusBar().showMessage(f"Exported {count} download(s)", 6000)
 
@@ -771,7 +771,7 @@ class MainWindow(QMainWindow):
         try:
             count = listio.read_file(self.manager.db, Path(path))
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "Grabline", f"Could not import: {exc}")
+            QMessageBox.warning(self, "GrabLine", f"Could not import: {exc}")
             return
         self.statusBar().showMessage(f"Imported {count} download(s)", 6000)
         self.refresh()
@@ -790,9 +790,9 @@ class MainWindow(QMainWindow):
             if result is not None:
                 tag, name, url = cast("tuple[str, str, str]", result)
                 box = QMessageBox(self)
-                box.setWindowTitle("Grabline")
+                box.setWindowTitle("GrabLine")
                 box.setText(
-                    f"Grabline {tag} is available (you have {__version__}).\n\n"
+                    f"GrabLine {tag} is available (you have {__version__}).\n\n"
                     "Update now downloads the installer and opens it."
                 )
                 update_btn = box.addButton("Update now", QMessageBox.ButtonRole.AcceptRole)
@@ -804,13 +804,13 @@ class MainWindow(QMainWindow):
                 elif box.clickedButton() is site_btn:
                     QDesktopServices.openUrl(QUrl(update.WEBSITE_DOWNLOAD_URL))
             elif not quiet:
-                QMessageBox.information(self, "Grabline", "You have the latest version.")
+                QMessageBox.information(self, "GrabLine", "You have the latest version.")
 
         def failed(_error: object) -> None:
             guard.end(self._in_flight, "update")
             self.statusBar().showMessage("Ready")
             if not quiet:
-                QMessageBox.information(self, "Grabline", "Could not check for updates right now.")
+                QMessageBox.information(self, "GrabLine", "Could not check for updates right now.")
 
         self._run_file_op(partial(update.installer_update, proxy), done, failed)
 
@@ -820,7 +820,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QProgressBar, QProgressDialog
 
         progress = QProgressDialog(f"Downloading {name}…", "Cancel", 0, 100, self)
-        progress.setWindowTitle("Grabline update")
+        progress.setWindowTitle("GrabLine update")
         progress.setMinimumDuration(0)
         bar = QProgressBar(progress)
         bar.setRange(0, 100)
@@ -849,7 +849,7 @@ class MainWindow(QMainWindow):
             progress.close()
             answer = QMessageBox.question(
                 self,
-                "Grabline",
+                "GrabLine",
                 f"Could not download the update ({error}).\nOpen the download page instead?",
             )
             if answer == QMessageBox.StandardButton.Yes:
@@ -911,7 +911,7 @@ class MainWindow(QMainWindow):
                 )
                 answer = QMessageBox.question(
                     self,
-                    "Grabline",
+                    "GrabLine",
                     f"{existing.filename} {what}.\nDownload it again?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
@@ -933,7 +933,7 @@ class MainWindow(QMainWindow):
             if free_mb is not None and free_mb < floor_mb:
                 answer = QMessageBox.warning(
                     self,
-                    "Grabline",
+                    "GrabLine",
                     f"Only {free_mb} MB free on the download drive "
                     f"(warning floor: {floor_mb} MB). Download anyway?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -958,7 +958,7 @@ class MainWindow(QMainWindow):
     def _confirm_insecure(self, url: str) -> bool:
         answer = QMessageBox.warning(
             self,
-            "Grabline",
+            "GrabLine",
             f"{url}\n\nThis download is over unencrypted HTTP. It could be "
             "tampered with in transit. Download anyway?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -978,7 +978,7 @@ class MainWindow(QMainWindow):
             if threat:
                 answer = QMessageBox.warning(
                     self,
-                    "Grabline",
+                    "GrabLine",
                     f"{url}\n\nGoogle Safe Browsing flags this as {threat}. Download anyway?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
@@ -1091,7 +1091,7 @@ class MainWindow(QMainWindow):
                     headers=headers,
                 )
                 return
-            QMessageBox.information(self, "Grabline", resolution.message or "No media found.")
+            QMessageBox.information(self, "GrabLine", resolution.message or "No media found.")
             return
         if resolution.kind is JobKind.TORRENT:
             self.add_torrent_source(resolution.url)
@@ -1543,7 +1543,7 @@ class MainWindow(QMainWindow):
                 if on_error is not None:
                     on_error(error)
                 else:
-                    QMessageBox.warning(self, "Grabline", str(error))
+                    QMessageBox.warning(self, "GrabLine", str(error))
             else:
                 on_done(result)
 
@@ -1586,9 +1586,9 @@ class MainWindow(QMainWindow):
 
         def done(result: object) -> None:
             if result:
-                QMessageBox.information(self, "Grabline", f"{path.name} matches the checksum.")
+                QMessageBox.information(self, "GrabLine", f"{path.name} matches the checksum.")
             else:
-                QMessageBox.warning(self, "Grabline", f"{path.name} does NOT match the checksum.")
+                QMessageBox.warning(self, "GrabLine", f"{path.name} does NOT match the checksum.")
 
         self._run_file_op(lambda: verify.verify_file(path, expected.strip()), done)
 
@@ -1650,7 +1650,7 @@ class MainWindow(QMainWindow):
                 detail = f"\n\n{error.detail}" if error.detail else ""
                 answer = QMessageBox.warning(
                     self,
-                    "Grabline",
+                    "GrabLine",
                     f"{error.scanner} flagged {path.name}.{detail}\n\n"
                     "Antivirus false positives are common. Extract it anyway?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -1669,7 +1669,7 @@ class MainWindow(QMainWindow):
                 if accepted and password:
                     self._extract(path, members, new_password=password)
                 return
-            QMessageBox.warning(self, "Grabline", str(error))
+            QMessageBox.warning(self, "GrabLine", str(error))
 
         self._run_file_op(self._archive_work(path, members, passwords, scan=scan), done, failed)
 
@@ -1724,7 +1724,7 @@ class MainWindow(QMainWindow):
             if view.status is JobStatus.COMPLETED:
                 owners[Path(view.dest_dir) / view.filename] = view.id
         if not owners:
-            QMessageBox.information(self, "Grabline", "No completed downloads to compare.")
+            QMessageBox.information(self, "GrabLine", "No completed downloads to compare.")
             return
         self.statusBar().showMessage("Comparing files …")
 
@@ -1732,7 +1732,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Ready")
             groups = cast("list[list[Path]]", result)
             if not groups:
-                QMessageBox.information(self, "Grabline", "No duplicate files found.")
+                QMessageBox.information(self, "GrabLine", "No duplicate files found.")
                 return
             dialog = DupesDialog(groups, self)
             if dialog.exec() != DupesDialog.DialogCode.Accepted:
@@ -1742,7 +1742,7 @@ class MainWindow(QMainWindow):
                 return
             answer = QMessageBox.warning(
                 self,
-                "Grabline",
+                "GrabLine",
                 f"Permanently delete {len(doomed)} duplicate file(s)? One copy of each is kept.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
@@ -1753,7 +1753,7 @@ class MainWindow(QMainWindow):
                 try:
                     path.unlink(missing_ok=True)
                 except OSError as exc:
-                    QMessageBox.warning(self, "Grabline", f"Could not delete {path.name}: {exc}")
+                    QMessageBox.warning(self, "GrabLine", f"Could not delete {path.name}: {exc}")
                     continue
                 job_id = owners.get(path)
                 if job_id is not None:
@@ -1847,7 +1847,7 @@ class MainWindow(QMainWindow):
             if v.id != view.id and v.status is not JobStatus.COMPLETED
         ]
         if not others:
-            QMessageBox.information(self, "Grabline", "No other unfinished downloads to wait for.")
+            QMessageBox.information(self, "GrabLine", "No other unfinished downloads to wait for.")
             return
         labels = ["(nothing, start normally)"] + [v.display_name for v in others]
         choice, accepted = QInputDialog.getItem(
@@ -1916,7 +1916,7 @@ class MainWindow(QMainWindow):
                 self.statusBar().clearMessage()
                 files = cast("list[cloud_engine.RemoteFile]", result)
                 if not files:
-                    QMessageBox.information(self, "Grabline", "That folder is empty.")
+                    QMessageBox.information(self, "GrabLine", "That folder is empty.")
                     return
                 dialog = CloudFolderDialog(url, files, self)
                 if dialog.exec() != CloudFolderDialog.DialogCode.Accepted:
@@ -1967,7 +1967,7 @@ class MainWindow(QMainWindow):
     def add_torrent_source(self, source: str) -> None:
         """Open the add-torrent dialog for a magnet link, a local .torrent
         path, or an http(s) .torrent URL - the one entry point used by the
-        menu, the resolver, drag-and-drop, and 'open with Grabline'."""
+        menu, the resolver, drag-and-drop, and 'open with GrabLine'."""
         default_dir = self.settings.torrent_dir or self.settings.download_dir
         if source.lower().startswith("magnet:"):
             name = torrent_engine.magnet_display_name(source) or "Magnet link"
@@ -2038,7 +2038,7 @@ class MainWindow(QMainWindow):
         if "%s" not in template:
             QMessageBox.information(
                 self,
-                "Grabline",
+                "GrabLine",
                 "Set a search URL first, in Settings under Torrent. For example:\n"
                 "https://example.com/search?q=%s",
             )
@@ -2174,7 +2174,7 @@ class MainWindow(QMainWindow):
         done = sum(1 for v in views if v.status is JobStatus.COMPLETED)
         self._status_info.setText(
             f"{len(views)} items · {active} active · {done} completed"
-            f"     Grabline v{__version__} · No telemetry"
+            f"     GrabLine v{__version__} · No telemetry"
         )
 
     def _restore_selection(self) -> None:
@@ -2470,12 +2470,12 @@ class MainWindow(QMainWindow):
 
     def _hint_still_running(self) -> None:
         """Say so, once, the first time closing the window only hides it -
-        otherwise Grabline looks like it quit and downloads look lost."""
+        otherwise GrabLine looks like it quit and downloads look lost."""
         if self.tray is None or self.settings.tray_hint_shown:
             return
         self.settings.tray_hint_shown = True
         self.tray.showMessage(
-            "Grabline is still running",
+            "GrabLine is still running",
             "Downloads keep going. Click the tray icon to bring the window back.",
             QSystemTrayIcon.MessageIcon.Information,
             6000,
@@ -2495,7 +2495,7 @@ class MainWindow(QMainWindow):
             noun = "download is" if active == 1 else "downloads are"
             answer = QMessageBox.question(
                 self,
-                "Grabline",
+                "GrabLine",
                 f"{active} {noun} still running. Quit anyway?\n"
                 "(Progress is saved; they resume next launch.)",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,

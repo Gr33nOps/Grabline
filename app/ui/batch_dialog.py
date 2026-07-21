@@ -110,7 +110,7 @@ class BatchImportDialog(chrome.Dialog):
         layout = QVBoxLayout(self)
         intro = QLabel(
             "Paste anything with links in it, one per line, a page's\n"
-            "text, an export file. Grabline picks out the URLs."
+            "text, an export file. GrabLine picks out the URLs."
         )
         layout.addWidget(intro)
         self.text_edit = QPlainTextEdit()

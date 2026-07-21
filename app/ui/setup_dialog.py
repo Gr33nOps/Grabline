@@ -30,14 +30,14 @@ class SetupDialog(chrome.Dialog):
         layout = QVBoxLayout(self)
 
         intro = QLabel(
-            "Two steps connect Grabline to your browser, so a download button "
+            "Two steps connect GrabLine to your browser, so a download button "
             "appears on videos and links."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
         # Step 1 - pair the native host.
-        layout.addWidget(self._heading("1. Pair Grabline with your browsers"))
+        layout.addWidget(self._heading("1. Pair GrabLine with your browsers"))
         pair_row = QHBoxLayout()
         self._pair_status = QLabel("Not paired yet.")
         pair_button = QPushButton("Pair now")
@@ -58,7 +58,7 @@ class SetupDialog(chrome.Dialog):
         self._store_url = browser_setup.extension_install_url()
         self._add_hint: QLabel | None = None
         if browser is not None:
-            add_button = QPushButton(f"Add Grabline to {browser[1]}")
+            add_button = QPushButton(f"Add GrabLine to {browser[1]}")
             add_button.setProperty("accent", "true")
             add_button.clicked.connect(self._add_to_browser)
             layout.addWidget(add_button)
@@ -98,7 +98,7 @@ class SetupDialog(chrome.Dialog):
         layout.addLayout(chrome_row)
 
         firefox_hint = QLabel(
-            "Firefox: install Grabline Connect from addons.mozilla.org. It is "
+            "Firefox: install GrabLine Connect from addons.mozilla.org. It is "
             "reviewed and signed by Mozilla, so it survives restarts."
         )
         firefox_hint.setWordWrap(True)

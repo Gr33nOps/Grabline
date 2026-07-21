@@ -33,7 +33,7 @@ cp "$ROOT/packaging/grabline.png" "$STAGE/usr/share/icons/hicolor/256x256/apps/g
 cat > "$STAGE/usr/share/applications/grabline.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=Grabline
+Name=GrabLine
 GenericName=Download Manager
 Comment=Download manager with browser integration, video and torrent support
 Exec=/usr/bin/grabline %u
@@ -55,7 +55,7 @@ Version: ${VERSION}
 Section: net
 Priority: optional
 Architecture: amd64
-Maintainer: Grabline <noreply@grabline.dev>
+Maintainer: GrabLine <noreply@grabline.dev>
 Installed-Size: ${INSTALLED_KB}
 Depends: libc6, libglib2.0-0, libgl1, libegl1, libxkbcommon0, libdbus-1-3
 Recommends: ffmpeg

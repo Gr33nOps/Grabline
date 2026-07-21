@@ -72,7 +72,7 @@ class TimeGraph(QWidget):
     # Repaint on the shared 60fps ticker while on screen, so the curve scrolls
     # between pushes rather than jumping a whole sample every refresh - but
     # only while there is a curve to scroll. A graph of flat zeros paints
-    # nothing, and animating nothing is what an idle Grabline was doing.
+    # nothing, and animating nothing is what an idle GrabLine was doing.
     def _has_motion(self) -> bool:
         return self.isVisible() and any(any(s.samples) for s in self.series)
 

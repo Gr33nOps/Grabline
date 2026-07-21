@@ -1,4 +1,4 @@
-// Grabline Connect - toolbar popup: pairing status, quick actions, the tab's
+// GrabLine Connect - toolbar popup: pairing status, quick actions, the tab's
 // detected media, recent downloads, and the interception / hover preferences.
 
 const api = globalThis.browser ?? globalThis.chrome;
@@ -28,7 +28,7 @@ async function renderStatus() {
   } else {
     status.textContent = "app not running";
     status.className = "status warn";
-    status.title = "Downloads queue and start when you open Grabline.";
+    status.title = "Downloads queue and start when you open GrabLine.";
     paired = true;
   }
 }

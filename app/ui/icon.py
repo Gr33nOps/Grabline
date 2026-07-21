@@ -1,4 +1,4 @@
-"""The Grabline app icon: the brand logo (a hand gripping a download arrow),
+"""The GrabLine app icon: the brand logo (a hand gripping a download arrow),
 loaded from the shipped asset, with the original painted glyph as a fallback
 so a broken install still shows *something* recognizable.
 """

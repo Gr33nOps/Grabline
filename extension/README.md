@@ -1,4 +1,4 @@
-# Grabline Connect
+# GrabLine Connect
 
 A thin, auditable browser extension (MV3, one codebase for Chrome / Edge /
 Brave / Firefox). It detects media, decorates the page, and hands URLs to the
@@ -8,7 +8,7 @@ whole extension is meant to be readable in one sitting.
 ## What it does
 
 - **Toolbar popup** styled like the app: pairing status, quick actions (open
-  Grabline, grab this tab, paste a link), the media detected in this tab, a
+  GrabLine, grab this tab, paste a link), the media detected in this tab, a
   live view of your recent downloads, and the interception and hover
   preferences. A default-quality setting drives one-click grabs.
 - **In-page quality panel**: click the download button on a supported site
@@ -16,9 +16,9 @@ whole extension is meant to be readable in one sitting.
   options…" opens the app's full panel with subtitles and trimming.
 - **Live progress pill**: anything grabbed from a tab shows its percentage
   bottom-right in that tab, streamed from the app over Native Messaging.
-- **Right-click → "Download with Grabline"** on any link, image, video,
+- **Right-click → "Download with GrabLine"** on any link, image, video,
   audio, selection, or page
-- **Right-click → "Download all images with Grabline"**: every
+- **Right-click → "Download all images with GrabLine"**: every
   big-enough image on the page lands in the app as a selectable thumbnail
   grid (a wrapping link to a full-size image wins over the thumbnail src)
 - **Hover download button** on videos and audio. Images are opt-in via the
@@ -26,17 +26,17 @@ whole extension is meant to be readable in one sitting.
   plus the gallery grabber already cover images. There is a per-site off
   switch and a master switch in the popup.
 - **Optional download takeover** (off by default): browser downloads of
-  media and archive types are cancelled and re-dispatched to Grabline for
+  media and archive types are cancelled and re-dispatched to GrabLine for
   segmented downloading.
 
 It talks to the desktop app over Native Messaging only: the browser launches
-Grabline's host process and pipes JSON over stdio. There is no localhost
+GrabLine's host process and pipes JSON over stdio. There is no localhost
 server and no open port, and the host manifests pin the extension IDs allowed
 to connect.
 
 ## Pairing (two steps)
 
-1. **Register the native host** - in the Grabline app: **Settings → Pair
+1. **Register the native host** - in the GrabLine app: **Settings → Pair
    browsers** (one click, covers Chrome/Chromium/Edge/Brave/Vivaldi/Opera/Arc/Firefox on
    Windows, macOS, and Linux). Terminal alternative:
 
@@ -65,7 +65,7 @@ moment it starts.
   installs come with Chrome Web Store publication (kit in
   [docs/store-listing.md](../docs/store-listing.md)).
 - **Firefox:** temporary add-ons are wiped on every restart - that's a
-  Firefox rule for unsigned extensions, not something Grabline can change.
+  Firefox rule for unsigned extensions, not something GrabLine can change.
   The fix is free and doesn't require a public listing: upload
   `dist/grabline-connect-firefox-*.zip` to addons.mozilla.org as
   **unlisted** (Submit New Add-on → "On your own"), and AMO's automated

@@ -24,7 +24,7 @@ class ArchiveDialog(chrome.Dialog):
         self, archive_name: str, entries: tuple[ArchiveEntry, ...], parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"Grabline: {archive_name}")
+        self.setWindowTitle(f"GrabLine: {archive_name}")
         self.setMinimumSize(520, 380)
         layout = QVBoxLayout(self)
 

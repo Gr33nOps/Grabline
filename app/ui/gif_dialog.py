@@ -103,10 +103,10 @@ class GifDialog(chrome.Dialog):
             start = parse_timestamp(self.start_edit.text())
             end = parse_timestamp(self.end_edit.text())
         except ValueError:
-            QMessageBox.warning(self, "Grabline", "Timestamps look like 90, 1:30, or 1:02:03.")
+            QMessageBox.warning(self, "GrabLine", "Timestamps look like 90, 1:30, or 1:02:03.")
             return
         if end is not None and end <= (start or 0.0):
-            QMessageBox.warning(self, "Grabline", "The end timestamp must be after the start.")
+            QMessageBox.warning(self, "GrabLine", "The end timestamp must be after the start.")
             return
         self._buttons.setEnabled(False)
         self._working_bar.show()
@@ -136,7 +136,7 @@ class GifDialog(chrome.Dialog):
         self._working_bar.hide()
         self._working_note.hide()
         if error is not None:
-            QMessageBox.warning(self, "Grabline", str(error))
+            QMessageBox.warning(self, "GrabLine", str(error))
             return
-        QMessageBox.information(self, "Grabline", f"Saved {Path(str(target)).name}")
+        QMessageBox.information(self, "GrabLine", f"Saved {Path(str(target)).name}")
         self.accept()

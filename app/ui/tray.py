@@ -8,16 +8,16 @@ from app.ui.icon import make_app_icon
 from app.ui.main_window import MainWindow
 
 
-class GrablineTray(QSystemTrayIcon):
+class GrabLineTray(QSystemTrayIcon):
     def __init__(self, window: MainWindow) -> None:
         super().__init__(make_app_icon())
-        self.setToolTip("Grabline")
+        self.setToolTip("GrabLine")
         self._window = window
         self._menu = QMenu()
         show_action = self._menu.addAction("Show / Hide")
         show_action.triggered.connect(self._toggle_window)
         self._menu.addSeparator()
-        quit_action = self._menu.addAction("Quit Grabline")
+        quit_action = self._menu.addAction("Quit GrabLine")
         quit_action.triggered.connect(self._quit)
         self.setContextMenu(self._menu)
         self.activated.connect(self._on_activated)

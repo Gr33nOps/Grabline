@@ -1,4 +1,4 @@
-// Grabline Connect - YouTube site module (F1.3, first slice).
+// GrabLine Connect - YouTube site module (F1.3, first slice).
 //
 // A hover ⬇ on video thumbnails (home, search, channels, sidebar, playlists,
 // Shorts shelf) so a video can be grabbed without opening it. Clicking hands

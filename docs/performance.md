@@ -74,5 +74,5 @@ Worth recording, so nobody optimizes these twice:
 
 For context on the download figure: five concurrent transfers through plain
 `httpx`, writing to disk through the same rate limiter and doing nothing else,
-cost 2.0% CPU at 1.17 MB/s on this machine. Grabline does the same work plus a
+cost 2.0% CPU at 1.17 MB/s on this machine. GrabLine does the same work plus a
 live UI.

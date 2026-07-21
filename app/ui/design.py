@@ -1,4 +1,4 @@
-"""The Grabline design system: one source of truth for colors, spacing, radius,
+"""The GrabLine design system: one source of truth for colors, spacing, radius,
 type, and the global Qt stylesheet.
 
 The accent is the blue from the app logo (`#0170fd`), a touch brighter in dark
@@ -155,7 +155,7 @@ def numeric_font(base: QFont | None = None) -> QFont:
 
 #: Accent presets offered in Settings → Appearance ("" = the brand blue).
 ACCENT_PRESETS: tuple[tuple[str, str], ...] = (
-    ("Grabline Blue", ""),
+    ("GrabLine Blue", ""),
     ("Violet", "#7c3aed"),
     ("Green", "#059669"),
     ("Orange", "#ea580c"),

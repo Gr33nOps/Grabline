@@ -1,4 +1,4 @@
-// Grabline Connect - byte formatting, shared by the popup's media list and the
+// GrabLine Connect - byte formatting, shared by the popup's media list and the
 // on-page progress pill (both used to carry their own drifting copy).
 (() => {
   function humanBytes(count) {

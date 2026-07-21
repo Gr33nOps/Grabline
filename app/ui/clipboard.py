@@ -31,7 +31,7 @@ class ClipboardWatcher(QObject):
         self._clipboard.dataChanged.connect(self._on_change)
 
     def suppress(self, text: str) -> None:
-        """Remember ``text`` as already seen, so Grabline's own 'Copy URL'
+        """Remember ``text`` as already seen, so GrabLine's own 'Copy URL'
         action doesn't bounce back as a download offer."""
         self._last = text.strip()
 

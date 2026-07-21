@@ -53,7 +53,7 @@ class Segment:
 
 @dataclass(frozen=True)
 class Handoff:
-    """A URL delivered by Grabline Connect, waiting for the app to pick it up."""
+    """A URL delivered by GrabLine Connect, waiting for the app to pick it up."""
 
     id: int
     url: str

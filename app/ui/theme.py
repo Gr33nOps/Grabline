@@ -1,8 +1,8 @@
 """In-app light/dark theme, driven by the design system (app.ui.design).
 
-"light" and "dark" apply the Grabline palette + global stylesheet. "system"
+"light" and "dark" apply the GrabLine palette + global stylesheet. "system"
 follows the OS: it picks light or dark from the platform's color scheme (and
-keeps the same Grabline look, rather than falling back to a bare Qt style, so
+keeps the same GrabLine look, rather than falling back to a bare Qt style, so
 the app is visually consistent everywhere).
 """
 

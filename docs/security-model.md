@@ -1,6 +1,6 @@
-# Grabline security model
+# GrabLine security model
 
-Grabline runs on hostile input by design: arbitrary URLs, whatever a server
+GrabLine runs on hostile input by design: arbitrary URLs, whatever a server
 sends back, filenames chosen by strangers, archives built by strangers, and
 messages relayed from web pages through a browser extension. This document is
 the map of where untrusted data crosses into the app, what stops it doing
@@ -18,7 +18,7 @@ harm, and — deliberately — what is *not* defended because it isn't a threat.
   These are not opinions about content; they are the app refusing to be turned
   against you, and they always trigger.
 
-The threat is a malicious **server or web page**, never the user. Grabline does
+The threat is a malicious **server or web page**, never the user. GrabLine does
 not defend the user from their own machine: a command you typed into the
 completion-script box runs, a URL you pasted resolves. It defends the app from
 what comes back over the wire.
@@ -79,7 +79,7 @@ deliberate product decision, not an oversight.
   `file://`/`user:pass@` URL, a huge download the user chose.
 - The engines are not sandboxed in containers (out of scope; would break the
   product). yt-dlp, FFmpeg, and libtorrent run with the app's own privileges.
-- No app-level authentication — Grabline is a single-user desktop app.
+- No app-level authentication — GrabLine is a single-user desktop app.
 - Attacks that require local admin the attacker would already have.
 
 ## Reporting a vulnerability

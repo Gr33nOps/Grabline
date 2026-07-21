@@ -141,7 +141,7 @@ if sys.platform == "darwin":
         bundle_identifier="dev.grabline.app",
         info_plist={
             "CFBundleName": "Grabline",
-            "CFBundleDisplayName": "Grabline",
+            "CFBundleDisplayName": "GrabLine",
             "CFBundleExecutable": "grabline",
             "LSMinimumSystemVersion": "11.0",
             "NSHighResolutionCapable": True,

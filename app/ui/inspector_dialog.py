@@ -1,4 +1,4 @@
-"""The Download Inspector dialog: a read-only report of everything Grabline
+"""The Download Inspector dialog: a read-only report of everything GrabLine
 learned about a URL - server/IP/CDN, TLS, MIME, headers, cookies, the redirect
 chain, mirrors, and the file's checksum.
 """
@@ -55,7 +55,7 @@ def _render(report: InspectionReport) -> str:
         lines.append(f"Server:       {report.server}")
     if not (report.ip_addresses or report.cdn or report.server):
         lines.append("(no server details available)")
-    lines.append("(Grabline shows IP/DNS/CDN only. It never sends the address to a geo service.)")
+    lines.append("(GrabLine shows IP/DNS/CDN only. It never sends the address to a geo service.)")
 
     if report.tls is not None:
         section("TLS / SSL")

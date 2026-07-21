@@ -227,7 +227,7 @@ class DownloadManager:
         return self.settings.auto_throttle_kbps * 1024 if other > threshold else 0
 
     def _download_rate(self) -> float:
-        """Grabline's own current download throughput (bytes/sec), from the
+        """GrabLine's own current download throughput (bytes/sec), from the
         change in total downloaded bytes between scheduler passes."""
         total = sum(task.bytes_downloaded for task in self._active.values())
         now = time.monotonic()

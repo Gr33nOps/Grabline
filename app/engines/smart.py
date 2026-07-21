@@ -40,7 +40,7 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
     ("Private video", "This video is private. Its owner restricted access."),
     (
         "Sign in to confirm your age",
-        "This video is age-restricted. Grabline tried your browser login "
+        "This video is age-restricted. GrabLine tried your browser login "
         "automatically. To download it you need to be signed in to YouTube in "
         "your browser (Firefox by default) on an age-verified account. Sign in "
         "there, then try again.",
@@ -53,21 +53,21 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
     (
         "Requested format is not available",
         "YouTube didn't return a usable video format. This is usually temporary "
-        "- try again shortly. If it only fails with 'Let Grabline use my browser "
+        "- try again shortly. If it only fails with 'Let GrabLine use my browser "
         "session' turned on, turn it off: on a PC without a JavaScript runtime, "
         "browser cookies can make YouTube hide the downloadable formats.",
     ),
     (
         "n challenge",
         "YouTube needs a JavaScript runtime to unlock this video's formats. "
-        "Grabline installs one (Deno) automatically; if this keeps happening, "
-        "install Node.js and restart Grabline.",
+        "GrabLine installs one (Deno) automatically; if this keeps happening, "
+        "install Node.js and restart GrabLine.",
     ),
     (
         "Only images are available",
         "YouTube needs a JavaScript runtime to unlock this video's formats. "
-        "Grabline installs one (Deno) automatically; if this keeps happening, "
-        "install Node.js and restart Grabline.",
+        "GrabLine installs one (Deno) automatically; if this keeps happening, "
+        "install Node.js and restart GrabLine.",
     ),
     (
         "available in your country",
@@ -91,7 +91,7 @@ _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
     ),
     (
         "DRM",
-        "This content is DRM-protected. Grabline cannot and will not bypass DRM.",
+        "This content is DRM-protected. GrabLine cannot and will not bypass DRM.",
     ),
     (
         "cookie database",

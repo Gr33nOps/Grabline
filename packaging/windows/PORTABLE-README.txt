@@ -1,4 +1,4 @@
-Grabline (portable)
+GrabLine (portable)
 ===================
 
 Run grabline.exe from this folder. Nothing is installed, and no administrator
@@ -12,7 +12,7 @@ then "Run anyway". You only see this once per version.
 
 Browser extension
 -----------------
-Grabline registers its browser connector on first launch, so the Grabline
+GrabLine registers its browser connector on first launch, so the GrabLine
 Connect extension can hand downloads over. If the extension says it is not
 paired, open Settings > Browser Integration and use "Pair browsers".
 

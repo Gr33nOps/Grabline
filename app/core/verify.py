@@ -2,7 +2,7 @@
 
 Supports MD5, SHA-1, SHA-256, SHA-512 (hashlib) and CRC32 (zlib). The
 algorithm behind a pasted digest is inferred from its length, so a user can
-paste any of them and Grabline verifies against the right one.
+paste any of them and GrabLine verifies against the right one.
 """
 
 from __future__ import annotations

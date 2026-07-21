@@ -1,7 +1,7 @@
 """Desktop integration, IDM-style: an application-menu entry and start-on-login.
 
 Everything here is per-user (no root) and idempotent. Linux gets the full
-treatment - an XDG desktop entry written on first run so Grabline shows up in
+treatment - an XDG desktop entry written on first run so GrabLine shows up in
 the app grid/dock, and an autostart entry behind the Settings toggle. Windows
 autostart uses the HKCU Run key; macOS a LaunchAgent plist. Entries launch the
 current interpreter (``python -m app``), so a moved checkout heals itself.
@@ -18,18 +18,23 @@ import shlex
 import sys
 from pathlib import Path
 
+# The brand name the menu entry shows.
+DISPLAY_NAME = "GrabLine"
+# The window-class / registry identifier: must stay "Grabline" so StartupWMClass
+# keeps matching the running window (taskbar icon) and existing autostart
+# registry values are still found.
 APP_NAME = "Grabline"
 _ENTRY_ID = "grabline"
 _MAC_LABEL = "dev.grabline.desktop"
 
 
 def launch_command(*, minimized: bool = False, windowless: bool = False) -> list[str]:
-    """How to start this very installation of Grabline.
+    """How to start this very installation of GrabLine.
 
     ``windowless`` swaps python.exe for pythonw.exe on Windows so a login-time
     autostart doesn't flash a console window (no-op elsewhere)."""
     if getattr(sys, "frozen", False):
-        # Frozen build: the executable *is* Grabline (already windowed), so
+        # Frozen build: the executable *is* GrabLine (already windowed), so
         # there's no interpreter or ``-m app`` module to invoke.
         command = [sys.executable]
         if minimized:
@@ -78,12 +83,12 @@ def _autostart_path() -> Path:
 
 def _desktop_entry(command: list[str], *, icon: Path | None, autostart: bool = False) -> str:
     # The menu entry takes a %u so double-clicked .torrent files and magnet
-    # links land in Grabline; the autostart entry must not (it opens nothing).
+    # links land in GrabLine; the autostart entry must not (it opens nothing).
     exec_line = _exec_line(command) + ("" if autostart else " %u")
     lines = [
         "[Desktop Entry]",
         "Type=Application",
-        f"Name={APP_NAME}",
+        f"Name={DISPLAY_NAME}",
         "GenericName=Download Manager",
         "Comment=Download manager with browser integration, video and torrent support",
         f"Exec={exec_line}",
@@ -107,7 +112,7 @@ def packaged_install() -> bool:
     """True when a system package (.deb/.rpm) installed this copy.
 
     Such a package ships its own /usr/share/applications entry, so writing a
-    second per-user one would list Grabline twice in the app grid and in
+    second per-user one would list GrabLine twice in the app grid and in
     search. AppImage and tarball runs are *not* packaged - nothing else
     provides an entry for them, so they still get one."""
     if not getattr(sys, "frozen", False):
@@ -129,7 +134,7 @@ def _write_if_changed(path: Path, content: str) -> None:
 
 
 def install_menu_entry(icon_png: bytes | None = None) -> Path | None:
-    """Put Grabline in the application menu (Linux; silently a no-op
+    """Put GrabLine in the application menu (Linux; silently a no-op
     elsewhere - the Windows installer and macOS app bundle own that job).
     Safe to call on every startup: rewrites only when something changed,
     so a moved venv heals itself."""
@@ -163,7 +168,7 @@ def autostart_enabled() -> bool:
 
 
 def set_autostart(enabled: bool) -> None:
-    """Start Grabline (minimized to the tray) on login - or stop doing so."""
+    """Start GrabLine (minimized to the tray) on login - or stop doing so."""
     command = launch_command(minimized=True, windowless=True)
     if sys.platform == "win32":
         import winreg

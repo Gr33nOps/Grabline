@@ -163,7 +163,7 @@ def list_entries(path: Path) -> tuple[ArchiveEntry, ...]:
             return _list_external(path)
     except (zipfile.BadZipFile, tarfile.TarError, OSError) as exc:
         raise DownloadError(f"the archive could not be read ({exc})") from exc
-    raise DownloadError("Grabline does not know how to read this file type.")
+    raise DownloadError("GrabLine does not know how to read this file type.")
 
 
 def _gzip_size(path: Path) -> int | None:
@@ -248,7 +248,7 @@ def extract(
         elif kind == "external":
             _extract_external(path, target, passwords, members)
         else:
-            raise DownloadError("Grabline does not know how to extract this file type.")
+            raise DownloadError("GrabLine does not know how to extract this file type.")
     except (zipfile.BadZipFile, tarfile.TarError) as exc:
         raise DownloadError(f"the archive could not be read ({exc})") from exc
     return target
@@ -336,7 +336,7 @@ def _external_tool(path: Path, *, listing: bool = False) -> str:
             return tool
     raise DownloadError(
         f"working with {path.suffix} files needs an external tool "
-        "(install '7z' or 'unar') that Grabline could not find."
+        "(install '7z' or 'unar') that GrabLine could not find."
     )
 
 

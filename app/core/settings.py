@@ -294,7 +294,7 @@ class Settings:
 
     @property
     def check_updates(self) -> bool:
-        """Look for a newer Grabline release on startup (best effort)."""
+        """Look for a newer GrabLine release on startup (best effort)."""
         return self._get_bool("check_updates", True)
 
     @check_updates.setter
@@ -748,7 +748,7 @@ class Settings:
 
     @property
     def close_to_tray(self) -> bool:
-        """Closing the window keeps Grabline running in the tray."""
+        """Closing the window keeps GrabLine running in the tray."""
         return self._get_bool("close_to_tray", True)
 
     @close_to_tray.setter

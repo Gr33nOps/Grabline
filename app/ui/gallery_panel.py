@@ -1,4 +1,4 @@
-"""Gallery grid (F2.2): the image URLs Grabline Connect collected on a page,
+"""Gallery grid (F2.2): the image URLs GrabLine Connect collected on a page,
 shown as a checkable thumbnail grid - pick, then batch-download.
 
 Thumbnails load lazily in one background thread; the grid is usable (and the

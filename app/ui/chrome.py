@@ -74,7 +74,7 @@ class TitleBar(QFrame):
 
         # Every bar carries the mark next to its title - main window included.
         lay.addWidget(components.app_logo(18))
-        self._title = components.role_label(window.windowTitle() or "Grabline", "strong")
+        self._title = components.role_label(window.windowTitle() or "GrabLine", "strong")
         window.windowTitleChanged.connect(self._title.setText)
         lay.addWidget(self._title)
         lay.addStretch(1)

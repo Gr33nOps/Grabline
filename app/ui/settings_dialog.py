@@ -44,7 +44,7 @@ from app.core.settings import SESSION_BROWSERS, Settings
 from app.ui import chrome, components, design, guard, theme, threads
 from app.ui.format import human_bytes
 
-_PROJECT_URL = "https://github.com/Gr33nOps/Grabline"
+_PROJECT_URL = "https://github.com/Gr33nOps/GrabLine"
 
 
 def _note(text: str) -> QLabel:
@@ -127,15 +127,15 @@ class SettingsDialog(chrome.Dialog):
 
         # ---- General ---------------------------------------------------------
         general_form = self._add_form_tab(tabs, "General")
-        self.autostart_check = QCheckBox("Start Grabline when I log in (minimized to the tray)")
+        self.autostart_check = QCheckBox("Start GrabLine when I log in (minimized to the tray)")
         general_form.addRow(self.autostart_check)
-        self.updates_check = QCheckBox("Check for Grabline updates on startup")
+        self.updates_check = QCheckBox("Check for GrabLine updates on startup")
         general_form.addRow(self.updates_check)
         self.start_min_check = QCheckBox("Start minimized to the tray")
         general_form.addRow(self.start_min_check)
         self.tray_min_check = QCheckBox("Minimize to the tray instead of the taskbar")
         general_form.addRow(self.tray_min_check)
-        self.tray_close_check = QCheckBox("Closing the window keeps Grabline in the tray")
+        self.tray_close_check = QCheckBox("Closing the window keeps GrabLine in the tray")
         general_form.addRow(self.tray_close_check)
         self.confirm_exit_check = QCheckBox("Confirm exit while downloads are running")
         general_form.addRow(self.confirm_exit_check)
@@ -143,7 +143,7 @@ class SettingsDialog(chrome.Dialog):
         self.new_dl_combo.addItem("Start automatically", True)
         self.new_dl_combo.addItem("Add paused (start by hand)", False)
         general_form.addRow("New downloads:", self.new_dl_combo)
-        general_form.addRow(_note("Grabline runs as a single instance. English only for now."))
+        general_form.addRow(_note("GrabLine runs as a single instance. English only for now."))
 
         # ---- Downloads -------------------------------------------------------
         downloads_form = self._add_form_tab(tabs, "Downloads")
@@ -225,7 +225,7 @@ class SettingsDialog(chrome.Dialog):
         pairing = QGroupBox("Browser extension")
         pairing_layout = QHBoxLayout(pairing)
         pairing_label = QLabel(
-            "Pair Grabline with your browsers so the Grabline Connect "
+            "Pair GrabLine with your browsers so the GrabLine Connect "
             "extension can hand downloads over."
         )
         pairing_label.setWordWrap(True)
@@ -249,7 +249,7 @@ class SettingsDialog(chrome.Dialog):
         session_layout.addLayout(browser_row)
         session_layout.addWidget(
             _note(
-                "Age- or members-restricted videos need a login. Grabline reads it from this "
+                "Age- or members-restricted videos need a login. GrabLine reads it from this "
                 "browser automatically, only for the video that asks, per download, kept in "
                 "memory, never stored. Normal videos never touch it, so downloads stay fast."
             )
@@ -519,7 +519,7 @@ class SettingsDialog(chrome.Dialog):
         self.after_combo = QComboBox()
         for label, value in (
             ("Do nothing", "nothing"),
-            ("Quit Grabline", "quit"),
+            ("Quit GrabLine", "quit"),
             ("Sleep the computer", "sleep"),
             ("Hibernate the computer", "hibernate"),
             ("Shut down the computer", "shutdown"),
@@ -788,7 +788,7 @@ class SettingsDialog(chrome.Dialog):
         head.addWidget(components.app_logo(44))
         title_box = QVBoxLayout()
         title_box.setSpacing(2)
-        name_label = components.role_label("Grabline", "strong")
+        name_label = components.role_label("GrabLine", "strong")
         font = name_label.font()
         font.setPointSize(font.pointSize() + 5)
         font.setBold(True)
@@ -892,7 +892,7 @@ class SettingsDialog(chrome.Dialog):
     def _clear_stats(self) -> None:
         answer = QMessageBox.question(
             self,
-            "Grabline",
+            "GrabLine",
             "Clear all download statistics? The download list itself is not touched.",
         )
         if answer == QMessageBox.StandardButton.Yes:
@@ -918,7 +918,7 @@ class SettingsDialog(chrome.Dialog):
             writer = csv.writer(handle)
             writer.writerow(["day", "category", "host", "bytes", "files"])
             writer.writerows(self.settings.db.stats_rows())
-        QMessageBox.information(self, "Grabline", f"Statistics exported to {path}")
+        QMessageBox.information(self, "GrabLine", f"Statistics exported to {path}")
 
     def _export_settings(self) -> None:
         path, _f = QFileDialog.getSaveFileName(
@@ -936,7 +936,7 @@ class SettingsDialog(chrome.Dialog):
             _json.dump(payload, handle, indent=2, sort_keys=True)
         QMessageBox.information(
             self,
-            "Grabline",
+            "GrabLine",
             f"Settings exported to {path}\n(API keys and proxy credentials are not included.)",
         )
 
@@ -955,18 +955,18 @@ class SettingsDialog(chrome.Dialog):
                 raise ValueError("not a settings export")
             count = self.settings.db.import_settings({str(k): str(v) for k, v in payload.items()})
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "Grabline", f"Could not import: {exc}")
+            QMessageBox.warning(self, "GrabLine", f"Could not import: {exc}")
             return
         QMessageBox.information(
             self,
-            "Grabline",
+            "GrabLine",
             f"Imported {count} setting(s). Reopen Settings (or restart) to see them all.",
         )
 
     def _reset_settings(self) -> None:
         answer = QMessageBox.question(
             self,
-            "Grabline",
+            "GrabLine",
             "Reset all settings to their defaults? Your downloads and history are not touched.",
         )
         if answer != QMessageBox.StandardButton.Yes:
@@ -982,20 +982,20 @@ class SettingsDialog(chrome.Dialog):
 
     def _vacuum_db(self) -> None:
         self.settings.db.vacuum()
-        QMessageBox.information(self, "Grabline", "Database compacted.")
+        QMessageBox.information(self, "GrabLine", "Database compacted.")
 
     def _check_db(self) -> None:
         verdict = self.settings.db.integrity_check()
         if verdict == "ok":
-            QMessageBox.information(self, "Grabline", "Database check: OK.")
+            QMessageBox.information(self, "GrabLine", "Database check: OK.")
         else:
-            QMessageBox.warning(self, "Grabline", f"Database check reported:\n{verdict}")
+            QMessageBox.warning(self, "GrabLine", f"Database check reported:\n{verdict}")
 
     def _copy_diagnostics(self) -> None:
         import platform
         import sys as _sys
 
-        lines = [f"Grabline {__version__}"]
+        lines = [f"GrabLine {__version__}"]
         lines.append(f"OS: {platform.platform()}")
         lines.append(f"Python: {_sys.version.split()[0]}")
         for module, label in (
@@ -1016,7 +1016,7 @@ class SettingsDialog(chrome.Dialog):
 
         lines.append(f"FFmpeg: {_find(self.settings) or 'not found'}")
         QGuiApplication.clipboard().setText("\n".join(lines))
-        QMessageBox.information(self, "Grabline", "Diagnostics copied to the clipboard.")
+        QMessageBox.information(self, "GrabLine", "Diagnostics copied to the clipboard.")
 
     def _browse_sound(self) -> None:
         chosen, _ = QFileDialog.getOpenFileName(
@@ -1085,13 +1085,13 @@ class SettingsDialog(chrome.Dialog):
         try:
             written = install_host()
         except OSError as exc:
-            QMessageBox.warning(self, "Grabline", f"Pairing failed: {exc}")
+            QMessageBox.warning(self, "GrabLine", f"Pairing failed: {exc}")
             return
         QMessageBox.information(
             self,
-            "Grabline",
+            "GrabLine",
             f"Registered with {len(written)} browser location(s).\n\n"
-            "Now install (or reload) the Grabline Connect extension in your "
+            "Now install (or reload) the GrabLine Connect extension in your "
             "browser. Its toolbar popup should say “connected”.",
         )
 
@@ -1108,7 +1108,7 @@ class SettingsDialog(chrome.Dialog):
         if not guard.begin(self._in_flight, "ffmpeg"):
             return  # already downloading - a second click does nothing
         progress = QProgressDialog("Downloading FFmpeg…", "Hide", 0, 0, self)
-        progress.setWindowTitle("Grabline")
+        progress.setWindowTitle("GrabLine")
         progress.setMinimumDuration(0)
         bar = QProgressBar(progress)
         bar.setRange(0, 0)
@@ -1127,13 +1127,13 @@ class SettingsDialog(chrome.Dialog):
             guard.end(self._in_flight, "ffmpeg")
             progress.close()
             self._refresh_ffmpeg_status()
-            QMessageBox.information(self, "Grabline", f"FFmpeg installed and verified:\n{path}")
+            QMessageBox.information(self, "GrabLine", f"FFmpeg installed and verified:\n{path}")
 
         def on_failure(message: str) -> None:
             guard.end(self._in_flight, "ffmpeg")
             progress.close()
             self._refresh_ffmpeg_status()
-            QMessageBox.warning(self, "Grabline", message)
+            QMessageBox.warning(self, "GrabLine", message)
 
         installer.progressed.connect(on_progress)
         installer.succeeded.connect(on_success)
@@ -1297,7 +1297,7 @@ class SettingsDialog(chrome.Dialog):
 
         proxy_error = net.validate_proxy(self.proxy_edit.text())
         if proxy_error is not None:
-            QMessageBox.warning(self, "Grabline", proxy_error)
+            QMessageBox.warning(self, "GrabLine", proxy_error)
             return False
         self.settings.download_dir = self.folder_edit.text().strip() or str(
             self.settings.download_dir
@@ -1401,5 +1401,5 @@ class SettingsDialog(chrome.Dialog):
             # that could drift from what the OS will actually do at login.
             launcher.set_autostart(self.autostart_check.isChecked())
         except OSError as exc:
-            QMessageBox.warning(self, "Grabline", f"Could not update autostart: {exc}")
+            QMessageBox.warning(self, "GrabLine", f"Could not update autostart: {exc}")
         return True

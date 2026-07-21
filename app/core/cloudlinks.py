@@ -115,7 +115,7 @@ _UNSUPPORTED = {
 
 
 def unsupported_cloud_reason(url: str) -> str | None:
-    """An honest, specific message for a cloud host Grabline deliberately does
+    """An honest, specific message for a cloud host GrabLine deliberately does
     not download from, or None. Keeps us from silently mangling the URL."""
     parts = urlsplit(url)
     host = parts.netloc.lower()

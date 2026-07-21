@@ -2,7 +2,7 @@
 S3, with resume where the protocol allows it and credentials pulled from the
 store automatically.
 
-Each source is one Grabline job. The task writes to ``job.part_path`` and, on
+Each source is one GrabLine job. The task writes to ``job.part_path`` and, on
 success, renames to ``job.dest_path`` - the same crash-safe pattern the HTTP
 segmented engine uses. Resume continues from the ``.part`` size using FTP
 REST, an SFTP seek, or an HTTP Range (WebDAV/S3).

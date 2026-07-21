@@ -1,4 +1,4 @@
-// Grabline Connect - naming a sniffed stream for the popup's media list.
+// GrabLine Connect - naming a sniffed stream for the popup's media list.
 //
 // The desktop app does the authoritative naming when a download is saved
 // (app/core/naming.py). This is the display-side mirror: a stream's URL leaf is

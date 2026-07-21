@@ -1,4 +1,4 @@
-// Grabline Connect - shared site-module hover button.
+// GrabLine Connect - shared site-module hover button.
 //
 // Every site module is just a matcher: given a hovered element, return the
 // element to anchor the ⬇ button to and the URL to grab, or null. This file

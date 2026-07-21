@@ -172,7 +172,7 @@ class QueueManagerDialog(chrome.Dialog):
             return
         answer = QMessageBox.question(
             self,
-            "Grabline",
+            "GrabLine",
             f"Delete queue '{queue.name}'? Its downloads go back to the "
             "default queue (nothing is removed).",
         )
@@ -248,7 +248,7 @@ class _QueueEditor(chrome.Dialog):
         depends_on = self.depends_combo.currentData()
         if depends_on is not None and _would_cycle(self._queues, self.queue.id, depends_on):
             QMessageBox.warning(
-                self, "Grabline", "That would make the queues wait on each other forever."
+                self, "GrabLine", "That would make the queues wait on each other forever."
             )
             return
         self.accept()

@@ -1,6 +1,6 @@
 """Best-effort malware scan before extraction, using a scanner already on the
 machine - Windows Defender (MpCmdRun.exe) or ClamAV (clamdscan/clamscan).
-Grabline is not an antivirus; when no scanner is installed and the setting is
+GrabLine is not an antivirus; when no scanner is installed and the setting is
 on, extraction stops with a message saying so rather than pretending to scan.
 """
 

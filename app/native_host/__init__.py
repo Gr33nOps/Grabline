@@ -1,4 +1,4 @@
-"""Grabline's Native Messaging host (F1.1).
+"""GrabLine's Native Messaging host (F1.1).
 
 The browser launches this process and speaks length-prefixed JSON over stdio
 - the same mechanism IDM uses. The host's only job is to relay: it validates

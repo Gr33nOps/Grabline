@@ -1,7 +1,7 @@
 """The torrent engine, built on libtorrent (the library behind qBittorrent).
 
 One shared session carries DHT, Peer Exchange, UPnP/NAT-PMP port mapping and
-the rate limits; each Grabline job is one torrent handle in it. A job is
+the rate limits; each GrabLine job is one torrent handle in it. A job is
 COMPLETED when the data is on disk - seeding then continues in the background
 until the seed-ratio limit (or immediately stops when seeding is off), so the
 queue behaves like a download manager while the session behaves like a
@@ -160,7 +160,7 @@ def create_torrent_file(
     if storage.num_files() == 0:
         raise DownloadError("the folder is empty, nothing to share")
     creator = lt.create_torrent(storage)
-    creator.set_creator("Grabline")
+    creator.set_creator("GrabLine")
     if comment:
         creator.set_comment(comment)
     creator.set_priv(private)
@@ -177,7 +177,7 @@ _PROXY_TYPES = {"socks4": 1, "socks5": 2, "http": 3}
 
 
 def _proxy_settings(proxy: str | None) -> dict[str, Any]:
-    """Translate Grabline's proxy URL into libtorrent session settings, so
+    """Translate GrabLine's proxy URL into libtorrent session settings, so
     torrent peer/tracker traffic goes through the same proxy as everything
     else. SOCKS5/SOCKS4/HTTP are supported (with auth)."""
     if not proxy:
@@ -212,7 +212,7 @@ class TorrentSession:
         self._ticker: threading.Thread | None = None
 
     def configure(self, settings: Settings) -> None:
-        """Apply (or re-apply, live) the Grabline settings to the session."""
+        """Apply (or re-apply, live) the GrabLine settings to the session."""
         with self._lock:
             self._settings = settings
             if self._session is not None:
@@ -229,7 +229,7 @@ class TorrentSession:
             "download_rate_limit": settings.speed_limit_kbps * 1024,
             "upload_rate_limit": settings.torrent_upload_kbps * 1024,
             "dht_bootstrap_nodes": _DHT_ROUTERS,
-            "user_agent": "Grabline",
+            "user_agent": "GrabLine",
         }
         # Peer encryption (Settings -> Torrent): prefer = enabled either way,
         # require = encrypted peers only, off = plaintext only.

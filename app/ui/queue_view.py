@@ -198,7 +198,7 @@ class QueueView(QWidget):
             dep = depends.currentData()
             queues = {q.id: q for q in all_queues}
             if dep is not None and _would_cycle(queues, queue.id, dep):
-                QMessageBox.warning(self, "Grabline", "That would make the queues wait forever.")
+                QMessageBox.warning(self, "GrabLine", "That would make the queues wait forever.")
                 return
             self.manager.update_queue(
                 replace(
@@ -258,7 +258,7 @@ class QueueView(QWidget):
     def _delete(self, queue: Queue) -> None:
         answer = QMessageBox.question(
             self,
-            "Grabline",
+            "GrabLine",
             f"Delete queue '{queue.name}'? Its downloads move back to the default queue.",
         )
         if answer == QMessageBox.StandardButton.Yes:

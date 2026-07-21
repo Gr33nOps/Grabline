@@ -16,7 +16,7 @@ from app.core import net
 
 log = logging.getLogger(__name__)
 
-_LATEST = "https://api.github.com/repos/Gr33nOps/Grabline/releases/latest"
+_LATEST = "https://api.github.com/repos/Gr33nOps/GrabLine/releases/latest"
 _NUM = re.compile(r"\d+")
 
 
@@ -56,7 +56,7 @@ def check_for_update(proxy: str | None = None) -> tuple[str, str] | None:
 
 #: Where the "Download update" fallback points: the website's download
 #: section, which always links the current installers.
-WEBSITE_DOWNLOAD_URL = "https://gr33nops.github.io/Grabline/#download"
+WEBSITE_DOWNLOAD_URL = "https://gr33nops.github.io/GrabLine/#download"
 
 
 def _asset_matches(name: str, platform: str) -> bool:

@@ -1,4 +1,4 @@
-/* Grabline Connect popup - colors mirror the desktop app's design tokens
+/* GrabLine Connect popup - colors mirror the desktop app's design tokens
    (app/ui/design.py) so the extension and app read as one product. */
 :root {
   --bg: #f3f5f9;

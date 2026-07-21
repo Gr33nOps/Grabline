@@ -1,4 +1,4 @@
-"""Grabline Desktop entry point: ``python -m app`` (or the ``grabline`` script)."""
+"""GrabLine Desktop entry point: ``python -m app`` (or the ``grabline`` script)."""
 
 from __future__ import annotations
 
@@ -28,14 +28,14 @@ from app.ui import theme
 from app.ui.clipboard import ClipboardWatcher
 from app.ui.icon import make_app_icon
 from app.ui.main_window import MainWindow
-from app.ui.tray import GrablineTray
+from app.ui.tray import GrabLineTray
 
 log = logging.getLogger(__name__)
 
 
 class _TextOnlyButtons(QProxyStyle):
     """Qt's default style paints a check on OK and a cross on Cancel in every
-    dialog button box (and QMessageBox). Grabline's buttons are text only, so
+    dialog button box (and QMessageBox). GrabLine's buttons are text only, so
     turn that style hint off application-wide - one place, every dialog."""
 
     def styleHint(self, hint, option=None, widget=None, returnData=None):
@@ -73,7 +73,7 @@ def _register_native_host_once(settings: Settings) -> None:
 
 def _open_arg(args: list[str]) -> tuple[str, str] | None:
     """A magnet link, .torrent path, or cloud address (sftp/ftp/s3/…) passed
-    on the command line ('open with Grabline' / double-clicked file), or None.
+    on the command line ('open with GrabLine' / double-clicked file), or None.
     Returns (kind, source) where kind is "torrent" or "cloud"."""
     from app.engines.cloud import is_cloud_scheme
 
@@ -153,7 +153,7 @@ def _set_windows_app_id() -> None:
     import ctypes
 
     with contextlib.suppress(AttributeError, OSError):
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Grabline")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("GrabLine")
 
 
 def main() -> int:
@@ -174,7 +174,7 @@ def main() -> int:
     minimized = "--minimized" in sys.argv
     open_with = _open_arg(sys.argv[1:])
     if instance.app_is_running():
-        # Grabline is already open. A second launch must never start a second
+        # GrabLine is already open. A second launch must never start a second
         # app: hand any 'open with' source to the running instance (it polls the
         # handoffs table) and ask it to come to the front, then bow out.
         handoff_db = Database(paths.data_dir() / "grabline.db")
@@ -187,9 +187,12 @@ def main() -> int:
     _set_windows_app_id()  # before any window exists, or the taskbar ignores it
     app = QApplication([arg for arg in sys.argv if arg != "--minimized"])
     app.setStyle(_TextOnlyButtons())  # no check/cross icons on dialog buttons
+    # Internal QStandardPaths identifiers: kept as "Grabline" so the data folder
+    # (settings, database, cached binaries) stays where it already is. The
+    # user-visible name is set via setApplicationDisplayName below.
     app.setApplicationName("Grabline")
     app.setOrganizationName("Grabline")
-    app.setApplicationDisplayName("Grabline")
+    app.setApplicationDisplayName("GrabLine")
     # Ties windows to grabline.desktop on Wayland and modern X11 shells, so the
     # dock shows the real name and icon instead of a generic placeholder.
     app.setDesktopFileName("grabline")
@@ -205,14 +208,14 @@ def main() -> int:
         # of failing later with a confusing database error.
         QMessageBox.critical(
             None,
-            "Grabline",
-            f"Grabline cannot use its data folder:\n\n{data_dir}\n\n{exc}\n\n"
+            "GrabLine",
+            f"GrabLine cannot use its data folder:\n\n{data_dir}\n\n{exc}\n\n"
             "Check the folder's permissions, or that the drive is available.",
         )
         return 1
 
     try:
-        # IDM-style install-less integration: first run puts Grabline in the
+        # IDM-style install-less integration: first run puts GrabLine in the
         # application menu; later runs heal the entry if the install moved.
         launcher.install_menu_entry(icon_png=_icon_png())
     except OSError:
@@ -251,9 +254,9 @@ def main() -> int:
             "FFmpeg not found - install it in Settings to enable MP3, merging, and streams"
         )
 
-    tray: GrablineTray | None = None
+    tray: GrabLineTray | None = None
     if QSystemTrayIcon.isSystemTrayAvailable():
-        tray = GrablineTray(window)
+        tray = GrabLineTray(window)
         tray.show()
         app.setQuitOnLastWindowClosed(False)
         window.close_to_tray = True
@@ -268,7 +271,7 @@ def main() -> int:
             pending_clipboard_url.clear()
             pending_clipboard_url.append(url)
             tray.showMessage(
-                "Download with Grabline?",
+                "Download with GrabLine?",
                 f"{url}\nClick to choose quality and download.",
                 QSystemTrayIcon.MessageIcon.Information,
                 6000,

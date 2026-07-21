@@ -1,10 +1,10 @@
-# Installing Grabline
+# Installing GrabLine
 
-Everything Grabline needs is inside the download — no Python, no extra
+Everything GrabLine needs is inside the download — no Python, no extra
 dependencies. Pick your system below.
 
 The builds are **not code-signed**. Signing certificates cost money per year,
-and Grabline is free, so Windows and macOS show a warning the first time you
+and GrabLine is free, so Windows and macOS show a warning the first time you
 run it. The exact clicks are under each section.
 
 - [Windows](#windows)
@@ -15,7 +15,7 @@ run it. The exact clicks are under each section.
 - [Uninstalling](#uninstalling)
 
 Get the files from the
-[latest release](https://github.com/Gr33nOps/Grabline/releases/latest).
+[latest release](https://github.com/Gr33nOps/GrabLine/releases/latest).
 
 ---
 
@@ -35,10 +35,10 @@ Get the files from the
 3. The wizard offers four optional tasks, all off unless you tick them:
    desktop shortcut, start with Windows (minimized to the tray), and handling
    magnet links and `.torrent` files.
-4. Finish. Grabline is in the Start menu and searchable from the taskbar.
+4. Finish. GrabLine is in the Start menu and searchable from the taskbar.
 
 Installing over an existing copy is fine — the installer closes a running
-Grabline first and keeps your settings and download list.
+GrabLine first and keeps your settings and download list.
 
 ### Portable
 
@@ -53,16 +53,16 @@ Windows; use the installer if you want those.
 
 `Grabline-<version>-applesilicon.dmg`, for Apple Silicon Macs (M1 and later).
 
-1. Open the `.dmg` and drag **Grabline** onto the **Applications** shortcut.
-2. Eject the disk image and open Grabline from Applications.
-3. macOS says **"Grabline cannot be opened because the developer cannot be
+1. Open the `.dmg` and drag **GrabLine** onto the **Applications** shortcut.
+2. Eject the disk image and open GrabLine from Applications.
+3. macOS says **"GrabLine cannot be opened because the developer cannot be
    verified"**. Click **Cancel** — not "Move to Bin".
-4. **Right-click** (or Control-click) Grabline in Applications → **Open** →
+4. **Right-click** (or Control-click) GrabLine in Applications → **Open** →
    **Open** in the dialog that follows.
 
    On macOS 15 and later you may instead need System Settings → **Privacy &
    Security**, scroll to the bottom, and click **Open Anyway** next to the
-   message about Grabline.
+   message about GrabLine.
 5. That is once per version. Afterwards it launches normally, and Spotlight
    finds it.
 
@@ -85,7 +85,7 @@ unexpectedly" on first launch — check the chip and download the matching file.
 sudo apt install ./grabline_<version>_amd64.deb
 ```
 
-Grabline lands in your applications menu, `grabline` works from a terminal,
+GrabLine lands in your applications menu, `grabline` works from a terminal,
 and magnet links and `.torrent` files open in it. Update by installing a newer
 `.deb` the same way.
 
@@ -113,15 +113,15 @@ Nothing is installed; move the folder wherever you like.
 
 ## The browser extension
 
-Grabline downloads fine on its own, but the extension is what puts a ⬇ button
+GrabLine downloads fine on its own, but the extension is what puts a ⬇ button
 on videos and hands your browser's downloads over.
 
 | Browser | How |
 |---|---|
-| **Firefox** | Install [Grabline Connect](https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/) — one click, reviewed and signed by Mozilla. |
-| **Chrome, Edge, Brave, other Chromium** | In Grabline: sidebar **⋯** → **Browser Setup** → **Add Grabline to \<browser\>**. It opens the extension folder and `chrome://extensions`; turn on **Developer mode** and click **Load unpacked**. |
+| **Firefox** | Install [GrabLine Connect](https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/) — one click, reviewed and signed by Mozilla. |
+| **Chrome, Edge, Brave, other Chromium** | In GrabLine: sidebar **⋯** → **Browser Setup** → **Add GrabLine to \<browser\>**. It opens the extension folder and `chrome://extensions`; turn on **Developer mode** and click **Load unpacked**. |
 
-Grabline registers the connector between app and browser on first launch. If
+GrabLine registers the connector between app and browser on first launch. If
 the extension says it is not paired, open **Settings → Browser Integration →
 Pair browsers**, then restart the browser.
 
@@ -150,8 +150,8 @@ Nothing is uploaded anywhere — there is no account and no telemetry.
 
 | System | How |
 |---|---|
-| **Windows** | Settings → Apps → **Grabline** → Uninstall. Portable: delete the folder. |
-| **macOS** | Drag **Grabline** from Applications to the Bin. |
+| **Windows** | Settings → Apps → **GrabLine** → Uninstall. Portable: delete the folder. |
+| **macOS** | Drag **GrabLine** from Applications to the Bin. |
 | **Linux (.deb)** | `sudo apt remove grabline` |
 | **Linux (AppImage/tarball)** | Delete the file or folder. |
 

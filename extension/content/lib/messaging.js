@@ -1,4 +1,4 @@
-// Grabline Connect - the one guarded path from a page or the popup to the
+// GrabLine Connect - the one guarded path from a page or the popup to the
 // background.
 //
 // api.runtime.sendMessage rejects with "Could not establish connection.
@@ -12,7 +12,7 @@
   globalThis.grablineSend = async (message) => {
     try {
       const reply = await api.runtime.sendMessage(message);
-      return reply ?? { type: "error", message: "no reply from Grabline" };
+      return reply ?? { type: "error", message: "no reply from GrabLine" };
     } catch (error) {
       return { type: "error", message: error?.message ?? String(error) };
     }

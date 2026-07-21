@@ -24,7 +24,7 @@ from app.core import paths
 AMO_LISTING_URL = "https://addons.mozilla.org/firefox/addon/grabline-connect/"
 CHROME_WEBSTORE_URL: str | None = None
 
-#: How each browser can install Grabline Connect for free.
+#: How each browser can install GrabLine Connect for free.
 #: "auto"  - a free store / signed add-on exists, so it can be one click.
 #: "unpacked" - needs the Chrome Web Store ($5) for auto; free path is
 #:             Developer mode -> Load unpacked (permanent, one manual step).

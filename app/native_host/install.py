@@ -97,7 +97,7 @@ def browser_targets(platform: str | None = None, home: Path | None = None) -> li
 def host_manifest(kind: str, launcher: Path) -> dict[str, object]:
     manifest: dict[str, object] = {
         "name": HOST_NAME,
-        "description": "Grabline download manager connector",
+        "description": "GrabLine download manager connector",
         "path": str(launcher),
         "type": "stdio",
     }
@@ -124,7 +124,7 @@ _STORE_PYTHON_MESSAGE = (
     "file it writes from your browsers, so pairing cannot work. Install "
     "Python from python.org, disable the Store aliases (Settings > Apps > "
     "Advanced app settings > App execution aliases > turn off python.exe), "
-    "reinstall Grabline with it, and pair again."
+    "reinstall GrabLine with it, and pair again."
 )
 
 
@@ -356,7 +356,7 @@ def main(argv: list[str] | None = None) -> int:
     if written:
         print(
             "Pairing complete. Load the extension (see extension/README.md), "
-            "then the right-click menu and toolbar button will reach Grabline."
+            "then the right-click menu and toolbar button will reach GrabLine."
         )
     return 0
 

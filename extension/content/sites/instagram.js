@@ -1,4 +1,4 @@
-// Grabline Connect - Instagram site module.
+// GrabLine Connect - Instagram site module.
 //
 // A hover ⬇ on Reels and video posts: on links to /reel/<id> or /p/<id>
 // (profile grids, the explore page), and on the playing <video> itself in

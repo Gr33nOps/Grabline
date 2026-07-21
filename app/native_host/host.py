@@ -154,7 +154,7 @@ def handle_message(db: Database, message: dict[str, Any]) -> dict[str, Any]:
         ]
         return {"type": "recent", "jobs": jobs, "appRunning": instance.app_is_running()}
     if kind == "focus":
-        # "Open Grabline": drop a marker the running app picks up on its next
+        # "Open GrabLine": drop a marker the running app picks up on its next
         # handoff poll and raises its window. An optional target ("settings")
         # tells it which page to open. Harmless if the app is closed.
         target = _clean_text(message.get("target"), limit=32)

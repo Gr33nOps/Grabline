@@ -4,7 +4,7 @@ YouTube's current extraction path solves an "n challenge" that needs a real
 JavaScript runtime. Without one, the signed-in (cookie) web client returns no
 downloadable formats - which is why turning on 'browser session' used to make
 videos fail with "Requested format is not available". yt-dlp already bundles
-the solver scripts and can drive Deno; Grabline provisions Deno exactly the
+the solver scripts and can drive Deno; GrabLine provisions Deno exactly the
 way it does FFmpeg: the pinned per-platform archive is downloaded over HTTPS,
 hashed while streaming, rejected on any mismatch, and only then extracted -
 never a blanket archive extract, never executed before it is verified.
@@ -143,7 +143,7 @@ def ensure_deno(
         if archive is None:
             raise DownloadError(
                 f"no pinned Deno build for this platform ({platform_key()}); install "
-                "Deno yourself and Grabline will pick it up from PATH"
+                "Deno yourself and GrabLine will pick it up from PATH"
             )
         target_dir.mkdir(parents=True, exist_ok=True)
         with net.build_client(

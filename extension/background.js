@@ -1,4 +1,4 @@
-// Grabline Connect - background (MV3 service worker / Firefox event page).
+// GrabLine Connect - background (MV3 service worker / Firefox event page).
 //
 // Deliberately thin and stateless: detect, decorate, deliver. Every download
 // happens in the desktop app; this file only relays URLs over Native
@@ -26,7 +26,7 @@ async function cookieHeaderFor(url) {
   }
 }
 
-async function sendToGrabline(
+async function sendToGrabLine(
   url,
   tab,
   { quality = null, fallbackUrls = [], credentials = false, title = null } = {},
@@ -58,7 +58,7 @@ async function sendToGrabline(
   }
 }
 
-async function pingGrabline() {
+async function pingGrabLine() {
   try {
     const reply = await api.runtime.sendNativeMessage(HOST_NAME, { type: "ping" });
     await api.storage.session.set({ lastNativeError: null });
@@ -175,31 +175,31 @@ function registerMenus() {
     void api.runtime.lastError; // ignore - removeAll on empty is fine
     api.contextMenus.create({
       id: MENU_ID,
-      title: "Download with Grabline",
+      title: "Download with GrabLine",
       contexts: ["link", "image", "video", "audio", "page", "selection"],
     });
     api.contextMenus.create({
       id: GALLERY_MENU_ID,
-      title: "Download all images with Grabline",
+      title: "Download all images with GrabLine",
       contexts: ["page", "image"],
     });
     api.contextMenus.create({
       id: LINKS_MENU_ID,
-      title: "Download all links with Grabline",
+      title: "Download all links with GrabLine",
       contexts: ["page"],
     });
     // Highlight part of a page, right-click: every link, image, and playing
     // media inside the selection goes to the app's checkable picker.
     api.contextMenus.create({
       id: SELECTION_MENU_ID,
-      title: "Download selected links & media with Grabline",
+      title: "Download selected links & media with GrabLine",
       contexts: ["selection"],
     });
   });
 }
 
 // MV3 backgrounds restart often, and Firefox event pages drop menus with
-// them - registering only on onInstalled made "Download with Grabline"
+// them - registering only on onInstalled made "Download with GrabLine"
 // vanish until a reinstall. Register on install, on browser startup, AND on
 // every background evaluation.
 api.runtime.onInstalled.addListener(registerMenus);
@@ -252,7 +252,7 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
     (/^https?:\/\/\S+$/.test(selected) ? selected : null) ??
     info.pageUrl;
   // A right-clicked link may be a login-gated file, so pass cookies along.
-  if (url) await sendToGrabline(url, tab, { credentials: Boolean(info.linkUrl) });
+  if (url) await sendToGrabLine(url, tab, { credentials: Boolean(info.linkUrl) });
 });
 
 // ------------------------------------------------- network sniffer (F1.4)
@@ -354,7 +354,7 @@ function shouldIntercept(item) {
 }
 
 // While we're taking downloads over, hide Chromium's download shelf/bubble so
-// the intercepted download doesn't flash in the browser UI before Grabline
+// the intercepted download doesn't flash in the browser UI before GrabLine
 // picks it up. Feature-detected: needs the downloads.ui/downloads.shelf
 // permissions (present in the Chrome store build; a no-op on Firefox, which
 // has neither API - a momentary flash there is unavoidable with the
@@ -396,11 +396,11 @@ api.storage.onChanged.addListener((changes, area) => {
 
 api.downloads.onCreated.addListener(async (item) => {
   // On by default, but only take a download away from the browser when the
-  // Grabline app is actually running to receive it - otherwise the file would
+  // GrabLine app is actually running to receive it - otherwise the file would
   // just vanish. If the app is off, the browser download proceeds normally.
   const { intercept = true } = await api.storage.local.get("intercept");
   if (!intercept || !shouldIntercept(item)) return;
-  const pong = await pingGrabline();
+  const pong = await pingGrabLine();
   if (!pong || !pong.appRunning) return;
   try {
     await api.downloads.cancel(item.id);
@@ -414,7 +414,7 @@ api.downloads.onCreated.addListener(async (item) => {
   // CDNs is a random hash - the "downloads named random numbers" report.
   const [active] = await api.tabs.query({ active: true, lastFocusedWindow: true });
   const chosenName = (item.filename || "").split(/[\\/]/).pop() || null;
-  await sendToGrabline(
+  await sendToGrabLine(
     item.finalUrl || item.url,
     { url: item.referrer || active?.url || null, title: active?.title || chosenName },
     { credentials: true },
@@ -456,13 +456,13 @@ async function interceptResponse(details) {
   // Only take a download away from the browser when the app is actually up to
   // receive it - otherwise the file would just vanish. Forced downloads are
   // rare, so this ping never touches ordinary browsing.
-  const pong = await pingGrabline();
+  const pong = await pingGrabLine();
   if (!pong || !pong.appRunning) return {};
   const [active] = await api.tabs
     .query({ active: true, lastFocusedWindow: true })
     .catch(() => []);
   const referrer = details.originUrl || details.documentUrl || active?.url || null;
-  void sendToGrabline(
+  void sendToGrabLine(
     details.url,
     { url: referrer, title: active?.title || null },
     { credentials: true },
@@ -517,7 +517,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       const tab = await tabForMessage(sender, message);
       const fallbackUrls = message.sniff ? await sniffedUrlsFor(tab?.id) : [];
-      return sendToGrabline(message.url, tab, {
+      return sendToGrabLine(message.url, tab, {
         quality: message.quality ?? null,
         fallbackUrls,
         title: message.title ?? null,
@@ -526,15 +526,15 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // async response
   }
   if (message?.cmd === "ping") {
-    pingGrabline().then(sendResponse);
+    pingGrabLine().then(sendResponse);
     return true;
   }
   if (message?.cmd === "recent") {
-    askGrabline({ type: "recent", limit: 5 }).then(sendResponse);
+    askGrabLine({ type: "recent", limit: 5 }).then(sendResponse);
     return true;
   }
   if (message?.cmd === "focus") {
-    askGrabline({ type: "focus", target: message.target ?? null }).then(sendResponse);
+    askGrabLine({ type: "focus", target: message.target ?? null }).then(sendResponse);
     return true;
   }
   return false;
@@ -542,7 +542,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // A one-shot native request that never throws: returns the reply, or null if
 // the host isn't reachable (older app, not paired). Callers degrade quietly.
-async function askGrabline(payload) {
+async function askGrabLine(payload) {
   try {
     const reply = await api.runtime.sendNativeMessage(HOST_NAME, payload);
     if (typeof reply?.appRunning === "boolean") noteAppRunning(reply.appRunning);

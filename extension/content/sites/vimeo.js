@@ -1,4 +1,4 @@
-// Grabline Connect - Vimeo site module (F2.6).
+// GrabLine Connect - Vimeo site module (F2.6).
 //
 // A hover ⬇ on links to Vimeo videos (vimeo.com/<digits>, on browse pages,
 // channels, search). Clicking hands the canonical video URL to the app.

@@ -33,8 +33,8 @@ _HLS_CONTENT_TYPES = _MANIFEST_CONTENT_TYPES[:3]  # dash+xml goes to FFmpeg unpa
 _HTML_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
 _HTML_MESSAGE = (
     "This address is a web page, not a downloadable file. If a video plays "
-    "on it, let it play for a moment, then use the Grabline button on the "
-    "player or the toolbar popup. Grabline grabs the stream the page loads."
+    "on it, let it play for a moment, then use the GrabLine button on the "
+    "player or the toolbar popup. GrabLine grabs the stream the page loads."
 )
 
 #: Services whose media is DRM-protected end to end. Refused up front with an
@@ -67,7 +67,7 @@ def _drm_refusal(url: str) -> str | None:
             if service == "Spotify" and _SPOTIFY_PODCAST_PATHS.match(parts.path):
                 return None
             return (
-                f"{service} protects its media with DRM. Grabline cannot and will "
+                f"{service} protects its media with DRM. GrabLine cannot and will "
                 "not bypass DRM, so there is nothing it can download here."
             )
     return None
@@ -132,7 +132,7 @@ class Resolver:
                 url=url,
                 kind=None,
                 message=(
-                    "Grabline can download http://, https://, magnet: and cloud "
+                    "GrabLine can download http://, https://, magnet: and cloud "
                     "(ftp/ftps/sftp/scp/s3/webdav) addresses."
                 ),
             )

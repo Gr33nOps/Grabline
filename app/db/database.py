@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS queues (
     category         TEXT NOT NULL DEFAULT ''
 );
 
--- URLs handed over by Grabline Connect (via the Native Messaging host).
+-- URLs handed over by GrabLine Connect (via the Native Messaging host).
 -- The host inserts; the running app claims and runs them through the
 -- resolver. This table IS the extension->app channel: no sockets exist.
 CREATE TABLE IF NOT EXISTS handoffs (

@@ -19,7 +19,7 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-#: Proxy schemes Grabline accepts.
+#: Proxy schemes GrabLine accepts.
 PROXY_SCHEMES = ("http", "https", "socks5", "socks5h", "socks4", "socks4a")
 _SOCKS4 = ("socks4", "socks4a")
 

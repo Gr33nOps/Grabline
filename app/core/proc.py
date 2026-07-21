@@ -1,4 +1,4 @@
-"""Subprocess helpers shared by every tool Grabline shells out to.
+"""Subprocess helpers shared by every tool GrabLine shells out to.
 
 On Windows a GUI app that launches a console program (FFmpeg, 7-Zip, Deno, a
 virus scanner) pops a black console window unless the child is created with

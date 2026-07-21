@@ -7,7 +7,7 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
-#define AppName "Grabline"
+#define AppName "GrabLine"
 #define AppExe "grabline.exe"
 
 [Setup]
@@ -15,7 +15,7 @@ AppId={{A1F0C0DE-4B3A-4E5D-9C2B-0F1A2B3C4D5E}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=Grabline
+AppPublisher=GrabLine
 AppPublisherURL=https://github.com/Gr33nOps/Grabline
 AppSupportURL=https://github.com/Gr33nOps/Grabline/issues
 AppUpdatesURL=https://github.com/Gr33nOps/Grabline/releases
@@ -50,9 +50,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
-Name: "startupicon"; Description: "Start Grabline when Windows starts"; GroupDescription: "Startup:"
-Name: "magnetassoc"; Description: "Open magnet links with Grabline"; GroupDescription: "File types:"
-Name: "torrentassoc"; Description: "Open .torrent files with Grabline"; GroupDescription: "File types:"
+Name: "startupicon"; Description: "Start GrabLine when Windows starts"; GroupDescription: "Startup:"
+Name: "magnetassoc"; Description: "Open magnet links with GrabLine"; GroupDescription: "File types:"
+Name: "torrentassoc"; Description: "Open .torrent files with GrabLine"; GroupDescription: "File types:"
 
 [Files]
 Source: "..\..\dist\grabline\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
@@ -110,4 +110,4 @@ Root: HKCU; Subkey: "Software\Mozilla\NativeMessagingHosts\dev.grabline.host"; \
 ; Refresh Windows' shell icon cache so an update shows the new icon instead of
 ; the one it cached from a previous version.
 Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden skipifdoesntexist
-Filename: "{app}\{#AppExe}"; Description: "Launch Grabline"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Description: "Launch GrabLine"; Flags: nowait postinstall skipifsilent

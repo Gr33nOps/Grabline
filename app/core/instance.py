@@ -1,4 +1,4 @@
-"""Is the Grabline desktop app running? PID-file based, no sockets (S3).
+"""Is the GrabLine desktop app running? PID-file based, no sockets (S3).
 
 The Native Messaging host uses this to tell the extension whether a handed-off
 URL will start immediately or wait for the next app launch.

@@ -1,8 +1,8 @@
-// Grabline Connect - the shared hover-button chrome.
+// GrabLine Connect - the shared hover-button chrome.
 //
 // Both the generic overlay (content/overlay.js) and the site-module factory
 // (content/sites/button.js) draw the same floating download button: the
-// Grabline logo in a rounded shadow-root button that swaps to a check/cross
+// GrabLine logo in a rounded shadow-root button that swaps to a check/cross
 // after a grab. Those primitives - the icons, the logo, the accent/status
 // colours, the corner positioning, the click feedback - lived in both files and
 // had drifted (a 16 vs 17px icon, a 6 vs 8px inset). One definition here.
@@ -42,7 +42,7 @@
     return el;
   }
 
-  // The button wears the Grabline logo; feedback swaps in a check/cross.
+  // The button wears the GrabLine logo; feedback swaps in a check/cross.
   function logoImg() {
     const api = globalThis.browser ?? globalThis.chrome;
     const img = document.createElement("img");
@@ -61,7 +61,7 @@
     const shadow = host.attachShadow({ mode: "closed" });
     const button = document.createElement("button");
     button.replaceChildren(logoImg());
-    button.title = "Download with Grabline";
+    button.title = "Download with GrabLine";
     button.style.cssText = [
       "position: fixed",
       "z-index: 2147483647",

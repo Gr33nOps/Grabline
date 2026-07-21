@@ -1,7 +1,7 @@
 """The security check: an advisory report about a finished download.
 
 Design rule: this NEVER blocks or deletes. A flagged file stays exactly where
-it is - Grabline surfaces what it found and lets the user decide. Antivirus
+it is - GrabLine surfaces what it found and lets the user decide. Antivirus
 false positives are common, so a detection is a heads-up, not a verdict.
 
 A report gathers, best-effort and only what's configured:

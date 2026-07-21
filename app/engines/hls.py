@@ -151,7 +151,7 @@ class HlsDownload:
             # file:// (read the user's disk into the output) or use concat:/
             # subfile:/gopher: - FFmpeg's known local-file-disclosure and SSRF
             # vectors. Modern FFmpeg blocks cross-protocol reads by default, but
-            # Grabline runs whatever ffmpeg is on PATH, so we pin it: only the
+            # GrabLine runs whatever ffmpeg is on PATH, so we pin it: only the
             # protocols real HLS/DASH needs. The input is always a remote URL,
             # so file is intentionally absent. Must precede -i to bind to it.
             "-protocol_whitelist",
@@ -352,7 +352,7 @@ class HlsDownload:
         if "#EXTINF" in text and "#EXT-X-ENDLIST" not in text:
             return (
                 "This looks like a live stream that is still in progress. "
-                "Grabline cannot save it yet. Try again once it has ended."
+                "GrabLine cannot save it yet. Try again once it has ended."
             )
         return None
 

@@ -58,7 +58,7 @@ def import_jobs(db: Database, data: dict[str, Any]) -> int:
     """Recreate the downloads described by ``data`` as fresh queued jobs.
     Returns how many were imported."""
     if data.get("format") != FORMAT:
-        raise ValueError("this file is not a Grabline download list")
+        raise ValueError("this file is not a GrabLine download list")
     imported = 0
     for item in data.get("items", []):
         if not isinstance(item, dict):
@@ -90,5 +90,5 @@ def import_jobs(db: Database, data: dict[str, Any]) -> int:
 def read_file(db: Database, path: Path) -> int:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError("this file is not a Grabline download list")
+        raise ValueError("this file is not a GrabLine download list")
     return import_jobs(db, data)

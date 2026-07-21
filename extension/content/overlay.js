@@ -1,4 +1,4 @@
-// Grabline Connect - element sniffer + hover ⬇ button (F1.2).
+// GrabLine Connect - element sniffer + hover ⬇ button (F1.2).
 //
 // One floating button, hosted in a closed shadow root so page CSS can't touch
 // it. Shown when the pointer rests on a <video>, <audio>, or big-enough

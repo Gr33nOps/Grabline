@@ -1,7 +1,7 @@
 """Platform data directories, Qt-free so the CLI and core never import PySide6.
 
 Locations match what Qt's QStandardPaths.AppDataLocation resolves to with the
-application/organization name "Grabline", so Phase 0 databases stay in place.
+application/organization name "Grabline", so existing databases stay in place.
 """
 
 from __future__ import annotations
@@ -11,6 +11,9 @@ import os
 import sys
 from pathlib import Path
 
+# The data-folder identifier stays "Grabline" (not the "GrabLine" brand): it is
+# the QStandardPaths folder name, and renaming it would orphan every user's
+# database, settings and downloaded ffmpeg/deno binaries. Users never see it.
 APP_NAME = "Grabline"
 
 log = logging.getLogger(__name__)

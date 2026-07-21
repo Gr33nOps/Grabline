@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="website/assets/logo.png" width="104" height="104" alt="Grabline logo" />
+<img src="website/assets/logo.png" width="104" height="104" alt="GrabLine logo" />
 
-# Grabline
+# GrabLine
 
 **The modern, cross-platform, open-source answer to IDM.**
 
@@ -18,26 +18,26 @@ Accelerated multi-connection downloads · a real browser button · a full qualit
 
 **Browser extension:** [Firefox Add-ons][amo] (official) · Chrome/Edge/Brave pair from inside the app
 
-[Website](https://gr33nops.github.io/Grabline/) · [Features](#-what-you-get) · [Install](#%EF%B8%8F-download--install) · [Everyday use](#-everyday-use) · [Extension docs](extension/README.md)
+[Website](https://gr33nops.github.io/GrabLine/) · [Features](#-what-you-get) · [Install](#%EF%B8%8F-download--install) · [Everyday use](#-everyday-use) · [Extension docs](extension/README.md)
 
 <!-- Tip: drop a screenshot at docs/screenshots/queue.png and uncomment the line below -->
-<!-- <img src="docs/screenshots/queue.png" width="840" alt="Grabline main window" /> -->
+<!-- <img src="docs/screenshots/queue.png" width="840" alt="GrabLine main window" /> -->
 
 </div>
 
-[releases]: https://github.com/Gr33nOps/Grabline/releases/latest
+[releases]: https://github.com/Gr33nOps/GrabLine/releases/latest
 [amo]: https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/
 [license]: LICENSE
-[ci]: https://github.com/Gr33nOps/Grabline/actions/workflows/ci.yml
-[download-badge]: https://img.shields.io/github/v/release/Gr33nOps/Grabline?label=Download&color=0170fd&sort=semver
+[ci]: https://github.com/Gr33nOps/GrabLine/actions/workflows/ci.yml
+[download-badge]: https://img.shields.io/github/v/release/Gr33nOps/GrabLine?label=Download&color=0170fd&sort=semver
 [amo-badge]: https://img.shields.io/amo/v/grabline-connect?label=Firefox%20Add-on&color=ff7139
 [license-badge]: https://img.shields.io/badge/License-AGPL--3.0-blue
 [platform-badge]: https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
-[ci-badge]: https://img.shields.io/github/actions/workflow/status/Gr33nOps/Grabline/ci.yml?branch=main&label=tests
+[ci-badge]: https://img.shields.io/github/actions/workflow/status/Gr33nOps/GrabLine/ci.yml?branch=main&label=tests
 
 ---
 
-Grabline downloads everything: a plain file, a 4K video, a whole folder of
+GrabLine downloads everything: a plain file, a 4K video, a whole folder of
 links, a streaming lecture, a torrent, a file off your SFTP box. Point it at a
 URL — paste it, drop it on the window, or click the ⬇ button in your browser —
 and it downloads fast with accelerated connections, crash-proof resume, and a
@@ -127,7 +127,7 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
   signed by Mozilla. Other browsers pair from inside the app (Browser Setup).
 - Hover ⬇ on videos and thumbnails (YouTube, YouTube Music, SoundCloud,
   Vimeo, X), pick the quality right on the page, watch a live progress pill.
-- Right-click → *Download with Grabline* on anything. **Grab all links**,
+- Right-click → *Download with GrabLine* on anything. **Grab all links**,
   **all images**, or just the **links & media inside your text selection** —
   or crawl a whole site a few levels deep.
 - A per-tab sniffer catches the streams a page loads. Native Messaging only —
@@ -146,7 +146,7 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
   cookies.txt field for login-gated or age-restricted videos.
 - Sites yt-dlp has no dedicated extractor for still work: a best-effort
   page scrape finds embedded `<video>` / og:video / m3u8 media before
-  Grabline gives up.
+  GrabLine gives up.
 - HLS/DASH streams reassembled into a clean .mp4 by FFmpeg, with quality
   picking and automatic retry.
 
@@ -157,7 +157,7 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 
 - Magnet links and .torrent files: paste them, click them on websites,
   double-click a downloaded .torrent, or drag one onto the window — all of
-  it opens in Grabline (no need for a separate torrent app).
+  it opens in GrabLine (no need for a separate torrent app).
 - DHT, Peer Exchange, and UPnP/NAT-PMP port mapping out of the box; web
   seeds honored automatically.
 - Pick the save location and the files you want before it starts;
@@ -186,7 +186,7 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 - **Download a whole remote folder** (FTP/SFTP/S3): list it, tick the files
   you want, queue them together.
 - Honest about the rest: Mega and Proton Drive are end-to-end encrypted and
-  iCloud has no public API, so Grabline says so instead of failing cryptically.
+  iCloud has no public API, so GrabLine says so instead of failing cryptically.
 
 </details>
 
@@ -197,7 +197,7 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 - Extract automatically after download, with saved passwords tried in
   order — a password you type once is remembered for next time.
 - Optional virus scan before extraction, using a scanner already on the
-  machine (Windows Defender or ClamAV) — Grabline never pretends to scan
+  machine (Windows Defender or ClamAV) — GrabLine never pretends to scan
   when none is installed.
 
 </details>
@@ -247,7 +247,7 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 <summary><b>🛡️ Security</b> (advisory — it warns, it never blocks or deletes)</summary>
 
 - **Checksums** in MD5, SHA-1, SHA-256, SHA-512, and CRC32. Paste any of
-  them into *Verify checksum* and Grabline figures out which and confirms it;
+  them into *Verify checksum* and GrabLine figures out which and confirms it;
   *Security check* shows all five at once.
 - **Virus scanning** using a scanner already on the machine (Windows Defender
   or ClamAV), plus optional **VirusTotal** (opt-in, your own API key, and only
@@ -285,15 +285,15 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 ## ⬇️ Download & install
 
 Grab the installer for your system from the
-[**latest release**](https://github.com/Gr33nOps/Grabline/releases/latest)
-— no Python needed. After installing, Grabline shows up in your
+[**latest release**](https://github.com/Gr33nOps/GrabLine/releases/latest)
+— no Python needed. After installing, GrabLine shows up in your
 Start Menu / Spotlight / app grid like any other program, and pairs itself
 with your browsers on first launch.
 
 | System | File | How |
 |---|---|---|
-| **Windows** | `Grabline-Setup-*.exe` | Run it → Grabline installs and appears in the Start Menu. No admin rights? Take the `*-windows-portable.zip` instead |
-| **macOS** | `Grabline-*-applesilicon.dmg` | Open it, drag **Grabline** to Applications. Apple Silicon (M1 and later) |
+| **Windows** | `Grabline-Setup-*.exe` | Run it → GrabLine installs and appears in the Start Menu. No admin rights? Take the `*-windows-portable.zip` instead |
+| **macOS** | `Grabline-*-applesilicon.dmg` | Open it, drag **GrabLine** to Applications. Apple Silicon (M1 and later) |
 | **Linux** | `grabline_*_amd64.deb` | `sudo apt install ./grabline_*_amd64.deb` on Debian/Ubuntu/Mint |
 | **Linux (any distro)** | `Grabline-*-x86_64.AppImage` | `chmod +x` it and run; it adds itself to your app grid. No FUSE? Use the `.tar.gz` — extract and run `./grabline/grabline` |
 
@@ -305,8 +305,8 @@ Then add the browser extension:
 
 | Browser | How |
 |---|---|
-| **Firefox** | Install **[Grabline Connect from Firefox Add-ons][amo]** — one click, reviewed and signed by Mozilla |
-| **Chrome / Edge / Brave / others** | Open **Browser Setup** in the app (sidebar → ⋯ menu) and click **Add Grabline to \<your browser\>** — the extension ships inside the app |
+| **Firefox** | Install **[GrabLine Connect from Firefox Add-ons][amo]** — one click, reviewed and signed by Mozilla |
+| **Chrome / Edge / Brave / others** | Open **Browser Setup** in the app (sidebar → ⋯ menu) and click **Add GrabLine to \<your browser\>** — the extension ships inside the app |
 
 > The installers are **not code-signed yet**, so the OS warns on first launch:
 > - **Windows:** SmartScreen → *More info* → *Run anyway*.
@@ -317,26 +317,26 @@ Then add the browser extension:
 
 ## 🚀 First run
 
-Grabline sets itself up — no config files, no terminal:
+GrabLine sets itself up — no config files, no terminal:
 
 1. **It pairs with your browsers automatically** on first launch.
 2. Install the extension: **Firefox** from [Firefox Add-ons][amo];
    other browsers via **Browser Setup** (sidebar → ⋯ menu) — one click there,
    then **Add** in the browser.
 3. For MP3 and streams, open **Settings → Video Downloader** and click
-   **Install FFmpeg** if it says *Not found* — Grabline fetches an official
+   **Install FFmpeg** if it says *Not found* — GrabLine fetches an official
    build over HTTPS and verifies a pinned checksum.
 
 The extension button's popup should say **connected**. Optional: in
-**Settings → General**, tick **Start Grabline when I log in** so it waits in
+**Settings → General**, tick **Start GrabLine when I log in** so it waits in
 the tray, always ready — like IDM.
 
 ## 🎯 Everyday use
 
-| You do | Grabline does |
+| You do | GrabLine does |
 |---|---|
 | Hover a video or thumbnail → click **⬇** | In-page panel: Best / 1080p / 720p / 480p / MP3 / M4A / FLAC — downloading starts immediately, a progress pill tracks it in the corner |
-| Right-click anything → *Download with Grabline* | Link, image, video, audio, or the page itself — routed to the best engine |
+| Right-click anything → *Download with GrabLine* | Link, image, video, audio, or the page itself — routed to the best engine |
 | Right-click a page → *Download all images / all links* | Every image or file link on the page, in a checkable, filterable picker |
 | Click the toolbar icon | Everything the page's network traffic loaded — streams (.m3u8/.mpd) and media files, one click each |
 | Paste a playlist URL | Fast listing → checkboxes → one quality for the batch |
@@ -346,7 +346,7 @@ the tray, always ready — like IDM.
 | Drag a URL onto the window | Queued instantly |
 | Select a download | A details drawer: live speed graph, ETA, server, destination, quick actions |
 | Right-click a finished row | Open it, open its folder, re-download, **verify checksum**, **extract**, or **Convert to GIF…** |
-| Copy a URL anywhere | An unobtrusive "Download with Grabline?" offer (off by default) |
+| Copy a URL anywhere | An unobtrusive "Download with GrabLine?" offer (off by default) |
 
 Popup toggles: hover button on/off per site, hover button on images (off by
 default), button position (any corner), download takeover (on by default —
@@ -357,7 +357,7 @@ it only takes over while the app is running).
 SoundCloud, Bandcamp, YouTube Music, Mixcloud, and every other non-DRM
 music site yt-dlp knows: hover ⬇ → MP3, tagged with cover art. Spotify
 tracks, Apple Music, TIDAL, Deezer, and Amazon Music are **DRM-protected
-and are refused with a clear message** — Grabline does not and will not
+and are refused with a clear message** — GrabLine does not and will not
 bypass DRM. (Spotify *podcasts* are not DRM-protected and download fine.)
 
 ## ⌨️ The CLI
@@ -386,7 +386,7 @@ python -m app.cli "https://…/playlist" ~/Downloads --playlist --limit 10
 Run from source (Python 3.12+ and git):
 
 ```bash
-git clone https://github.com/Gr33nOps/Grabline.git && cd Grabline
+git clone https://github.com/Gr33nOps/GrabLine.git && cd GrabLine
 python3 -m venv .venv && source .venv/bin/activate   # Windows: py -m venv .venv
 pip install -e .
 python -m app
@@ -406,7 +406,7 @@ app/
 ├── ui/         PySide6: design system, sidebar shell, embedded pages, panels
 ├── native_host/ Native Messaging host + per-browser registration
 └── tests/      failure-simulating media server, engine tests, kill -9 milestone
-extension/      Grabline Connect (MV3, Chrome + Firefox, readable in a sitting)
+extension/      GrabLine Connect (MV3, Chrome + Firefox, readable in a sitting)
 packaging/      PyInstaller spec + per-OS installers (Windows/macOS/Linux)
 scripts/        FFmpeg pin updater, extension store packaging
 ```
