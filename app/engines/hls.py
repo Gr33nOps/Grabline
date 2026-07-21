@@ -365,7 +365,7 @@ class HlsDownload:
     def _fetch_url_text(self, url: str) -> tuple[str, str] | None:
         try:
             with net.build_client(
-                proxy=self.proxy, follow_redirects=True, http2=True, timeout=15
+                proxy=self.proxy, follow_redirects=True, http2=False, timeout=15
             ) as client:
                 response = client.get(url, headers=self._headers or None)
                 if response.status_code != 200:
@@ -501,7 +501,17 @@ class HlsDownload:
 
         with (
             net.build_client(
-                proxy=self.proxy, follow_redirects=True, http2=True, timeout=60
+                proxy=self.proxy,
+                follow_redirects=True,
+                # HTTP/1.1 so the segment workers are real parallel TCP flows,
+                # not multiplexed onto one h2 socket - the latter throttled the
+                # native fetch to a crawl. One kept-alive connection per worker.
+                http2=False,
+                timeout=60,
+                limits=httpx.Limits(
+                    max_connections=_SEGMENT_WORKERS + 2,
+                    max_keepalive_connections=_SEGMENT_WORKERS + 2,
+                ),
             ) as client,
             ThreadPoolExecutor(max_workers=_SEGMENT_WORKERS) as pool,
         ):

@@ -139,12 +139,20 @@ class SegmentedDownload:
             bypass_hosts=bypass_hosts,
             user_agent=user_agent,
             follow_redirects=True,
-            # HTTP/2 when the server offers it (negotiated via TLS ALPN, so
-            # plain-http servers silently stay on 1.1): range requests
-            # multiplex over fewer sockets and CDNs deprioritize h1 traffic.
-            http2=True,
+            # HTTP/1.1 on purpose. This is a segmented downloader: its whole
+            # point is N range requests carried on N *separate* TCP connections,
+            # each with its own congestion window, so they add up. HTTP/2 would
+            # multiplex all N onto a single socket (one window), collapsing the
+            # accelerator to roughly single-connection speed on any CDN that
+            # offers h2 - the reason "8 connections" used to crawl. Keep the
+            # pool large enough to hold one live connection per segment so a
+            # high connection count doesn't churn through reconnects.
+            http2=False,
             timeout=httpx.Timeout(30.0, connect=15.0),
-            limits=httpx.Limits(max_connections=connections + 2),
+            limits=httpx.Limits(
+                max_connections=connections + 2,
+                max_keepalive_connections=connections + 2,
+            ),
             headers=headers or None,
         )
         self._checkpointer = _Checkpointer(db, checkpoint_interval)

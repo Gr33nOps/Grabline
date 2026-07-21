@@ -38,6 +38,13 @@ class RateLimiter:
     def throttle(self, amount: int) -> None:
         if amount <= 0:
             return
+        # Fast path: an unlimited bucket does nothing, so don't make every
+        # worker of every download serialize on this shared lock for each
+        # chunk. Reading the int is atomic; a rate change racing this check
+        # just takes effect from the next chunk, which is already how the
+        # interval-based limiter behaves.
+        if self._rate == UNLIMITED:
+            return
         with self._lock:
             if self._rate == UNLIMITED:
                 return

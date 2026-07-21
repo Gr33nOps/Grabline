@@ -47,6 +47,37 @@ def test_segmented_download_completes_with_checksum(server: MediaServer, db: Dat
     assert server.request_count("/big.bin") >= 9  # probe + 8+ range requests
 
 
+def test_downloader_uses_http1_for_real_parallel_connections(
+    server: MediaServer, db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # HTTP/2 multiplexes every range request onto one socket (one congestion
+    # window), collapsing the N-connection accelerator to single-connection
+    # speed. The downloader must build an HTTP/1.1 client whose pool can hold a
+    # live connection per segment - otherwise "8 connections" silently crawls.
+    from app.core import net
+
+    captured: dict[str, object] = {}
+    real_build = net.build_client
+
+    def spy(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return real_build(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("app.core.downloader.net.build_client", spy)
+
+    url = server.add("/h1.bin", payload(2 * MB, 3))
+    job = db.create_job(url, str(dest), "h1.bin")
+
+    status = SegmentedDownload(db, job, connections=8).run()
+
+    assert status is JobStatus.COMPLETED
+    assert captured.get("http2") is False
+    limits = captured.get("limits")
+    assert limits is not None
+    assert limits.max_connections >= 8  # type: ignore[attr-defined]
+    assert limits.max_keepalive_connections >= 8  # type: ignore[attr-defined]
+
+
 def test_finalize_survives_fsync_failure(
     server: MediaServer, db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
 ):
