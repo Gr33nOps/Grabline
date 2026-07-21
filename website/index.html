@@ -19,8 +19,7 @@
       property="og:description"
       content="A free, open-source download manager for Windows, macOS and Linux. Many parallel connections, a real browser button, and a full quality picker for video and audio. No ads, no tracking."
     />
-    <!-- TODO: replace with a 1200x630 screenshot card at assets/og.png for richer social previews. -->
-    <meta property="og:image" content="https://gr33nops.github.io/GrabLine/assets/logo.png?v=3" />
+    <meta property="og:image" content="https://gr33nops.github.io/GrabLine/assets/og.png" />
     <meta property="og:url" content="https://gr33nops.github.io/GrabLine/" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="GrabLine — download anything, at full speed" />
@@ -28,7 +27,7 @@
       name="twitter:description"
       content="Free, open-source download manager. Fast parallel downloads, a browser button, video and audio in any quality. Windows, macOS, Linux."
     />
-    <meta name="twitter:image" content="https://gr33nops.github.io/GrabLine/assets/logo.png?v=3" />
+    <meta name="twitter:image" content="https://gr33nops.github.io/GrabLine/assets/og.png" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -42,7 +41,7 @@
         "softwareVersion": "1.23.7",
         "license": "https://www.gnu.org/licenses/agpl-3.0.html",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-        "screenshot": "https://gr33nops.github.io/GrabLine/assets/logo.png",
+        "screenshot": "https://gr33nops.github.io/GrabLine/assets/og.png",
         "author": { "@type": "Organization", "name": "GrabLine" }
       }
     </script>
@@ -602,7 +601,12 @@
         display: block;
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        /* contain + an opaque dark backdrop: shows the whole shot (the quality
+           panel is portrait) without cropping, and hides the placeholder
+           behind it. The screenshots are dark-themed, so this reads cleanly in
+           both page themes. */
+        object-fit: contain;
+        background: #0b0f17;
       }
       .shot-placeholder {
         position: absolute;
