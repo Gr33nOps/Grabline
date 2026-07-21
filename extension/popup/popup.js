@@ -98,7 +98,7 @@ async function renderQuickActions(tab) {
     if (!tab?.url) return;
     grabTab.disabled = true;
     grabTab.textContent = "Sent";
-    await api.runtime.sendMessage({ cmd: "grab", url: tab.url, tabId: tab.id });
+    await grablineSend({ cmd: "grab", url: tab.url, tabId: tab.id });
   });
 
   const input = document.getElementById("paste-url");
@@ -108,7 +108,7 @@ async function renderQuickActions(tab) {
     if (!/^https?:\/\//i.test(url)) return;
     send.disabled = true;
     send.textContent = "Sent";
-    await api.runtime.sendMessage({ cmd: "grab", url });
+    await grablineSend({ cmd: "grab", url });
     input.value = "";
     setTimeout(() => {
       send.disabled = false;
@@ -152,7 +152,7 @@ async function renderMediaList(tab) {
       grab.disabled = true;
       grab.textContent = "Sent";
       grab.classList.add("done");
-      const reply = await api.runtime.sendMessage({
+      const reply = await grablineSend({
         cmd: "grab",
         url: item.url,
         tabId: tab.id,

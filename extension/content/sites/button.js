@@ -207,7 +207,7 @@
           closePanel();
           // "More options…" sends no quality: the desktop panel opens instead.
           const quality = QUALITY_LABELS.includes(label) ? label : null;
-          feedback(await api.runtime.sendMessage({ cmd: "grab", url, quality }));
+          feedback(await grablineSend({ cmd: "grab", url, quality }));
         });
         panel.appendChild(choice);
       }
@@ -318,7 +318,7 @@
         return;
       }
       // No panel for this site: one click grabs at the app's default quality.
-      feedback(await api.runtime.sendMessage({ cmd: "grab", url: currentUrl }));
+      feedback(await grablineSend({ cmd: "grab", url: currentUrl }));
     });
   };
 })();

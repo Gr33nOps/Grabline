@@ -55,6 +55,7 @@
         "<all_urls>"
       ],
       "js": [
+        "content/lib/messaging.js",
         "content/overlay.js"
       ],
       "run_at": "document_idle"
@@ -64,6 +65,7 @@
         "*://*.youtube.com/*"
       ],
       "js": [
+        "content/lib/messaging.js",
         "content/sites/button.js",
         "content/sites/youtube.js"
       ],
@@ -74,6 +76,7 @@
         "*://*.vimeo.com/*"
       ],
       "js": [
+        "content/lib/messaging.js",
         "content/sites/button.js",
         "content/sites/vimeo.js"
       ],
@@ -85,6 +88,7 @@
         "*://*.twitter.com/*"
       ],
       "js": [
+        "content/lib/messaging.js",
         "content/sites/button.js",
         "content/sites/x.js"
       ],
@@ -95,6 +99,7 @@
         "*://*.soundcloud.com/*"
       ],
       "js": [
+        "content/lib/messaging.js",
         "content/sites/button.js",
         "content/sites/soundcloud.js"
       ],
@@ -105,6 +110,7 @@
         "*://*.instagram.com/*"
       ],
       "js": [
+        "content/lib/messaging.js",
         "content/sites/button.js",
         "content/sites/instagram.js"
       ],

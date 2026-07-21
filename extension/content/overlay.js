@@ -512,11 +512,7 @@
     event.stopPropagation();
     if (!currentTarget) return;
     const media = mediaUrlFor(currentTarget);
-    const reply = await api.runtime.sendMessage({
-      cmd: "grab",
-      url: media.url,
-      sniff: media.fromPage,
-    });
+    const reply = await grablineSend({ cmd: "grab", url: media.url, sniff: media.fromPage });
     // Quick inline feedback, then fade away.
     const failed = reply?.type === "error";
     button.replaceChildren(iconSvg(failed ? ICON.error : ICON.check));
