@@ -1160,3 +1160,54 @@ def test_heavy_pages_are_built_on_first_visit(db: Database, tmp_path: Path):
         assert window._pages.currentWidget() is window._queue_view
     finally:
         manager.shutdown()
+
+
+def test_pause_shows_instantly_before_the_worker_settles(db: Database, tmp_path, monkeypatch):
+    """Pausing an active download flips the row to Paused at once, even though
+    the manager keeps the DB status on Downloading until the worker winds
+    down - otherwise the button feels dead (the reported symptom)."""
+    from dataclasses import replace
+
+    from app.core.manager import JobView
+    from app.core.models import JobKind, JobStatus
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        window.show()
+        job = db.create_job("http://x.invalid/a.bin", str(tmp_path), "a.bin")
+        db.set_job_status(job.id, JobStatus.DOWNLOADING)
+
+        paused: list[int] = []
+        monkeypatch.setattr(manager, "pause", lambda jid: paused.append(jid))
+
+        window._pause_job(job.id)
+        assert paused == [job.id]  # the worker was signalled
+        assert window._optimistic_status[job.id] is JobStatus.PAUSED
+
+        # The manager still reports DOWNLOADING; the mask must show Paused.
+        downloading_view = JobView(
+            id=job.id,
+            url="http://x.invalid/a.bin",
+            filename="a.bin",
+            dest_dir=str(tmp_path),
+            status=JobStatus.DOWNLOADING,
+            total_size=None,
+            downloaded=0,
+            error=None,
+            kind=JobKind.DIRECT,
+        )
+        masked = window._apply_optimistic_status([downloading_view], {job.id})
+        assert masked[0].status is JobStatus.PAUSED
+
+        # Once the worker settles to the real Paused, the override is dropped.
+        settled = replace(downloading_view, status=JobStatus.PAUSED)
+        masked = window._apply_optimistic_status([settled], {job.id})
+        assert masked[0].status is JobStatus.PAUSED
+        assert job.id not in window._optimistic_status
+    finally:
+        manager.shutdown()
+

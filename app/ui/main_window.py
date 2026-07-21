@@ -7,6 +7,7 @@ from __future__ import annotations
 import time
 from collections import deque
 from collections.abc import Callable
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from typing import cast
@@ -158,6 +159,12 @@ class MainWindow(QMainWindow):
         #: Force-removed jobs hidden immediately; cancelling a running worker
         #: is asynchronous, so its row would otherwise linger for seconds.
         self._removing: set[int] = set()
+        #: Optimistic status for instant pause/cancel feedback. Pausing an
+        #: active download only signals the worker, which keeps the row on
+        #: "Downloading" until it winds down (seconds, on a slow read) - so the
+        #: button felt dead. We show the intended status right away and let the
+        #: real one take over the moment the worker actually settles.
+        self._optimistic_status: dict[int, JobStatus] = {}
         #: True while a right-click selects its row - selection then must not
         #: pop the details drawer (that is a left-click affordance).
         self._suppress_drawer = False
@@ -1217,17 +1224,51 @@ class MainWindow(QMainWindow):
         else:
             self._drawer.hide()
 
+    def _apply_optimistic_status(self, views: list[JobView], present: set[int]) -> list[JobView]:
+        """Mask a still-``DOWNLOADING`` row with the status the user just asked
+        for (Paused/Cancelled), until the worker actually settles - then the
+        real status wins. Any other real status means the worker resolved, so
+        the override is dropped immediately."""
+        if not self._optimistic_status:
+            return views
+        self._optimistic_status = {k: v for k, v in self._optimistic_status.items() if k in present}
+        masked: list[JobView] = []
+        for view in views:
+            target = self._optimistic_status.get(view.id)
+            if target is not None and view.status is JobStatus.DOWNLOADING:
+                masked.append(replace(view, status=target))
+            else:
+                self._optimistic_status.pop(view.id, None)
+                masked.append(view)
+        return masked
+
     def _pause_selected(self) -> None:
         for job_id in self._selected_job_ids():
-            self.manager.pause(job_id)
+            self._pause_job(job_id)
+        self.refresh()
 
     def _resume_selected(self) -> None:
         for job_id in self._selected_job_ids():
-            self.manager.resume(job_id)
+            self._resume_job(job_id)
+        self.refresh()
+
+    def _pause_job(self, job_id: int) -> None:
+        """Pause one download and show it immediately (shared by the toolbar
+        button and the right-click menu)."""
+        self.manager.pause(job_id)
+        self._optimistic_status[job_id] = JobStatus.PAUSED
+
+    def _resume_job(self, job_id: int) -> None:
+        self.manager.resume(job_id)
+        # resume() sets the row to QUEUED synchronously, so no optimism needed;
+        # just make sure any lingering pause override is gone.
+        self._optimistic_status.pop(job_id, None)
 
     def _cancel_selected(self) -> None:
         for job_id in self._selected_job_ids():
             self.manager.cancel(job_id)
+            self._optimistic_status[job_id] = JobStatus.CANCELLED
+        self.refresh()
 
     def _remove_selected(self) -> None:
         """Remove the selected downloads from the list, whatever state they are
@@ -1281,6 +1322,19 @@ class MainWindow(QMainWindow):
             self._suppress_drawer = False
         menu = QMenu(self)
         file_path = Path(view.dest_dir) / view.filename
+
+        # Pause / Resume up top, one or the other depending on state, so the
+        # most common control is the first thing under the cursor.
+        can_pause = view.status in (JobStatus.DOWNLOADING, JobStatus.QUEUED)
+        pause_action = menu.addAction("Pause")
+        pause_action.setVisible(can_pause)
+        resume_label = "Resume" if view.status is JobStatus.PAUSED else "Start"
+        resume_action = menu.addAction(resume_label)
+        resume_action.setVisible(
+            view.status in (JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED)
+        )
+        menu.addSeparator()
+
         open_file = menu.addAction("Open file")
         open_file.setEnabled(view.status is JobStatus.COMPLETED and file_path.exists())
         open_folder = menu.addAction("Open folder")
@@ -1367,7 +1421,13 @@ class MainWindow(QMainWindow):
         # Force remove: works whatever the state, mid-download included.
         remove = menu.addAction("Remove from list")
         chosen = menu.exec(self.table.viewport().mapToGlobal(position))
-        if chosen is open_file:
+        if chosen is pause_action:
+            self._pause_job(view.id)
+            self.refresh()
+        elif chosen is resume_action:
+            self._resume_job(view.id)
+            self.refresh()
+        elif chosen is open_file:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path)))
         elif chosen is open_folder:
             QDesktopServices.openUrl(QUrl.fromLocalFile(view.dest_dir))
@@ -2042,6 +2102,7 @@ class MainWindow(QMainWindow):
         self._removing &= present
         if self._removing:
             views = [view for view in views if view.id not in self._removing]
+        views = self._apply_optimistic_status(views, present)
         self._detect_transitions(views)
         self._measure_speeds(views)
         self._update_speed_line(views)
