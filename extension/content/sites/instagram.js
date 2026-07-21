@@ -1,6 +1,6 @@
 // GrabLine Connect - Instagram site module.
 //
-// A hover ⬇ on Reels and video posts: on links to /reel/<id> or /p/<id>
+// A hover button on Reels and video posts: on links to /reel/<id> or /p/<id>
 // (profile grids, the explore page), and on the playing <video> itself in
 // the Reels feed or a post lightbox. Clicking hands the canonical URL to
 // the app, which resolves it with yt-dlp. Fail-silent by design: if

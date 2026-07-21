@@ -1,7 +1,7 @@
 // GrabLine Connect - shared site-module hover button.
 //
 // Every site module is just a matcher: given a hovered element, return the
-// element to anchor the ⬇ button to and the URL to grab, or null. This file
+// element to anchor the button to and the URL to grab, or null. This file
 // owns the rest - the shadow-root button, the show dwell (no flicker while
 // scanning a grid), the rect keep-alive (players that spawn *over* the
 // anchor steal the hover; as long as the pointer stays inside the anchor's

@@ -26,7 +26,7 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 ## Summary (short description)
 
 > The connector for the GrabLine download manager: right-click download,
-> hover ⬇ buttons on media, quality picking for 1000+ sites - every download
+> hover buttons on media, quality picking for 1000+ sites - every download
 > runs in the open-source desktop app, not the browser.
 
 ## Description (long)
@@ -36,7 +36,7 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 > thin - it detects and delivers, the desktop app downloads:
 >
 > - **Right-click → "Download with GrabLine"** on any link, image, video, or page
-> - **Hover ⬇ button** on videos, audio, and large images
+> - **Hover button** on videos, audio, and large images (the button is the GrabLine logo)
 > - **Per-tab media list**: every stream (.m3u8/.mpd) and media file the page loaded
 > - **Download all images** on a page into a selection grid
 > - **Optional download takeover** (off by default)
@@ -63,7 +63,7 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 | `webRequestBlocking` (Firefox) | The **opt-in** takeover cancels a media/archive response at the network layer so the desktop app can fetch it instead, with no flash of a browser download. Chrome ignores blocking `webRequest` in MV3, so there the `downloads` API does the takeover. Off by default. |
 | `downloads` | The takeover path on Chrome: cancel a starting browser download and re-dispatch it to the app. Off by default. |
 | `tabs` | Page URL/title accompany a handed-off URL so the app can name files sensibly. |
-| Content scripts on `<all_urls>` | The hover ⬇ button and the image collector must run where the media is. They render one button in a closed shadow root and send nothing anywhere except the local app. |
+| Content scripts on `<all_urls>` | The hover button and the image collector must run where the media is. They render one button in a closed shadow root and send nothing anywhere except the local app. |
 
 **Single purpose statement (CWS):** connect the browser to the locally
 installed GrabLine download manager.

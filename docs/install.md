@@ -113,8 +113,8 @@ Nothing is installed; move the folder wherever you like.
 
 ## The browser extension
 
-GrabLine downloads fine on its own, but the extension is what puts a ⬇ button
-on videos and hands your browser's downloads over.
+GrabLine downloads fine on its own, but the extension is what puts a GrabLine
+button on videos and hands your browser's downloads over.
 
 | Browser | How |
 |---|---|

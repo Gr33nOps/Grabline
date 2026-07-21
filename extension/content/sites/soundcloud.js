@@ -3,7 +3,7 @@
 // SoundCloud plays through a hidden MSE audio element, so the generic
 // overlay has nothing to hover - and the page URL is wrong the moment you
 // play from Discover or the feed (that's how "soundcloud:user discover
-// 404" happens). This module puts the ⬇ on actual track links instead:
+// 404" happens). This module puts the button on actual track links instead:
 // the bottom play bar (whatever is playing right now) and track titles in
 // lists/charts. Fail-silent: right-click a track title + paste keep
 // working if SoundCloud's DOM churns.

@@ -39,7 +39,8 @@ Accelerated multi-connection downloads, a real browser button, and a full qualit
 
 GrabLine downloads everything: a plain file, a 4K video, a page full of links, a
 streaming lecture, a torrent, a file off your SFTP box. Point it at a URL by
-pasting it, dropping it on the window, or clicking the ⬇ button in your browser.
+pasting it, dropping it on the window, or clicking the GrabLine button in your
+browser.
 It downloads fast, with many parallel connections, resume that survives a crash,
 and a queue you actually control. On the 1000+ sites it understands (YouTube,
 SoundCloud, and the rest) you also get a quality picker: 4K down to 144p,
@@ -53,9 +54,10 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 
 - **A real accelerator.** Up to 128 connections per file, dynamic segmentation,
   HTTP/2, resume that survives a crash, retry-forever reconnect, mirror failover.
-- **A browser button that just works.** Hover ⬇ on a video, click, and GrabLine
-  opens a fast Download Info dialog: name, folder, category, and a quality
-  choice. Everything travels over Native Messaging, with no open ports.
+- **A browser button that just works.** Hover a video and a small GrabLine logo
+  button appears; click it and GrabLine opens a fast Download Info dialog: name,
+  folder, category, and a quality choice. Everything travels over Native
+  Messaging, with no open ports.
 - **Video and audio without the terminal.** yt-dlp runs in-process: 4K to 144p,
   MP3/M4A/FLAC with cover art, subtitles, playlists, SponsorBlock.
 - **Light on your machine.** About 1% CPU sitting idle, half a second to start.
@@ -133,9 +135,10 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 
 - **Firefox users install it from [Firefox Add-ons][amo]**, reviewed and signed
   by Mozilla. Other browsers pair from inside the app (Browser Setup).
-- Hover ⬇ on videos and thumbnails (YouTube, YouTube Music, SoundCloud, Vimeo, X),
-  click, and GrabLine opens its **Download Info dialog** to confirm the name,
-  folder, and quality, then starts. Turn the dialog off to start immediately.
+- Hover a video or thumbnail (YouTube, YouTube Music, SoundCloud, Vimeo, X) and a
+  small **GrabLine logo button** appears; click it and GrabLine opens its
+  **Download Info dialog** to confirm the name, folder, and quality, then starts.
+  Turn the dialog off to start immediately.
 - Right-click → *Download with GrabLine* on anything. **Grab all links**, **all
   images**, or just the links and media inside your **text selection**, or crawl
   a whole site a few levels deep.
@@ -342,7 +345,7 @@ tick **Start GrabLine when I log in** so it waits in the tray, always ready.
 
 | You do | GrabLine does |
 |---|---|
-| Hover a video or thumbnail → click **⬇** | Jumps to the front and opens a **Download Info dialog**: name, folder, category, and a quality choice (Best / 1080p / 720p / 480p / MP3 / M4A / FLAC). Hit **Start Download**, or **Download Later** to queue it paused. |
+| Hover a video or thumbnail → click the **GrabLine button** | Jumps to the front and opens a **Download Info dialog**: name, folder, category, and a quality choice (Best / 1080p / 720p / 480p / MP3 / M4A / FLAC). Hit **Start Download**, or **Download Later** to queue it paused. |
 | Right-click anything → *Download with GrabLine* | Link, image, video, audio, or the page itself, routed to the best engine, with the same Download Info dialog. |
 | Right-click a page → *Download all images / all links* | Every image or file link on the page, in a checkable, filterable picker. |
 | Click the toolbar icon | Everything the page's network traffic loaded: streams (`.m3u8`/`.mpd`) and media files, one click each. |
@@ -365,7 +368,8 @@ active only while the app is running).
 ## Music
 
 SoundCloud, Bandcamp, YouTube Music, Mixcloud, and every other non-DRM music site
-yt-dlp knows: hover ⬇, choose MP3, and it downloads tagged with cover art. Spotify
+yt-dlp knows: hover, click the GrabLine button, choose MP3, and it downloads
+tagged with cover art. Spotify
 tracks, Apple Music, TIDAL, Deezer, and Amazon Music are **DRM-protected and are
 refused with a clear message**. GrabLine does not and will not bypass DRM. (Spotify
 *podcasts* are not DRM-protected and download fine.)

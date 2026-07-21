@@ -11,8 +11,9 @@ whole extension is meant to be readable in one sitting.
   GrabLine, grab this tab, paste a link), the media detected in this tab, a
   live view of your recent downloads, and the interception and hover
   preferences.
-- **Hover ⬇ hands off to the app**: click the button on a supported site and
-  the URL goes straight to GrabLine, which opens its **Download Info dialog**
+- **The hover button hands off to the app**: click the GrabLine logo button on
+  a supported site and the URL goes straight to GrabLine, which opens its
+  **Download Info dialog**
   (name, folder, category, and a quality choice for video) and starts. The
   quality is picked in the app, not on the page, so there is no in-page panel
   to keep in sync with the site's DOM.
@@ -78,7 +79,7 @@ moment it starts.
 ## How a URL travels
 
 ```
-right-click / ⬇ / popup → background.js → Native Messaging host
+right-click / hover button / popup → background.js → Native Messaging host
     → handoffs table (SQLite) → desktop app polls → resolver
     → Download Info dialog → the queue
 ```
@@ -90,16 +91,16 @@ out. The shared machinery - the shadow-root button, the show dwell, the
 "keep the button alive while an inline preview player covers the thumbnail"
 logic - lives once in `content/sites/button.js`.
 
-- **youtube.js** - hover ⬇ on video thumbnails (home, search, channels,
+- **youtube.js** - hover the button on video thumbnails (home, search, channels,
   Shorts shelf) *and on the player itself* on watch/Shorts pages; both hand
   the watch URL to the app, which opens its Download Info dialog. Also covers
   **YouTube Music** (song links and the bottom player bar - MP3 is one hover
   and one click away). The generic overlay stands back on YouTube entirely.
-- **vimeo.js** - hover ⬇ on links to `vimeo.com/<id>` videos.
-- **x.js** - hover ⬇ on videos inside tweets; sends the tweet's
+- **vimeo.js** - hover the button on links to `vimeo.com/<id>` videos.
+- **x.js** - hover the button on videos inside tweets; sends the tweet's
   permalink (timeline videos are blob-backed, so the permalink is the only
   URL worth handing over).
-- **soundcloud.js** - hover ⬇ on the bottom play bar (whatever is
+- **soundcloud.js** - hover the button on the bottom play bar (whatever is
   playing now) and on track titles in lists; sends the track's permalink,
   never the browse page you happen to be on.
 

@@ -1,9 +1,9 @@
 // GrabLine Connect - YouTube site module (F1.3, first slice).
 //
-// A hover ⬇ on video thumbnails (home, search, channels, sidebar, playlists,
+// A hover button on video thumbnails (home, search, channels, sidebar, playlists,
 // Shorts shelf) so a video can be grabbed without opening it. Clicking hands
 // the *watch URL* to the desktop app, which pops its quality panel. The
-// shared button (content/sites/button.js) keeps the ⬇ alive while YouTube's
+// shared button (content/sites/button.js) keeps the button alive while YouTube's
 // inline hover-preview player covers the thumbnail.
 //
 // DELIBERATELY ISOLATED: every selector lives in THUMBNAIL_ANCHORS below.

@@ -1,4 +1,4 @@
-// GrabLine Connect - element sniffer + hover ⬇ button (F1.2).
+// GrabLine Connect - element sniffer + hover button (F1.2).
 //
 // One floating button, hosted in a closed shadow root so page CSS can't touch
 // it. Shown when the pointer rests on a <video>, <audio>, or big-enough
@@ -43,13 +43,13 @@
   // Master switch (popup): turn hover buttons off everywhere. Right-click and
   // the toolbar popup still work.
   let hoverGlobal = true;
-  // Images are opt-in (popup toggle): a ⬇ on every profile picture and chat
+  // Images are opt-in (popup toggle): a button on every profile picture and chat
   // thumbnail is noise, and right-click + the gallery grabber cover images.
   let imagesEnabled = false;
   let currentTarget = null;
   let hideTimer = 0;
 
-  // Which corner of the hovered element the ⬇ sits in (popup setting).
+  // Which corner of the hovered element the button sits in (popup setting).
   let corner = "top-right";
   // The on-page progress pill is off by default - the app window and tray
   // already show progress. Opt in from the popup.
