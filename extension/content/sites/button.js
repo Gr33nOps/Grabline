@@ -15,73 +15,18 @@
   const RECT_MARGIN = 8;
   const BUTTON_SIZE = 30;
   // The in-page quality panel (F1.3). Labels the app resolves at download
-  // time (same trick as playlist batches) - instant, no metadata fetch.
+  // time (same trick as playlist batches) - instant, no metadata fetch. Must
+  // match the app's generic_quality_options() (smart.py); a label the app
+  // doesn't know silently falls back to its default.
   const QUALITY_LABELS = ["Best", "1080p", "720p", "480p", "MP3", "M4A", "FLAC"];
 
-  // The app's line icons (currentColor, 1.5 stroke) so the hover button reads
-  // as part of Grabline, not an emoji. Built as real DOM nodes - no innerHTML,
-  // no dynamic markup - so the store's static analysis stays happy.
-  const SVGNS = "http://www.w3.org/2000/svg";
-  const ICON = {
-    download: ["M8 2v8", "M5 7l3 3 3-3", "M3 13h10"],
-    check: ["M3 8.5L6.5 12 13 4"],
-    error: ["M4 4l8 8", "M12 4l-8 8"],
-  };
-  function iconSvg(paths) {
-    const el = document.createElementNS(SVGNS, "svg");
-    const attrs = {
-      width: "16",
-      height: "16",
-      viewBox: "0 0 16 16",
-      fill: "none",
-      stroke: "currentColor",
-      "stroke-width": "1.5",
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round",
-    };
-    for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, value);
-    for (const d of paths) {
-      const path = document.createElementNS(SVGNS, "path");
-      path.setAttribute("d", d);
-      el.appendChild(path);
-    }
-    return el;
-  }
-  // Match the app's accent + status colors (design.py).
-  const ACCENT = "#0170fd";
-  const OK = "#1f9d55";
-  const WARN = "#cf222e";
-
-  // The button wears the Grabline logo; feedback swaps in a check/cross.
-  const LOGO_URL = api.runtime.getURL("icons/icon48.png");
-  function logoImg() {
-    const img = document.createElement("img");
-    img.src = LOGO_URL;
-    img.alt = "";
-    img.style.cssText = "width:100%;height:100%;border-radius:8px;display:block;";
-    return img;
-  }
-
-  // Which corner of the hovered element the ⬇ sits in - user-settable in
-  // the popup (some sites put their own controls exactly where we default).
-  let corner = "top-right";
-  api.storage.local.get("buttonCorner").then(({ buttonCorner = "top-right" }) => {
-    corner = buttonCorner;
-  });
-  api.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.buttonCorner) {
-      corner = changes.buttonCorner.newValue ?? "top-right";
-    }
-  });
-
-  function buttonPosition(rect, size) {
-    const left = corner.endsWith("left") ? rect.left + 8 : rect.right - size - 8;
-    const top = corner.startsWith("bottom") ? rect.bottom - size - 6 : rect.top + 6;
-    return {
-      left: Math.min(Math.max(4, left), window.innerWidth - size - 4),
-      top: Math.min(Math.max(4, top), window.innerHeight - size - 4),
-    };
-  }
+  // The button chrome - icons, logo, colours, corner positioning, click
+  // feedback - is shared with the generic overlay in content/lib/button-kit.js
+  // so the two can't drift. This file owns the dwell, the rect keep-alive, and
+  // the quality panel.
+  const kit = globalThis.grablineButtonKit;
+  // The user's chosen corner (popup), kept live.
+  const cornerOf = kit.watchCorner();
 
   globalThis.grablineSiteButton = ({ resolve, qualityPanel = false }) => {
     let enabled = true;
@@ -104,28 +49,7 @@
       }
     });
 
-    const host = document.createElement("div");
-    const shadow = host.attachShadow({ mode: "closed" });
-    const button = document.createElement("button");
-    button.replaceChildren(logoImg());
-    button.title = "Download with Grabline";
-    button.style.cssText = [
-      "position: fixed",
-      "z-index: 2147483647",
-      "display: none",
-      "align-items: center",
-      "justify-content: center",
-      "width: 30px",
-      "height: 30px",
-      "padding: 0",
-      "border: none",
-      "border-radius: 8px",
-      "background: transparent",
-      "color: #fff",
-      "cursor: pointer",
-      "box-shadow: 0 2px 6px rgba(0,0,0,.4)",
-    ].join(";");
-    shadow.appendChild(button);
+    const { host, shadow, button } = kit.createButton(BUTTON_SIZE);
 
     const panel = document.createElement("div");
     panel.style.cssText = [
@@ -175,13 +99,7 @@
       panelOpen = false;
     }
 
-    function feedback(reply) {
-      const failed = reply?.type === "error";
-      button.replaceChildren(iconSvg(failed ? ICON.error : ICON.check));
-      button.style.background = failed ? WARN : OK;
-      button.style.padding = "";
-      setTimeout(hide, 900);
-    }
+    const feedback = (reply) => kit.showFeedback(button, reply, hide);
 
     function openPanel() {
       panel.textContent = "";
@@ -199,7 +117,7 @@
           "cursor: pointer",
           "text-align: left",
         ].join(";");
-        choice.addEventListener("mouseenter", () => (choice.style.background = ACCENT));
+        choice.addEventListener("mouseenter", () => (choice.style.background = kit.COLORS.accent));
         choice.addEventListener("mouseleave", () => (choice.style.background = "transparent"));
         choice.addEventListener("click", async (event) => {
           event.preventDefault();
@@ -256,13 +174,14 @@
       if (rect === null) return; // anchor re-rendered away and we lost it
       currentUrl = url;
       currentRect = rect;
-      const position = buttonPosition(rect, BUTTON_SIZE);
+      const position = kit.placeInCorner(rect, BUTTON_SIZE, cornerOf(), {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
       button.style.left = `${position.left}px`;
       button.style.top = `${position.top}px`;
       button.style.display = "flex";
-      button.style.background = "transparent";
-      button.style.padding = "0";
-      button.replaceChildren(logoImg());
+      kit.resetButton(button);
     }
 
     document.addEventListener(

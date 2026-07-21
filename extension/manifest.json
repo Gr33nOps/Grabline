@@ -57,6 +57,7 @@
       "js": [
         "content/lib/messaging.js",
         "content/lib/format.js",
+        "content/lib/button-kit.js",
         "content/overlay.js"
       ],
       "run_at": "document_idle"
@@ -67,6 +68,7 @@
       ],
       "js": [
         "content/lib/messaging.js",
+        "content/lib/button-kit.js",
         "content/sites/button.js",
         "content/sites/youtube.js"
       ],
@@ -78,6 +80,7 @@
       ],
       "js": [
         "content/lib/messaging.js",
+        "content/lib/button-kit.js",
         "content/sites/button.js",
         "content/sites/vimeo.js"
       ],
@@ -90,6 +93,7 @@
       ],
       "js": [
         "content/lib/messaging.js",
+        "content/lib/button-kit.js",
         "content/sites/button.js",
         "content/sites/x.js"
       ],
@@ -101,6 +105,7 @@
       ],
       "js": [
         "content/lib/messaging.js",
+        "content/lib/button-kit.js",
         "content/sites/button.js",
         "content/sites/soundcloud.js"
       ],
@@ -112,6 +117,7 @@
       ],
       "js": [
         "content/lib/messaging.js",
+        "content/lib/button-kit.js",
         "content/sites/button.js",
         "content/sites/instagram.js"
       ],
