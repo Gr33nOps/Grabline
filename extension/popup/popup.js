@@ -2,47 +2,8 @@
 // detected media, recent downloads, and the interception / hover preferences.
 
 const api = globalThis.browser ?? globalThis.chrome;
-
-function humanBytes(count) {
-  if (!count) return "";
-  const units = ["B", "KB", "MB", "GB"];
-  let value = count;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(index ? 1 : 0)} ${units[index]}`;
-}
-
-// Generic stream/segment leaf names that carry no meaning - fall back to the
-// page title for these (master.m3u8, videoplayback, a hex hash, ...).
-const UGLY_LEAF =
-  /^(master|index|playlist|manifest|chunklist|videoplayback|video|audio|media|stream|init|segment|seg|frag|output|dash|hls|prog)\b/i;
-
-function cleanTitle(title) {
-  return (title || "")
-    .replace(
-      /\s*[-|•·—–]\s*(YouTube|Instagram|Vimeo|TikTok|Twitter|X|Facebook|Dailymotion|Twitch|SoundCloud|Reddit)\s*$/i,
-      "",
-    )
-    .trim();
-}
-
-function mediaName(item, tab) {
-  try {
-    const leaf = decodeURIComponent(
-      new URL(item.url).pathname.split("/").filter(Boolean).pop() || "",
-    );
-    const base = leaf.replace(/\.[a-z0-9]{2,4}$/i, "");
-    const named =
-      leaf && base.length >= 3 && !UGLY_LEAF.test(base) && !/^[0-9a-f]{12,}$/i.test(base);
-    if (named) return leaf;
-  } catch {
-    /* unparsable URL - fall through to the title */
-  }
-  return cleanTitle(item.title) || cleanTitle(tab?.title) || item.kind || "media";
-}
+const { humanBytes } = globalThis.grablineFormat;
+const { mediaName } = globalThis.grablineNaming;
 
 async function activeTab() {
   const [tab] = await api.tabs.query({ active: true, currentWindow: true });

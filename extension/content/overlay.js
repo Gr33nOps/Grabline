@@ -327,17 +327,7 @@
   ].join(";");
   pillShadow.appendChild(pillStack);
   const pillRows = new Map(); // url -> { row, timer }
-
-  function humanBytes(count) {
-    const units = ["B", "KB", "MB", "GB"];
-    let value = count;
-    let index = 0;
-    while (value >= 1024 && index < units.length - 1) {
-      value /= 1024;
-      index += 1;
-    }
-    return `${value.toFixed(index ? 1 : 0)} ${units[index]}`;
-  }
+  const { humanBytes } = globalThis.grablineFormat;
 
   function pillRowFor(url) {
     let entry = pillRows.get(url);
