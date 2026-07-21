@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grabline"
-version = "1.23.3"
-description = "Grabline: a fast, free, open-source download manager with a browser button and a full quality picker."
+version = "1.23.4"
+description = "GrabLine: a fast, free, open-source download manager with a browser button and a full quality picker."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
