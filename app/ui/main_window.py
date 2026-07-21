@@ -82,7 +82,7 @@ from app.core.settings import Settings
 from app.engines import cloud as cloud_engine
 from app.engines import torrent as torrent_engine
 from app.engines.smart import option_for_label
-from app.ui import chrome, components, design, icons, motion, theme, work_threads
+from app.ui import chrome, components, design, guard, icons, motion, theme, work_threads
 from app.ui.archive_dialog import ArchiveDialog
 from app.ui.batch_dialog import BatchImportDialog, BatchImportThread
 from app.ui.cloud_dialog import CloudFolderDialog, prompt_cloud_url
@@ -165,6 +165,9 @@ class MainWindow(QMainWindow):
         #: button felt dead. We show the intended status right away and let the
         #: real one take over the moment the worker actually settles.
         self._optimistic_status: dict[int, JobStatus] = {}
+        #: One-shot actions currently running, so a double-click can't open a
+        #: second dialog or start a second background task (see app/ui/guard.py).
+        self._in_flight: set[str] = set()
         #: True while a right-click selects its row - selection then must not
         #: pop the details drawer (that is a left-click affordance).
         self._suppress_drawer = False
@@ -765,11 +768,14 @@ class MainWindow(QMainWindow):
 
     def check_for_updates(self, *, quiet: bool) -> None:
         """Look for a newer release; ``quiet`` skips the 'up to date' notice."""
+        if not guard.begin(self._in_flight, "update"):
+            return  # a check is already running - don't stack a second dialog
         if not quiet:
             self.statusBar().showMessage("Checking for updates…")
         proxy = self.settings.proxy
 
         def done(result: object) -> None:
+            guard.end(self._in_flight, "update")
             self.statusBar().showMessage("Ready")  # never leave "Checking…" stuck
             if result is not None:
                 tag, name, url = cast("tuple[str, str, str]", result)
@@ -791,6 +797,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "Grabline", "You have the latest version.")
 
         def failed(_error: object) -> None:
+            guard.end(self._in_flight, "update")
             self.statusBar().showMessage("Ready")
             if not quiet:
                 QMessageBox.information(self, "Grabline", "Could not check for updates right now.")
@@ -1293,13 +1300,16 @@ class MainWindow(QMainWindow):
     def _open_settings(self) -> None:
         from app.ui.settings_dialog import SettingsDialog
 
-        dialog = SettingsDialog(self.settings, self)
-        dialog.settings_reset.connect(self.manager.reload_settings)
-        if dialog.exec() == SettingsDialog.DialogCode.Accepted:
-            self.manager.reload_settings()
-            app = QApplication.instance()
-            if isinstance(app, QApplication):
-                theme.apply_theme(app, self.settings.theme)
+        with guard.single_flight(self._in_flight, "settings") as go:
+            if not go:
+                return
+            dialog = SettingsDialog(self.settings, self)
+            dialog.settings_reset.connect(self.manager.reload_settings)
+            if dialog.exec() == SettingsDialog.DialogCode.Accepted:
+                self.manager.reload_settings()
+                app = QApplication.instance()
+                if isinstance(app, QApplication):
+                    theme.apply_theme(app, self.settings.theme)
 
     # -------------------------------------------------------- row actions
 

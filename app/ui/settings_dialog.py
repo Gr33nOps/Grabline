@@ -41,7 +41,7 @@ from app.core import launcher, paths
 from app.core.errors import DownloadError
 from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
 from app.core.settings import SESSION_BROWSERS, Settings
-from app.ui import chrome, components, design, theme, threads
+from app.ui import chrome, components, design, guard, theme, threads
 from app.ui.format import human_bytes
 
 _PROJECT_URL = "https://github.com/Gr33nOps/Grabline"
@@ -844,6 +844,9 @@ class SettingsDialog(chrome.Dialog):
         layout.addWidget(buttons)
 
         self._installer: _FfmpegInstaller | None = None
+        #: Keys of one-shot actions currently running, so a double-click can't
+        #: launch a second dialog or task (see app/ui/guard.py).
+        self._in_flight: set[str] = set()
 
     @staticmethod
     def _add_form_tab(tabs: QTabWidget, title: str) -> QFormLayout:
@@ -1026,7 +1029,9 @@ class SettingsDialog(chrome.Dialog):
         from app.core.credentials import CredentialStore
         from app.ui.cloud_dialog import CloudAccountsDialog
 
-        CloudAccountsDialog(CredentialStore(self.settings.db), self).exec()
+        with guard.single_flight(self._in_flight, "cloud") as go:
+            if go:
+                CloudAccountsDialog(CredentialStore(self.settings.db), self).exec()
 
     @staticmethod
     def _vpn_status_text() -> str:
@@ -1057,9 +1062,11 @@ class SettingsDialog(chrome.Dialog):
         Settings view, so ``self`` is not in the visible widget tree."""
         from app.ui.setup_dialog import SetupDialog
 
-        sender = self.sender()
-        parent = sender.window() if isinstance(sender, QWidget) else self
-        SetupDialog(parent).exec()
+        with guard.single_flight(self._in_flight, "setup") as go:
+            if go:
+                sender = self.sender()
+                parent = sender.window() if isinstance(sender, QWidget) else self
+                SetupDialog(parent).exec()
 
     def _check_updates_now(self) -> None:
         """Manual update check. The main window owns the checker; reach it via
@@ -1098,6 +1105,8 @@ class SettingsDialog(chrome.Dialog):
             self.ffmpeg_button.setText("Install FFmpeg")
 
     def _install_ffmpeg(self) -> None:
+        if not guard.begin(self._in_flight, "ffmpeg"):
+            return  # already downloading - a second click does nothing
         progress = QProgressDialog("Downloading FFmpeg…", "Hide", 0, 0, self)
         progress.setWindowTitle("Grabline")
         progress.setMinimumDuration(0)
@@ -1115,11 +1124,13 @@ class SettingsDialog(chrome.Dialog):
             progress.setLabelText(f"Downloading FFmpeg… {human_bytes(received)}")
 
         def on_success(path: str) -> None:
+            guard.end(self._in_flight, "ffmpeg")
             progress.close()
             self._refresh_ffmpeg_status()
             QMessageBox.information(self, "Grabline", f"FFmpeg installed and verified:\n{path}")
 
         def on_failure(message: str) -> None:
+            guard.end(self._in_flight, "ffmpeg")
             progress.close()
             self._refresh_ffmpeg_status()
             QMessageBox.warning(self, "Grabline", message)
