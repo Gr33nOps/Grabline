@@ -16,18 +16,28 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+import shutil
 import subprocess
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import IO
+from urllib.parse import urljoin
 
 import httpx
 
 from app.core import naming, net, proc
 from app.core.models import Job, JobStatus
 from app.db.database import Database
-from app.engines.manifest import playlist_duration
+from app.engines.manifest import is_master_playlist, playlist_duration
+
+#: The URI="..." on an #EXT-X-KEY / #EXT-X-MAP tag.
+_TAG_URI = re.compile(r'URI="([^"]*)"')
+#: Local segment fetch concurrency - enough to saturate a CDN, not so many that
+#: a segment server rate-limits us the way one greedy connection would.
+_SEGMENT_WORKERS = 8
 
 log = logging.getLogger(__name__)
 
@@ -98,7 +108,9 @@ class HlsDownload:
             return self._finish_failed(
                 "FFmpeg is required to save this stream. Install it from Settings"
             )
-        playlist_text = self._fetch_playlist()
+        fetched = self._fetch_playlist()
+        playlist_text = fetched[0] if fetched else None
+        base_url = fetched[1] if fetched else self._input_url
         live_error = self._detect_live_playlist(playlist_text)
         if live_error:
             return self._finish_failed(live_error)
@@ -106,6 +118,24 @@ class HlsDownload:
             self._duration = playlist_duration(playlist_text)
         part = self.job.part_path
         part.parent.mkdir(parents=True, exist_ok=True)
+
+        # Preferred path for a resolvable HLS media playlist: fetch the manifest,
+        # every segment, the AES key and the init segment with the app's own HTTP
+        # client - the one that applies the browser headers, follows redirects and
+        # speaks HTTP/2 - then let FFmpeg remux the *local* copies. FFmpeg makes
+        # no network request, so a gated CDN its own client can't satisfy (the
+        # "Invalid data found when processing input" failures) is out of the loop.
+        # If this can't run, fall through to letting FFmpeg fetch as before.
+        if (
+            playlist_text is not None
+            and "#EXTM3U" in playlist_text
+            and not is_master_playlist(playlist_text)
+        ):
+            status = self._attempt_native(playlist_text, base_url, part)
+            if status is not None:
+                return status
+            log.info("hls job %s: native fetch unavailable, letting FFmpeg fetch", self.job.id)
+
         for attempt in range(1, self.max_attempts + 1):
             status = self._attempt(part)
             if status is not None:
@@ -325,17 +355,22 @@ class HlsDownload:
 
     # -------------------------------------------------------------- playlist
 
-    def _fetch_playlist(self) -> str | None:
-        """The input manifest's text, or None when it cannot be fetched.
+    def _fetch_playlist(self) -> tuple[str, str] | None:
+        """The input manifest's text and its final URL after redirects (the base
+        for resolving relative segment/key URIs), or None when it can't be
+        fetched. A fetch error is swallowed so FFmpeg can report the real one."""
+        result = self._fetch_url_text(self._input_url)
+        return result
 
-        Any fetch error is ignored so FFmpeg can report the real problem.
-        """
+    def _fetch_url_text(self, url: str) -> tuple[str, str] | None:
         try:
-            with net.build_client(proxy=self.proxy, follow_redirects=True, timeout=10) as client:
-                response = client.get(self._input_url, headers=self._headers or None)
+            with net.build_client(
+                proxy=self.proxy, follow_redirects=True, http2=True, timeout=15
+            ) as client:
+                response = client.get(url, headers=self._headers or None)
                 if response.status_code != 200:
                     return None
-                return response.text
+                return response.text, str(response.url)
         except httpx.HTTPError:
             return None
 
@@ -355,6 +390,166 @@ class HlsDownload:
                 "GrabLine cannot save it yet. Try again once it has ended."
             )
         return None
+
+    # --------------------------------------------------------- native fetch
+
+    def _attempt_native(self, text: str, base_url: str, part: Path) -> JobStatus | None:
+        """Fetch the media playlist's parts with the app's HTTP client and remux
+        the local copies. Returns a terminal JobStatus on success or a stop;
+        None means native could not finish, so the caller lets FFmpeg fetch."""
+        self._downloaded = 0
+        work = part.parent / f".{part.name}.hls"
+        shutil.rmtree(work, ignore_errors=True)
+        try:
+            work.mkdir(parents=True, exist_ok=True)
+            video = self._prepare_local_manifest(text, base_url, work, "video")
+            if video is None:
+                return self._settle_stopped(part) if self._stop_event.is_set() else None
+            inputs = [video]
+            if self._audio_url:
+                audio = self._fetch_url_text(self._audio_url)
+                if audio is not None:
+                    audio_manifest = self._prepare_local_manifest(audio[0], audio[1], work, "audio")
+                    if audio_manifest is None:
+                        return self._settle_stopped(part) if self._stop_event.is_set() else None
+                    inputs.append(audio_manifest)
+            if self._stop_event.is_set():
+                return self._settle_stopped(part)
+            return self._remux_local(inputs, part)
+        except (OSError, httpx.HTTPError) as exc:
+            log.info("hls job %s: native fetch failed (%s)", self.job.id, exc)
+            if self._headers:
+                # We sent the browser's headers and a part was still refused: say
+                # so, in case the FFmpeg fallback's error is no clearer.
+                self._failure = (
+                    "the server refused part of this stream (the page's login or "
+                    "referer may have expired - try grabbing it again from the browser)"
+                )
+            return None
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def _prepare_local_manifest(
+        self, text: str, base_url: str, work: Path, prefix: str
+    ) -> Path | None:
+        """Rewrite a media playlist to point at local files, fetch them, and
+        write the local manifest. None if there is nothing to fetch or a stop."""
+        rewritten, downloads = self._localize(text, base_url, prefix)
+        if not any(name.endswith(".ts") for _, name in downloads):
+            return None  # no media segments - not a playlist we can fetch locally
+        if not self._fetch_segments(downloads, work):
+            return None  # stopped part-way (a failed part raises, caught above)
+        manifest = work / f"{prefix}.m3u8"
+        manifest.write_text(rewritten, encoding="utf-8")
+        return manifest
+
+    def _localize(self, text: str, base_url: str, prefix: str) -> tuple[str, list[tuple[str, str]]]:
+        """Rewrite every segment / key / init URI to a local filename, collecting
+        the (absolute_url, local_name) pairs to download. Same URL maps to one
+        file, so byte-range segments and repeated keys fetch once."""
+        local_of: dict[str, str] = {}
+        downloads: list[tuple[str, str]] = []
+
+        def local_name(uri: str, suffix: str) -> str:
+            absolute = urljoin(base_url, uri.strip())
+            if absolute not in local_of:
+                name = f"{prefix}-{len(local_of):05d}{suffix}"
+                local_of[absolute] = name
+                downloads.append((absolute, name))
+            return local_of[absolute]
+
+        out: list[str] = []
+        for line in text.splitlines():
+            if line.startswith(("#EXT-X-KEY", "#EXT-X-SESSION-KEY")):
+                line = _TAG_URI.sub(lambda m: f'URI="{local_name(m.group(1), ".key")}"', line)
+            elif line.startswith("#EXT-X-MAP"):
+                line = _TAG_URI.sub(lambda m: f'URI="{local_name(m.group(1), ".mp4")}"', line)
+            elif line.strip() and not line.startswith("#"):
+                line = local_name(line, ".ts")
+            out.append(line)
+        return "\n".join(out) + "\n", downloads
+
+    def _fetch_segments(self, downloads: list[tuple[str, str]], work: Path) -> bool:
+        """Download every (url, local_name) into ``work`` with the browser
+        headers, in parallel. Raises on a refused part; returns False if the job
+        was paused/cancelled part-way, True when all parts are on disk."""
+        total = len(downloads)
+        done = 0
+        total_bytes = 0
+        lock = threading.Lock()
+
+        def fetch_one(client: httpx.Client, url: str, name: str) -> None:
+            nonlocal done, total_bytes
+            if self._stop_event.is_set():
+                return
+            dest = work / name
+            with client.stream("GET", url, headers=self._headers or None) as response:
+                response.raise_for_status()
+                with open(dest, "wb") as fh:
+                    for chunk in response.iter_bytes(65536):
+                        if self._stop_event.is_set():
+                            return
+                        fh.write(chunk)
+            with lock:
+                done += 1
+                total_bytes += dest.stat().st_size
+                self._downloaded = total_bytes
+                if done % 5 == 0 or done == total:
+                    self.db.update_job_downloaded(self.job.id, total_bytes)
+                    # Extrapolate the total from the average part so the bar moves.
+                    self.db.update_job_total(self.job.id, int(total_bytes / done * total))
+
+        with (
+            net.build_client(
+                proxy=self.proxy, follow_redirects=True, http2=True, timeout=60
+            ) as client,
+            ThreadPoolExecutor(max_workers=_SEGMENT_WORKERS) as pool,
+        ):
+            futures = [pool.submit(fetch_one, client, url, name) for url, name in downloads]
+            for future in futures:
+                future.result()  # re-raises a refused part (caught in _attempt_native)
+        return not self._stop_event.is_set()
+
+    def _remux_local(self, inputs: list[Path], part: Path) -> JobStatus | None:
+        """Remux the already-downloaded local manifest(s) into an MP4. No network
+        - only file/crypto/data, so FFmpeg just muxes and (for AES-128) decrypts
+        with the local key. None on failure so the caller can still try FFmpeg."""
+        assert self.ffmpeg_path is not None
+        command = [
+            self.ffmpeg_path,
+            "-y",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-nostats",
+            "-allowed_extensions",
+            "ALL",
+            "-protocol_whitelist",
+            "file,crypto,data",
+        ]
+        for manifest in inputs:
+            command += ["-i", str(manifest)]
+        if len(inputs) > 1:
+            for index in range(len(inputs)):
+                command += ["-map", str(index)]
+        command += ["-c", "copy", "-f", "mp4", str(part)]
+        try:
+            result = subprocess.run(
+                command, capture_output=True, text=True, timeout=1800, **proc.hidden()
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            log.info("hls job %s: local remux could not run (%s)", self.job.id, exc)
+            return None
+        if result.returncode != 0 or not part.exists() or part.stat().st_size == 0:
+            tail = (result.stderr or "").strip().splitlines()
+            log.info(
+                "hls job %s: local remux failed%s",
+                self.job.id,
+                f" ({tail[-1]})" if tail else "",
+            )
+            _discard(part)
+            return None
+        return self._finalize(part)
 
     # ------------------------------------------------------------- outcomes
 

@@ -347,6 +347,34 @@ def test_fetch_playlist_and_ffmpeg_both_send_the_headers(
 
 
 @pytest.mark.skipif(FFMPEG is None, reason="needs a real ffmpeg")
+def test_native_fetch_saves_a_referer_gated_stream(
+    server: MediaServer, db: Database, dest: Path, tmp_path: Path
+):
+    """The fix for the 'Invalid data found when processing input' failures: the
+    manifest AND every segment sit behind a Referer gate (403 without it, as a
+    hotlink-protected CDN does). The app fetches them all with its own HTTP
+    client, which carries the browser headers, and hands FFmpeg only the local
+    files - so the stream saves. Without the header every fetch 403s and the job
+    fails cleanly rather than handing FFmpeg an error page to choke on."""
+    files = make_hls(tmp_path / "hls", seconds=1)
+    gate = {"Referer": "https://site.example/watch"}
+    for name, content in files.items():
+        content_type = "application/vnd.apple.mpegurl" if name.endswith(".m3u8") else "video/mp2t"
+        server.add(f"/gated/{name}", content, content_type=content_type, required_headers=gate)
+
+    with_header = _hls_job(
+        db, server.url("/gated/index.m3u8"), dest, options={"http_headers": gate}
+    )
+    assert HlsDownload(db, with_header, ffmpeg_path=FFMPEG).run() is JobStatus.COMPLETED
+    assert (dest / "lecture.mp4").stat().st_size > 0
+    # No .gl-part or scratch .hls dir left behind.
+    assert not any(p.name.endswith(".hls") for p in dest.iterdir())
+
+    without_header = _hls_job(db, server.url("/gated/index.m3u8"), dest)
+    assert HlsDownload(db, without_header, ffmpeg_path=FFMPEG).run() is JobStatus.FAILED
+
+
+@pytest.mark.skipif(FFMPEG is None, reason="needs a real ffmpeg")
 def test_whitelist_blocks_local_file_read(dest: Path, tmp_path: Path):
     """End to end against real FFmpeg: a manifest pointing a segment at a local
     file yields no output (the protocol is refused), while the same command
