@@ -180,3 +180,14 @@ def test_extension_manifest_pins_match_host_pins():
     digest = hashlib.sha256(der).hexdigest()[:32]
     derived_id = "".join(chr(ord("a") + int(c, 16)) for c in digest)
     assert derived_id in CHROME_EXTENSION_IDS
+
+
+def test_extension_requests_blocking_webrequest():
+    """Proactive interception cancels a download at the network layer, before
+    the browser ever shows it, instead of letting it flash then cancelling via
+    downloads.onCreated. That needs blocking webRequest, which Firefox honours
+    in MV3; without the permission the listener can't register."""
+    manifest = json.loads(
+        (Path(__file__).resolve().parents[2] / "extension" / "manifest.json").read_text()
+    )
+    assert "webRequestBlocking" in manifest["permissions"]

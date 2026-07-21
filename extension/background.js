@@ -362,6 +362,13 @@ function shouldIntercept(item) {
 // isn't running, so native browser downloads stay visible.
 let lastAppRunning = false;
 
+// A synchronous mirror of the intercept toggle: the blocking webRequest handler
+// below must decide without awaiting storage, so it reads this instead.
+let interceptEnabled = true;
+void api.storage.local.get("intercept").then(({ intercept = true }) => {
+  interceptEnabled = intercept;
+});
+
 async function updateDownloadUi() {
   const { intercept = true } = await api.storage.local.get("intercept");
   const visible = !(intercept && lastAppRunning);
@@ -381,7 +388,10 @@ function noteAppRunning(running) {
 }
 
 api.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.intercept) void updateDownloadUi();
+  if (area === "local" && changes.intercept) {
+    interceptEnabled = changes.intercept.newValue ?? true;
+    void updateDownloadUi();
+  }
 });
 
 api.downloads.onCreated.addListener(async (item) => {
@@ -410,6 +420,73 @@ api.downloads.onCreated.addListener(async (item) => {
     { credentials: true },
   );
 });
+
+// ----------------------------------- proactive interception (Firefox, F1.5b)
+// downloads.onCreated (above) fires only after the browser has already
+// committed to the download, so the item flashes in the download panel before
+// we cancel it - the reported "it shows in the browser for a millisecond" bug.
+// Blocking webRequest cancels the response at the network layer, before any
+// download item exists, so nothing ever appears in the browser. Firefox
+// honours blocking webRequest in MV3; Chrome does not (policy-only), so there
+// this listener simply isn't installed and the onCreated path (with the shelf
+// hidden via setUiOptions) stands.
+
+// Content-types with no inline viewer: the browser always downloads these, so
+// taking them over matches its own decision. An allowlist by design - a
+// navigation to anything the browser renders itself (html, pdf, images, media)
+// is never in this set, so ordinary browsing is untouched.
+const DOWNLOAD_CONTENT_TYPES =
+  /^application\/(?:octet-stream|zip|gzip|x-gzip|x-tar|x-rar-compressed|vnd\.rar|x-7z-compressed|x-bzip2|x-xz|x-msdownload|x-msdos-program|vnd\.microsoft\.portable-executable|x-apple-diskimage|x-iso9660-image|x-bittorrent|x-debian-package|vnd\.android\.package-archive)/i;
+
+function isForcedDownload(details) {
+  // The unambiguous server signal first: Content-Disposition: attachment always
+  // means "download", and overrides any inline rendering.
+  const disposition = (headerValue(details.responseHeaders, "content-disposition") ?? "")
+    .trim()
+    .toLowerCase();
+  if (disposition.startsWith("attachment")) return true;
+  const type = (headerValue(details.responseHeaders, "content-type") ?? "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  return DOWNLOAD_CONTENT_TYPES.test(type);
+}
+
+async function interceptResponse(details) {
+  // Only take a download away from the browser when the app is actually up to
+  // receive it - otherwise the file would just vanish. Forced downloads are
+  // rare, so this ping never touches ordinary browsing.
+  const pong = await pingGrabline();
+  if (!pong || !pong.appRunning) return {};
+  const [active] = await api.tabs
+    .query({ active: true, lastFocusedWindow: true })
+    .catch(() => []);
+  const referrer = details.originUrl || details.documentUrl || active?.url || null;
+  void sendToGrabline(
+    details.url,
+    { url: referrer, title: active?.title || null },
+    { credentials: true },
+  );
+  return { cancel: true };
+}
+
+// Stays synchronous for the common case (returns {} at once), so navigation is
+// never delayed; only an actual download awaits the ping/handoff.
+function onDownloadHeaders(details) {
+  if (!interceptEnabled || details.tabId < 0) return {};
+  if (!isForcedDownload(details)) return {};
+  return interceptResponse(details);
+}
+
+try {
+  api.webRequest.onHeadersReceived.addListener(
+    onDownloadHeaders,
+    { urls: ["<all_urls>"], types: ["main_frame", "sub_frame"] },
+    ["blocking", "responseHeaders"],
+  );
+} catch {
+  // Blocking webRequest unavailable (Chrome MV3) - the onCreated path stands.
+}
 
 // ------------------------------------------------------------- messages
 

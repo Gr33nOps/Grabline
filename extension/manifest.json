@@ -39,6 +39,7 @@
     "nativeMessaging",
     "storage",
     "webRequest",
+    "webRequestBlocking",
     "downloads",
     "downloads.shelf",
     "downloads.ui",
