@@ -63,10 +63,10 @@ class SetupDialog(chrome.Dialog):
             add_button.clicked.connect(self._add_to_browser)
             layout.addWidget(add_button)
             self._add_hint = QLabel(
-                f"Opens the store page in {browser[1]} - click <b>Add</b> there."
+                f"Opens the store page in {browser[1]}. Click <b>Add</b> there."
                 if self._store_url
                 else f"{browser[1]} has no store install yet, so this opens the "
-                "extension folder and the extensions page - turn on "
+                "extension folder and the extensions page, then turn on "
                 "<b>Developer mode</b> and <b>Load unpacked</b> it (one time)."
             )
             self._add_hint.setWordWrap(True)
@@ -179,7 +179,7 @@ class SetupDialog(chrome.Dialog):
     def _verify(self) -> None:
         healthy, lines = host_install.check()
         if healthy:
-            self._verify_status.setText("Connected - the app and browser can talk.")
+            self._verify_status.setText("Connected. The app and browser can talk.")
         else:
             fail = next((line for line in lines if line.startswith("FAIL")), "not paired yet")
             self._verify_status.setText(fail.removeprefix("FAIL ").strip() or "not paired yet")

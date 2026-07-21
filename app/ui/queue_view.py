@@ -76,7 +76,7 @@ class QueueView(QWidget):
                 w.deleteLater()
         queues = {q.id: q for q in self.manager.list_queues()}
         if not queues:
-            empty = components.role_label("No queues yet — press New queue to create one", "muted")
+            empty = components.role_label("No queues yet. Press New queue to create one.", "muted")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._body.addSpacing(48)
             self._body.addWidget(empty)

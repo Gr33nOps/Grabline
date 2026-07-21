@@ -182,7 +182,7 @@ class SpeedSmoother:
 def fmt_speed(bps: float) -> str:
     """A stable speed readout with a fixed decimal, so digits don't jitter."""
     if bps < 1:
-        return "—"
+        return ""
     if bps < 1024:
         return f"{bps:.0f} B/s"
     if bps < 1024 * 1024:
@@ -192,7 +192,7 @@ def fmt_speed(bps: float) -> str:
 
 def fmt_eta(seconds: float | None) -> str:
     if seconds is None or seconds <= 0:
-        return "—"
+        return ""
     seconds = int(seconds)
     if seconds < 60:
         return f"{seconds}s"

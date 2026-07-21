@@ -96,7 +96,7 @@ class HlsDownload:
         self.db.set_job_status(self.job.id, JobStatus.DOWNLOADING)
         if not self.ffmpeg_path:
             return self._finish_failed(
-                "FFmpeg is required to save this stream - install it from Settings"
+                "FFmpeg is required to save this stream. Install it from Settings"
             )
         playlist_text = self._fetch_playlist()
         live_error = self._detect_live_playlist(playlist_text)
@@ -241,8 +241,8 @@ class HlsDownload:
                 return self._finalize(part)
             _discard(part)
             self._failure = (
-                f"the stream stalled (no data for {self.stall_timeout:.0f}s) - "
-                "it may be live or the server may be down"
+                f"the stream stalled (no data for {self.stall_timeout:.0f}s). "
+                "It may be live or the server may be down"
             )
             return None
         if process.returncode != 0:
@@ -351,7 +351,7 @@ class HlsDownload:
             return None
         if "#EXTINF" in text and "#EXT-X-ENDLIST" not in text:
             return (
-                "This looks like a live stream that is still in progress - "
+                "This looks like a live stream that is still in progress. "
                 "Grabline cannot save it yet. Try again once it has ended."
             )
         return None

@@ -42,7 +42,7 @@ class HlsVariant:
         parts = [self.label]
         if self.height and self.bandwidth:
             parts.append(f"{self.bandwidth / 1_000_000:.1f} Mbps")
-        return " - ".join(parts)
+        return ", ".join(parts)
 
 
 def parse_attributes(line: str) -> dict[str, str]:

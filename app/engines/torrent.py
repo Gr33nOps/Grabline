@@ -158,7 +158,7 @@ def create_torrent_file(
     storage = lt.file_storage()
     lt.add_files(storage, str(source))
     if storage.num_files() == 0:
-        raise DownloadError("the folder is empty - nothing to share")
+        raise DownloadError("the folder is empty, nothing to share")
     creator = lt.create_torrent(storage)
     creator.set_creator("Grabline")
     if comment:

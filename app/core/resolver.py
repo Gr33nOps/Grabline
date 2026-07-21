@@ -34,7 +34,7 @@ _HTML_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
 _HTML_MESSAGE = (
     "This address is a web page, not a downloadable file. If a video plays "
     "on it, let it play for a moment, then use the Grabline button on the "
-    "player or the toolbar popup - Grabline grabs the stream the page loads."
+    "player or the toolbar popup. Grabline grabs the stream the page loads."
 )
 
 #: Services whose media is DRM-protected end to end. Refused up front with an

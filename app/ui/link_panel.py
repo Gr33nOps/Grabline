@@ -47,7 +47,7 @@ class LinkPanel(chrome.Dialog):
         self.setMinimumSize(560, 460)
 
         layout = QVBoxLayout(self)
-        title = QLabel(f"{page_title or 'This page'} - {len(urls)} links")
+        title = QLabel(f"{page_title or 'This page'}: {len(urls)} links")
         title.setWordWrap(True)
         title.setStyleSheet("font-weight: 600; font-size: 14px;")
         layout.addWidget(title)

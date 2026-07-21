@@ -601,7 +601,7 @@ def test_dashboard_dialog_populates(db: Database):
     manager = DownloadManager(db, max_concurrent=0)
     try:
         dialog = DashboardDialog(manager)  # _tick runs once in __init__
-        assert dialog._tiles["lifetime"].value.text() != "—"
+        assert dialog._tiles["lifetime"].value.text() != ""
         assert dialog.server_tree.topLevelItemCount() == 1
         assert dialog.category_tree.topLevelItemCount() == 1
         dialog.done(0)  # stops the timer cleanly

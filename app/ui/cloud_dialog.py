@@ -155,7 +155,7 @@ class CloudFolderDialog(chrome.Dialog):
         self.setMinimumSize(520, 380)
         layout = QVBoxLayout(self)
         total = sum(f.size or 0 for f in files)
-        layout.addWidget(QLabel(f"{len(files)} file(s) in {folder_url} - {human_bytes(total)}"))
+        layout.addWidget(QLabel(f"{len(files)} file(s) in {folder_url}, {human_bytes(total)}"))
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["File", "Size"])
         self.tree.setRootIsDecorated(False)

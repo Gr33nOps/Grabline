@@ -78,7 +78,7 @@ class PlaylistPanel(chrome.Dialog):
         layout.addWidget(self.entry_list)
         if len(playlist.entries) > preselect_cap:
             note = QLabel(
-                f"The first {preselect_cap} are preselected - use Select all for the rest."
+                f"The first {preselect_cap} are preselected. Use Select all for the rest."
             )
             note.setStyleSheet("color: gray; font-size: 11px;")
             layout.addWidget(note)

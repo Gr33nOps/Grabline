@@ -30,7 +30,7 @@ class DupesDialog(chrome.Dialog):
         extra = sum(len(group) - 1 for group in groups)
         layout.addWidget(
             QLabel(
-                f"{len(groups)} set(s) of identical files - {extra} redundant "
+                f"{len(groups)} set(s) of identical files, {extra} redundant "
                 "cop(ies). Checked files will be deleted; the first of each "
                 "set is kept."
             )

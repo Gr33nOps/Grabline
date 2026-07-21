@@ -55,7 +55,7 @@ def _render(report: InspectionReport) -> str:
         lines.append(f"Server:       {report.server}")
     if not (report.ip_addresses or report.cdn or report.server):
         lines.append("(no server details available)")
-    lines.append("(Grabline shows IP/DNS/CDN only - it never sends the address to a geo service.)")
+    lines.append("(Grabline shows IP/DNS/CDN only. It never sends the address to a geo service.)")
 
     if report.tls is not None:
         section("TLS / SSL")
@@ -69,8 +69,8 @@ def _render(report: InspectionReport) -> str:
     if report.redirect_chain:
         section("Redirect chain")
         for status, location in report.redirect_chain:
-            lines.append(f"  {status} → {location}")
-        lines.append(f"  {report.status} → {report.final_url}")
+            lines.append(f"  {status} to {location}")
+        lines.append(f"  {report.status} to {report.final_url}")
 
     if report.mirrors:
         section("Mirrors")

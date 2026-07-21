@@ -79,7 +79,7 @@ class GifDialog(chrome.Dialog):
         self.width_spin.setValue(gif.DEFAULT_WIDTH)
         self.width_spin.setSuffix(" px wide")
         form.addRow("Size:", self.width_spin)
-        hint = QLabel("Tip: GIFs get huge fast - keep clips short.")
+        hint = QLabel("Tip: GIFs get huge fast, so keep clips short.")
         hint.setStyleSheet("color: gray; font-size: 11px;")
         form.addRow(hint)
 

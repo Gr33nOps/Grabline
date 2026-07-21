@@ -72,7 +72,7 @@ class GalleryPanel(chrome.Dialog):
         self.setMinimumSize(640, 480)
 
         layout = QVBoxLayout(self)
-        title = QLabel(f"{page_title or 'This page'} - {len(urls)} images")
+        title = QLabel(f"{page_title or 'This page'}: {len(urls)} images")
         title.setWordWrap(True)
         title.setStyleSheet("font-weight: 600; font-size: 14px;")
         layout.addWidget(title)

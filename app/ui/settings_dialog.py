@@ -250,7 +250,7 @@ class SettingsDialog(chrome.Dialog):
         session_layout.addWidget(
             _note(
                 "Age- or members-restricted videos need a login. Grabline reads it from this "
-                "browser automatically, only for the video that asks - per download, kept in "
+                "browser automatically, only for the video that asks, per download, kept in "
                 "memory, never stored. Normal videos never touch it, so downloads stay fast."
             )
         )
@@ -301,7 +301,7 @@ class SettingsDialog(chrome.Dialog):
         defaults_form.addRow("MP3 bitrate:", self.bitrate_combo)
         cookies_row = QHBoxLayout()
         self.cookies_edit = QLineEdit()
-        self.cookies_edit.setPlaceholderText("cookies.txt (Netscape format) - blank = off")
+        self.cookies_edit.setPlaceholderText("cookies.txt (Netscape format), blank = off")
         cookies_browse = QPushButton("Browse…")
         cookies_browse.clicked.connect(self._browse_cookies)
         cookies_row.addWidget(self.cookies_edit, 1)
@@ -514,7 +514,7 @@ class SettingsDialog(chrome.Dialog):
         battery_row.addWidget(self.battery_pct_spin)
         battery_row.addStretch(1)
         scheduler_form.addRow(battery_row)
-        self.network_check = QCheckBox("Wait for internet - resume the moment it reconnects")
+        self.network_check = QCheckBox("Wait for internet, resume the moment it reconnects")
         scheduler_form.addRow(self.network_check)
         self.after_combo = QComboBox()
         for label, value in (
@@ -589,7 +589,7 @@ class SettingsDialog(chrome.Dialog):
         # ---- Security ----------------------------------------------------------
         security_form = self._add_form_tab(tabs, "Security")
         security_form.addRow(
-            _note("These checks only warn — a flagged file stays usable and it's your call.")
+            _note("These checks only warn. A flagged file stays usable and it's your call.")
         )
         self.scan_downloads_check = QCheckBox(
             "Security-check every finished download (local virus scan + VirusTotal if set)"
@@ -875,7 +875,7 @@ class SettingsDialog(chrome.Dialog):
         if runtime is not None:
             return f"JavaScript runtime (for YouTube): {runtime[0]} at {runtime[1]}."
         return (
-            "JavaScript runtime (for YouTube): none found - Deno (~40 MB, "
+            "JavaScript runtime (for YouTube): none found. Deno (~40 MB, "
             "verified) is installed automatically on the first YouTube download."
         )
 
@@ -1092,7 +1092,7 @@ class SettingsDialog(chrome.Dialog):
             "Grabline",
             f"Registered with {len(written)} browser location(s).\n\n"
             "Now install (or reload) the Grabline Connect extension in your "
-            "browser - its toolbar popup should say “connected”.",
+            "browser. Its toolbar popup should say “connected”.",
         )
 
     def _refresh_ffmpeg_status(self) -> None:

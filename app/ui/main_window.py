@@ -419,7 +419,7 @@ class MainWindow(QMainWindow):
         self.speed_line = motion.Sparkline()
         self.speed_line.setFixedWidth(72)  # compact in the toolbar
         lay.addWidget(self.speed_line)
-        self._total_speed = components.role_label("—", "strong", size=design.FONT["h2"], bold=True)
+        self._total_speed = components.role_label("", "strong", size=design.FONT["h2"], bold=True)
         self._total_speed.setFont(design.numeric_font(self._total_speed.font()))
         self._total_speed.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         # Widest reading the formatter can produce, measured in the real font
@@ -537,7 +537,7 @@ class MainWindow(QMainWindow):
         # The empty state: one quiet line naming the action that exists,
         # instead of a bare surface. Purely visual; hidden once rows appear.
         self._empty_label = components.role_label(
-            "Nothing here yet — paste a link or press Add URL", "muted"
+            "Nothing here yet. Paste a link or press Add URL.", "muted"
         )
         self._empty_label.setParent(self.table.viewport())
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -881,10 +881,10 @@ class MainWindow(QMainWindow):
             message += f", skipped {len(items)}"
         self.statusBar().showMessage(message, 10000)
         if items:
-            detail = "\n".join(f"• {url} - {reason}" for url, reason in items[:10])
+            detail = "\n".join(f"• {url}: {reason}" for url, reason in items[:10])
             if len(items) > 10:
                 detail += f"\n… and {len(items) - 10} more"
-            QMessageBox.information(self, "Grabline - import finished", f"{message}.\n\n{detail}")
+            QMessageBox.information(self, "Import finished", f"{message}.\n\n{detail}")
         self.refresh()
 
     def begin_add_url(
@@ -959,7 +959,7 @@ class MainWindow(QMainWindow):
         answer = QMessageBox.warning(
             self,
             "Grabline",
-            f"{url}\n\nThis download is over unencrypted HTTP - it could be "
+            f"{url}\n\nThis download is over unencrypted HTTP. It could be "
             "tampered with in transit. Download anyway?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -1082,7 +1082,7 @@ class MainWindow(QMainWindow):
         if resolution.kind is None:
             if fallbacks:
                 # The page itself had nothing - try the stream it played.
-                self.statusBar().showMessage("Page had no direct media - trying its stream …")
+                self.statusBar().showMessage("Page had no direct media, trying its stream …")
                 self.begin_add_url(
                     fallbacks[0],
                     page_title=page_title,
@@ -1377,7 +1377,7 @@ class MainWindow(QMainWindow):
         sections = convert.targets_for(file_path) if convertible else {}
         convert_menu.setEnabled(bool(sections))
         if ffmpeg_path is None:
-            convert_menu.setToolTip("Install FFmpeg in Settings → Video Downloader")
+            convert_menu.setToolTip("Install FFmpeg in Settings, under Video Downloader")
         convert_actions: dict[QAction, str] = {}
         to_gif: QAction | None = None
         if file_path.suffix.lower() in _VIDEO_SUFFIXES:
@@ -1696,7 +1696,7 @@ class MainWindow(QMainWindow):
 
     def _edit_tags(self, view: JobView) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Tags & notes - {view.display_name}")
+        dialog.setWindowTitle(f"Tags & notes: {view.display_name}")
         dialog.setMinimumWidth(420)
         form = QFormLayout(dialog)
         tags_edit = QLineEdit(view.tags)
@@ -1795,10 +1795,10 @@ class MainWindow(QMainWindow):
                 # Only a real warning interrupts; the file is already saved.
                 answer = QMessageBox.warning(
                     self,
-                    "Grabline - security",
+                    "Security",
                     f"{view.display_name}\n\n"
                     + "\n".join(f"• {f}" for f in report.findings)
-                    + "\n\nThe file is saved and usable - this is advice only. "
+                    + "\n\nThe file is saved and usable. This is advice only. "
                     "Open the full report?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
@@ -1849,7 +1849,7 @@ class MainWindow(QMainWindow):
         if not others:
             QMessageBox.information(self, "Grabline", "No other unfinished downloads to wait for.")
             return
-        labels = ["(nothing - start normally)"] + [v.display_name for v in others]
+        labels = ["(nothing, start normally)"] + [v.display_name for v in others]
         choice, accepted = QInputDialog.getItem(
             self,
             "Start after",
@@ -1868,7 +1868,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QDateTimeEdit
 
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Start at - {view.display_name}")
+        dialog.setWindowTitle(f"Start at: {view.display_name}")
         form = QFormLayout(dialog)
         when_edit = QDateTimeEdit(QDateTime.currentDateTime().addSecs(3600))
         when_edit.setDisplayFormat("yyyy-MM-dd HH:mm")
@@ -2039,7 +2039,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Grabline",
-                "Set a search URL first (Settings → Torrent), e.g.\n"
+                "Set a search URL first, in Settings under Torrent. For example:\n"
                 "https://example.com/search?q=%s",
             )
             return
@@ -2090,7 +2090,7 @@ class MainWindow(QMainWindow):
             self,
             "Connections",
             f"Parallel connections for this download\n"
-            f"(0 = automatic; beyond ~32 servers often throttle)  -  {view.display_name}",
+            f"(0 = automatic; beyond ~32 servers often throttle)\n{view.display_name}",
             value=0,
             minValue=0,
             maxValue=128,
@@ -2102,7 +2102,7 @@ class MainWindow(QMainWindow):
         kbps, accepted = QInputDialog.getInt(
             self,
             "Limit speed",
-            f"Max speed for this download in KB/s\n(0 = no limit)  -  {view.display_name}",
+            f"Max speed for this download in KB/s\n(0 = no limit)\n{view.display_name}",
             value=view.speed_limit_kbps,
             minValue=0,
             maxValue=1_000_000,
@@ -2336,7 +2336,7 @@ class MainWindow(QMainWindow):
             name_item.setIcon(QIcon())
             name_item.setToolTip("")
 
-        self._cell(row, _COL_SIZE).setText(human_bytes(view.total_size) if view.total_size else "—")
+        self._cell(row, _COL_SIZE).setText(human_bytes(view.total_size) if view.total_size else "")
 
         bar = self._progress_bars.get(view.id)
         if bar is not None:
@@ -2350,11 +2350,11 @@ class MainWindow(QMainWindow):
 
         speed = self._smoothed_speed(view)
         speed_item = self._cell(row, _COL_SPEED)
-        speed_item.setText(motion.fmt_speed(speed) if view.status is JobStatus.DOWNLOADING else "—")
+        speed_item.setText(motion.fmt_speed(speed) if view.status is JobStatus.DOWNLOADING else "")
         # Speed is data, not an action: primary text while moving, muted idle.
         speed_item.setForeground(QColor(p.text if speed > 0 else p.text3))
 
-        eta = "—"
+        eta = ""
         if view.status is JobStatus.DOWNLOADING and speed > 1 and view.total_size:
             eta = motion.fmt_eta((view.total_size - view.downloaded) / speed)
         self._cell(row, _COL_ETA).setText(eta)
@@ -2496,7 +2496,7 @@ class MainWindow(QMainWindow):
             answer = QMessageBox.question(
                 self,
                 "Grabline",
-                f"{active} {noun} still running - quit anyway?\n"
+                f"{active} {noun} still running. Quit anyway?\n"
                 "(Progress is saved; they resume next launch.)",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,

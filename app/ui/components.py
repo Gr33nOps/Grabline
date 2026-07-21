@@ -105,7 +105,7 @@ class StatTile(QFrame):
         lay.setSpacing(3)
         cap = role_label(caption.upper(), "caption", size=design.FONT["caption"])
         self.value = role_label(
-            "—", "accent" if accent else "strong", size=design.FONT["display"], bold=True
+            "", "accent" if accent else "strong", size=design.FONT["display"], bold=True
         )
         self.value.setFont(design.numeric_font(self.value.font()))
         self.sub = role_label("", "muted", size=design.FONT["small"])

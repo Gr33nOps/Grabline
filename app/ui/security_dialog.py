@@ -65,7 +65,7 @@ class SecurityDialog(chrome.Dialog):
         self._verdict.setStyleSheet("font-size: 15px; font-weight: 600;")
         layout.addWidget(self._verdict)
         note = QLabel(
-            "This is advice, not a verdict - a flagged file is kept and stays "
+            "This is advice, not a verdict. A flagged file is kept and stays "
             "usable. Antivirus false positives are common; judge by where the "
             "file came from."
         )

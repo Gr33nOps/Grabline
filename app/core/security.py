@@ -106,7 +106,7 @@ def check_file(
     if report.executable:
         report._raise(
             Risk.CAUTION,
-            "This is an executable or installer - only run it if you trust the source.",
+            "This is an executable or installer. Only run it if you trust the source.",
         )
 
     if url:
@@ -116,7 +116,7 @@ def check_file(
             if not report.https:
                 report._raise(
                     Risk.CAUTION,
-                    "Downloaded over unencrypted HTTP - it could have been "
+                    "Downloaded over unencrypted HTTP. It could have been "
                     "tampered with in transit.",
                 )
 
@@ -137,7 +137,7 @@ def check_file(
                     Risk.WARNING,
                     f"{result.scanner} flagged this file"
                     + (f" ({result.detail})" if result.detail else "")
-                    + ". Antivirus false positives happen - decide based on where it came from.",
+                    + ". Antivirus false positives happen. Decide based on where it came from.",
                 )
 
     if virustotal_key:

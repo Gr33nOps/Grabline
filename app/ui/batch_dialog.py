@@ -71,7 +71,7 @@ class BatchImportThread(QThread):
             return resolution.message or "nothing downloadable"
         if resolution.kind is JobKind.SMART:
             if resolution.playlist is not None:
-                return "playlist - add it on its own to pick entries"
+                return "playlist, add it on its own to pick entries"
             assert resolution.media is not None
             if not resolution.media.options:
                 return "no downloadable formats"
@@ -109,7 +109,7 @@ class BatchImportDialog(chrome.Dialog):
 
         layout = QVBoxLayout(self)
         intro = QLabel(
-            "Paste anything with links in it - one per line, a page's\n"
+            "Paste anything with links in it, one per line, a page's\n"
             "text, an export file. Grabline picks out the URLs."
         )
         layout.addWidget(intro)

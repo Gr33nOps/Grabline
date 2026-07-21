@@ -201,7 +201,7 @@ class DashboardView(QWidget):
 
         vpn = net.active_vpn_interfaces()
         if vpn:
-            self._vpn.setText(f"VPN active — {', '.join(vpn)}    ·    No geo lookup")
+            self._vpn.setText(f"VPN active: {', '.join(vpn)}    ·    No geo lookup")
         else:
             self._vpn.setText("VPN not detected")
 

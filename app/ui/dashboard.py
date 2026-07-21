@@ -42,7 +42,7 @@ class _Stat(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(0)
-        self.value = QLabel("—")
+        self.value = QLabel("")
         self.value.setStyleSheet("font-size: 18px; font-weight: 600;")
         caption = QLabel(label)
         caption.setStyleSheet("color: gray; font-size: 11px;")
@@ -171,7 +171,7 @@ class DashboardDialog(chrome.Dialog):
         self._tiles["current"].set(_speed(reading.current))
         self._tiles["average"].set(_speed(reading.average))
         self._tiles["peak"].set(_speed(reading.peak))
-        self._tiles["eta"].set(duration_text(reading.eta_seconds) or "—")
+        self._tiles["eta"].set(duration_text(reading.eta_seconds) or "")
         self._tiles["active"].set(str(active))
 
         totals = self.manager.stat_totals()

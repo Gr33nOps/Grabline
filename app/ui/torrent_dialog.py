@@ -153,7 +153,7 @@ class CreateTorrentDialog(chrome.Dialog):
         form.addRow("Web seeds:", self.webseeds_edit)
         self.comment_edit = QLineEdit()
         form.addRow("Comment:", self.comment_edit)
-        self.private_check = QCheckBox("Private (no DHT/PEX - tracker-only swarms)")
+        self.private_check = QCheckBox("Private (no DHT/PEX, tracker-only swarms)")
         form.addRow("", self.private_check)
         layout.addLayout(form)
 

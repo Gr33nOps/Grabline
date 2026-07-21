@@ -137,7 +137,7 @@ class DetailDrawer(QFrame):
             components.role_label("SPEED · LAST 30s", "caption", size=design.FONT["caption"])
         )
         sc.addWidget(self._spark)
-        self._spark_val = components.role_label("—", "accent", size=design.FONT["h2"], bold=True)
+        self._spark_val = components.role_label("", "accent", size=design.FONT["h2"], bold=True)
         self._spark_val.setAlignment(Qt.AlignmentFlag.AlignRight)
         sc.addWidget(self._spark_val)
         self._body.addWidget(self._spark_card)
@@ -200,7 +200,7 @@ class DetailDrawer(QFrame):
         lay.addWidget(
             components.role_label(caption.upper(), "caption", size=design.FONT["caption"])
         )
-        value = components.role_label("—", "value", size=design.FONT["small"])
+        value = components.role_label("", "value", size=design.FONT["small"])
         value.setWordWrap(True)
         value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lay.addWidget(value)
@@ -233,7 +233,7 @@ class DetailDrawer(QFrame):
             self._icon.setPixmap(svg_icon(type_icon_name(kind), p.accent).pixmap(16, 16))
             self._name.setText(view.display_name)
             self._meta_queue.setText(self._queue_name(view.queue_id))
-            self._meta_server.setText(urlsplit(view.url).hostname or "—")
+            self._meta_server.setText(urlsplit(view.url).hostname or "")
             self._meta_dest.setText(_wrappable(view.dest_dir))
             self._meta_url.setText(_wrappable(view.url))
             self._rebuild_tags(view)
@@ -271,12 +271,12 @@ class DetailDrawer(QFrame):
             if not new:
                 self._spark.push(speed_bps)
             self._spark_val.setText(motion.fmt_speed(speed_bps))
-            eta = "—"
+            eta = ""
             if speed_bps > 1 and view.total_size:
                 eta = motion.fmt_eta((view.total_size - view.downloaded) / speed_bps)
             self._meta_eta.setText(eta)
         else:
-            self._meta_eta.setText("—")
+            self._meta_eta.setText("")
         self._act_hash.setVisible(view.status is JobStatus.COMPLETED)
 
     def _rebuild_tags(self, view: JobView) -> None:

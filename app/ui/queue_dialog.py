@@ -186,7 +186,7 @@ class _QueueEditor(chrome.Dialog):
         super().__init__(parent)
         self.queue = queue
         self._queues = {q.id: q for q in queues}
-        self.setWindowTitle(f"Queue - {queue.name}")
+        self.setWindowTitle(f"Queue: {queue.name}")
         self.setMinimumWidth(400)
         form = QFormLayout(self)
 
