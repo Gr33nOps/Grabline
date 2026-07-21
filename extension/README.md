@@ -105,6 +105,21 @@ Every selector lives at the top of its module; when a site's DOM churns,
 that one file is the whole blast radius, and right-click + paste keep
 working regardless.
 
+## Tests
+
+The pure logic (byte formatting, stream naming, button positioning) is covered
+by Deno tests that load each `content/lib/*.js` module in isolation:
+
+```
+deno test --allow-read extension/test/
+```
+
+Anything touching the DOM, `chrome.*`/`browser.*`, or the MV3 lifecycle still
+needs a manual pass: load the unpacked extension in **both** Firefox and Chrome
+and exercise the sniffer, hover button (generic + site modules), quality panel,
+context menus, interception, gallery/links/selection grab, progress pill, and
+popup.
+
 ## Publishing to the stores
 
 `python scripts/package_extension.py` builds store-ready zips for Chrome
