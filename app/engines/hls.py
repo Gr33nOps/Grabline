@@ -9,7 +9,11 @@ Robustness beyond the Phase 1 core:
 - one automatic retry on transient failures (nonzero exit or a stall), since
   a CDN hiccup should not kill a 40-minute reassembly for good.
 
-No resume: an interrupted reassembly restarts from the beginning next run.
+The native fetch (the default for a resolvable media playlist) is resumable at
+segment granularity: pausing keeps the segments already on disk and the next
+run fetches only what is missing, so a paused multi-GB stream does not start
+over. The fallback where FFmpeg fetches the stream directly is not resumable
+and restarts from the beginning.
 """
 
 from __future__ import annotations
@@ -399,22 +403,33 @@ class HlsDownload:
         None means native could not finish, so the caller lets FFmpeg fetch."""
         self._downloaded = 0
         work = part.parent / f".{part.name}.hls"
-        shutil.rmtree(work, ignore_errors=True)
+        # Keep whatever a previous run left in this work dir so a paused stream
+        # resumes instead of refetching gigabytes. The dir is keyed by the part
+        # name, so it belongs to this job alone. Only a pause preserves it (set
+        # below); every other exit clears it in the finally.
+        keep_work = False
         try:
             work.mkdir(parents=True, exist_ok=True)
             video = self._prepare_local_manifest(text, base_url, work, "video")
             if video is None:
-                return self._settle_stopped(part) if self._stop_event.is_set() else None
+                if self._stop_event.is_set():
+                    keep_work = not self._cancelled
+                    return self._settle_stopped(part, keep_progress=not self._cancelled)
+                return None
             inputs = [video]
             if self._audio_url:
                 audio = self._fetch_url_text(self._audio_url)
                 if audio is not None:
                     audio_manifest = self._prepare_local_manifest(audio[0], audio[1], work, "audio")
                     if audio_manifest is None:
-                        return self._settle_stopped(part) if self._stop_event.is_set() else None
+                        if self._stop_event.is_set():
+                            keep_work = not self._cancelled
+                            return self._settle_stopped(part, keep_progress=not self._cancelled)
+                        return None
                     inputs.append(audio_manifest)
             if self._stop_event.is_set():
-                return self._settle_stopped(part)
+                keep_work = not self._cancelled
+                return self._settle_stopped(part, keep_progress=not self._cancelled)
             return self._remux_local(inputs, part)
         except (OSError, httpx.HTTPError) as exc:
             log.info("hls job %s: native fetch failed (%s)", self.job.id, exc)
@@ -427,7 +442,11 @@ class HlsDownload:
                 )
             return None
         finally:
-            shutil.rmtree(work, ignore_errors=True)
+            # A successful remux, a cancel, or a fall-through to the FFmpeg
+            # fallback makes the local segments useless, so clear them. A pause
+            # keeps them for the resume.
+            if not keep_work:
+                shutil.rmtree(work, ignore_errors=True)
 
     def _prepare_local_manifest(
         self, text: str, base_url: str, work: Path, prefix: str
@@ -472,24 +491,46 @@ class HlsDownload:
     def _fetch_segments(self, downloads: list[tuple[str, str]], work: Path) -> bool:
         """Download every (url, local_name) into ``work`` with the browser
         headers, in parallel. Raises on a refused part; returns False if the job
-        was paused/cancelled part-way, True when all parts are on disk."""
+        was paused/cancelled part-way, True when all parts are on disk.
+
+        Resumable at segment granularity: a fully fetched segment is renamed
+        into place atomically, so a later run counts and skips the ones already
+        on disk instead of re-downloading them. A segment interrupted mid-write
+        stays a throwaway ``.part`` and is fetched again."""
         total = len(downloads)
+        lock = threading.Lock()
+
+        # Resume: trust only segments a previous run renamed into their final
+        # name, and refetch everything else. This is what lets pausing a big HLS
+        # download keep its progress instead of starting from zero.
+        pending: list[tuple[str, str]] = []
         done = 0
         total_bytes = 0
-        lock = threading.Lock()
+        for seg_url, seg_name in downloads:
+            existing = work / seg_name
+            if existing.exists():
+                done += 1
+                total_bytes += existing.stat().st_size
+            else:
+                pending.append((seg_url, seg_name))
+        self._downloaded = total_bytes
+        if not pending:
+            return not self._stop_event.is_set()
 
         def fetch_one(client: httpx.Client, url: str, name: str) -> None:
             nonlocal done, total_bytes
             if self._stop_event.is_set():
                 return
             dest = work / name
+            tmp = work / f"{name}.part"
             with client.stream("GET", url, headers=self._headers or None) as response:
                 response.raise_for_status()
-                with open(dest, "wb") as fh:
+                with open(tmp, "wb") as fh:
                     for chunk in response.iter_bytes(65536):
                         if self._stop_event.is_set():
-                            return
+                            return  # leave the .part behind; it is refetched next run
                         fh.write(chunk)
+            os.replace(tmp, dest)  # atomic: only a complete segment becomes `name`
             with lock:
                 done += 1
                 total_bytes += dest.stat().st_size
@@ -515,7 +556,7 @@ class HlsDownload:
             ) as client,
             ThreadPoolExecutor(max_workers=_SEGMENT_WORKERS) as pool,
         ):
-            futures = [pool.submit(fetch_one, client, url, name) for url, name in downloads]
+            futures = [pool.submit(fetch_one, client, url, name) for url, name in pending]
             for future in futures:
                 future.result()  # re-raises a refused part (caught in _attempt_native)
         return not self._stop_event.is_set()
@@ -583,11 +624,14 @@ class HlsDownload:
         self.db.set_job_status(self.job.id, JobStatus.COMPLETED)
         return JobStatus.COMPLETED
 
-    def _settle_stopped(self, part: Path) -> JobStatus:
-        # MP4 muxing cannot resume: a paused reassembly restarts from scratch,
-        # so the partial output is useless either way.
+    def _settle_stopped(self, part: Path, *, keep_progress: bool = False) -> JobStatus:
+        # The .gl-part output is always disposable - the remux has not produced
+        # a usable MP4 yet. But when the native fetch is paused its downloaded
+        # segments are kept (see _attempt_native), so keep the progress count
+        # too rather than snapping the bar back to zero.
         _discard(part)
-        self.db.update_job_downloaded(self.job.id, 0)
+        if not keep_progress:
+            self.db.update_job_downloaded(self.job.id, 0)
         if self._cancelled:
             self.db.set_job_status(self.job.id, JobStatus.CANCELLED)
             return JobStatus.CANCELLED

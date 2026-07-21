@@ -147,6 +147,52 @@ def test_looks_complete_accepts_full_stream(db: Database, dest: Path):
     assert task._looks_complete(part) is False
 
 
+def test_native_fetch_skips_segments_already_on_disk(
+    server: MediaServer, db: Database, dest: Path, tmp_path: Path
+):
+    """Resume: a segment a previous run already fetched (renamed into place) is
+    counted and skipped, not re-downloaded. This is what keeps a paused multi-GB
+    HLS stream from starting over."""
+    seg0 = b"already-fetched-segment-zero"
+    seg1 = b"the-only-segment-we-still-need"
+    url0 = server.add("/s/seg000.ts", seg0, content_type="video/mp2t")
+    url1 = server.add("/s/seg001.ts", seg1, content_type="video/mp2t")
+
+    job = _hls_job(db, server.url("/s/index.m3u8"), dest)
+    task = HlsDownload(db, job, ffmpeg_path="ffmpeg")  # ffmpeg is not invoked here
+
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "video-00000.ts").write_bytes(seg0)  # a previous run finished this one
+
+    ok = task._fetch_segments([(url0, "video-00000.ts"), (url1, "video-00001.ts")], work)
+
+    assert ok is True
+    assert server.request_count("/s/seg000.ts") == 0  # already on disk: not refetched
+    assert server.request_count("/s/seg001.ts") == 1  # the only one fetched
+    assert (work / "video-00001.ts").read_bytes() == seg1
+    assert task._downloaded == len(seg0) + len(seg1)  # both count toward progress
+    assert not (work / "video-00001.ts.part").exists()  # temp renamed away
+
+
+def test_paused_native_fetch_keeps_its_progress(db: Database, dest: Path):
+    """A paused native fetch keeps its segments on disk, so its progress count
+    must survive the pause; only the non-resumable FFmpeg path zeroes it."""
+    job = _hls_job(db, "https://x/s.m3u8", dest)
+    task = HlsDownload(db, job, ffmpeg_path="ffmpeg")
+    part = job.part_path
+    part.parent.mkdir(parents=True, exist_ok=True)
+    db.update_job_downloaded(job.id, 500_000)
+
+    assert task._settle_stopped(part, keep_progress=True) is JobStatus.PAUSED
+    fresh = db.get_job(job.id)
+    assert fresh is not None and fresh.downloaded == 500_000  # not reset
+
+    assert task._settle_stopped(part) is JobStatus.PAUSED  # FFmpeg path: no keep
+    fresh2 = db.get_job(job.id)
+    assert fresh2 is not None and fresh2.downloaded == 0
+
+
 def test_discard_removes_leftover_part(db: Database, dest: Path, tmp_path: Path):
     from app.engines.hls import _discard
 
