@@ -33,6 +33,7 @@ from PySide6.QtGui import (
     QDropEvent,
     QFontMetrics,
     QGuiApplication,
+    QIcon,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -2308,13 +2309,16 @@ class MainWindow(QMainWindow):
 
         name_item = self._cell(row, _COL_NAME)
         name_item.setText(view.display_name)
-        # Tags and notes stay reachable on hover (and in the detail drawer),
-        # without a marker glyph cluttering the name.
+        # A small note icon next to the name marks a download that carries tags
+        # or notes, so they're discoverable at a glance (not only on hover) -
+        # a tinted glyph, never an emoji. Hover still shows the detail.
         if view.tags or view.notes:
+            name_item.setIcon(icons.svg_icon("note", p.text3))
             name_item.setToolTip(
                 (f"Tags: {view.tags}\n" if view.tags else "") + ("Has notes" if view.notes else "")
             )
         else:
+            name_item.setIcon(QIcon())
             name_item.setToolTip("")
 
         self._cell(row, _COL_SIZE).setText(human_bytes(view.total_size) if view.total_size else "—")

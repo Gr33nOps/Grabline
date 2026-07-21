@@ -42,6 +42,12 @@ _PATHS: dict[str, str] = {
         "M6 2h6a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z"
     ),
     "vpn": "M8 2L3 4v5c0 3 2.5 5 5 6 2.5-1 5-3 5-6V4L8 2z",
+    # A page with a folded corner and two text lines - "this download has
+    # tags/notes". Stroked, not filled, so it reads as an icon, not an emoji.
+    "note": (
+        "M4 2.5h5l3 3v8a.5.5 0 01-.5.5h-7a.5.5 0 01-.5-.5V3a.5.5 0 01.5-.5z"
+        "|M9 2.5V6h3|M6 8.5h4|M6 10.5h4"
+    ),
     "shield": "M8 2L3 4v5c0 3 2.5 5 5 6 2.5-1 5-3 5-6V4L8 2z|M6 8l1.5 1.5L10.5 6",
     "inspect": "M6.5 11a4.5 4.5 0 100-9 4.5 4.5 0 000 9z|M10.5 10.5L14 14|M6.5 4.5v4M4.5 6.5h4",
     "chevron-right": "M6 4l4 4-4 4",
