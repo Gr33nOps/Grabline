@@ -1253,3 +1253,33 @@ def test_add_download_dialog_file_has_no_quality(db: Database):
     )
     assert dialog.chosen_quality() is None
     assert not dialog.dont_ask_again()
+
+
+def test_browser_grab_of_video_runs_analysis_for_the_full_panel(
+    db: Database, tmp_path: Path, monkeypatch
+):
+    """A YouTube hover grab must analyse the URL (so the real title resolves and
+    the full quality panel is shown) rather than the quick Download Info dialog -
+    the fix for 'watch' filenames and the missing settings popup on hover."""
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    settings.confirm_downloads = True
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        assert window.resolver.smart.matches(url)  # sanity: this is a smart video
+
+        seen: list[object] = []
+        monkeypatch.setattr(
+            window,
+            "_resolve_and_queue",
+            lambda u, page_title, quality, *a, **k: seen.append((u, quality)),
+        )
+        window._browser_add(url, None, (), None)
+
+        # Routed to analysis with quality=None -> _on_resolved opens QualityPanel.
+        assert seen == [(url, None)]
+    finally:
+        manager.shutdown()

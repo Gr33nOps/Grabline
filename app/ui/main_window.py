@@ -1017,6 +1017,13 @@ class MainWindow(QMainWindow):
             lambda _e: self._finish_add(url, *args),  # a failed check never blocks
         )
 
+    def _raise_to_front(self) -> None:
+        """Bring GrabLine forward so its dialog or panel is right there, the way
+        IDM pops up when you start a download in the browser."""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
     def _browser_add(
         self,
         url: str,
@@ -1024,9 +1031,14 @@ class MainWindow(QMainWindow):
         fallbacks: tuple[str, ...],
         headers: dict[str, str] | None,
     ) -> None:
-        """A download started from the browser: show the Download Info dialog
-        (unless the user turned it off in Settings), then queue on Start. No
-        analysis, so it opens instantly - IDM-fast."""
+        """A download started from the browser.
+
+        A smart-engine video (YouTube and friends) is analysed so its real title
+        resolves - a hover on a thumbnail no longer saves as "watch" - and the
+        full quality panel (every format, subtitles, trimming) is offered, the
+        same rich flow a pasted URL gets. A stream or a plain file takes the fast
+        Download Info dialog with no analysis, unless that dialog is turned off.
+        """
         is_video = self.resolver.smart.matches(url)
         is_stream = urlsplit(url).path.lower().endswith((".m3u8", ".mpd"))
         if not is_video and not is_stream and fallbacks:
@@ -1038,7 +1050,24 @@ class MainWindow(QMainWindow):
             )
             is_stream = urlsplit(url).path.lower().endswith((".m3u8", ".mpd"))
 
-        if is_video or is_stream:
+        if is_video:
+            if self.settings.confirm_downloads:
+                # Analyse and show the full quality panel (formats, subtitles,
+                # trimming) with the real title - the flow the user asked to get
+                # back for YouTube. _resolve_and_queue with quality=None runs the
+                # extractor, then _on_resolved opens QualityPanel.
+                self._raise_to_front()
+                self._resolve_and_queue(url, page_title, None, fallbacks, headers)
+            else:
+                # 'Start immediately': queue at the default quality, no panel, but
+                # still with the real title (fetched via oEmbed) rather than the
+                # URL's "watch" leaf.
+                self._resolve_and_queue(
+                    url, page_title, self.settings.video_default_quality, fallbacks, headers
+                )
+            return
+
+        if is_stream:
             name = naming.clean_page_title(page_title) or Path(naming.filename_from_url(url)).stem
             category = "Video"
         else:
@@ -1047,9 +1076,7 @@ class MainWindow(QMainWindow):
 
         if not self.settings.confirm_downloads:
             dest = str(categories.dest_dir_for(self.settings.download_dir, name, enabled=True))
-            self._queue_download(
-                url, name, dest, "Best" if is_video else None, is_video, is_stream, headers, False
-            )
+            self._queue_download(url, name, dest, None, False, is_stream, headers, False)
             return
 
         from app.ui.add_download_dialog import AddDownloadDialog
@@ -1059,13 +1086,10 @@ class MainWindow(QMainWindow):
             suggested_name=name,
             category=category,
             download_dir=str(self.settings.download_dir),
-            with_quality=is_video,
+            with_quality=False,
             parent=self,
         )
-        # Bring GrabLine to the front so the dialog is right there, IDM-style.
-        self.show()
-        self.raise_()
-        self.activateWindow()
+        self._raise_to_front()
         if dialog.exec() != AddDownloadDialog.DialogCode.Accepted:
             self.statusBar().showMessage("Ready")
             return
@@ -1075,8 +1099,8 @@ class MainWindow(QMainWindow):
             url,
             dialog.chosen_name(),
             dialog.chosen_directory() or None,
-            dialog.chosen_quality(),
-            is_video,
+            None,
+            False,
             is_stream,
             headers,
             dialog.outcome() == "later",
