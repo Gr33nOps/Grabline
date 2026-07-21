@@ -1210,4 +1210,3 @@ def test_pause_shows_instantly_before_the_worker_settles(db: Database, tmp_path,
         assert job.id not in window._optimistic_status
     finally:
         manager.shutdown()
-
