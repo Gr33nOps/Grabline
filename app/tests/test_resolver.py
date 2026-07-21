@@ -49,11 +49,13 @@ class FakeSmart(SmartEngine):
         self._error = error
         self._playlist = playlist
         self._generic = generic
+        self.last_headers: dict[str, str] | None = None
 
     def matches(self, url: str) -> bool:
         return self._match
 
     def inspect(self, url: str, **kwargs) -> MediaInfo | PlaylistInfo:
+        self.last_headers = kwargs.get("headers")
         if kwargs.get("force_generic"):
             # Model the generic scraper: nothing found unless a fake was given.
             if self._generic is None:
@@ -110,6 +112,26 @@ def test_hls_master_playlist_forwards_headers(server: MediaServer):
     assert resolution.kind is JobKind.HLS
     assert len(resolution.variants) == 1
     assert resolution.variants[0].url.endswith("720p.m3u8")
+
+
+def test_smart_inspection_forwards_browser_headers():
+    """A gated video (yt-dlp path) must analyse with the browser's Referer/
+    Cookie/User-Agent, the same headers the HLS and direct paths forward -
+    without them the page 403s and the quality panel comes back empty."""
+    smart = FakeSmart(match=True)
+    headers = {"Referer": "https://site.example/watch", "Cookie": "sess=abc"}
+    Resolver(smart).resolve("https://tube.example/watch?v=1", headers=headers)
+    assert smart.last_headers == headers
+
+
+def test_generic_scrape_forwards_browser_headers(server: MediaServer):
+    """The last-resort page scrape (force_generic) also needs the handoff's
+    headers, so a gated embed page can be reached at all."""
+    url = server.add("/page", b"<html></html>", content_type="text/html")
+    smart = FakeSmart(match=False, generic=FAKE_MEDIA)
+    headers = {"Referer": "https://site.example/watch"}
+    Resolver(smart).resolve(url, headers=headers)
+    assert smart.last_headers == headers
 
 
 def test_smart_match_wins(server: MediaServer):

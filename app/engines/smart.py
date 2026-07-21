@@ -149,6 +149,23 @@ def _apply_network_guards(opts: dict[str, Any], proxy: str | None) -> None:
         opts["source_address"] = "0.0.0.0"  # how --force-ipv4 is spelled internally
 
 
+def _handoff_headers(raw: Any, *, has_cookie_source: bool) -> dict[str, str]:
+    """The browser handoff's Referer/Cookie/User-Agent to hand yt-dlp, or ``{}``
+    when there are none. Many gated CDNs refuse a stream (or serve an HTML error
+    yt-dlp can't use) without the page's Referer, so the same headers the HLS and
+    direct engines forward ride into yt-dlp too. yt-dlp merges these under each
+    extractor's own headers, so a site extractor still wins where it sets them.
+    The Cookie is dropped when yt-dlp is already loading cookies itself
+    (cookiefile / cookiesfrombrowser), so the two jars can't fight.
+    """
+    if not isinstance(raw, dict) or not raw:
+        return {}
+    headers = {str(key): str(value) for key, value in raw.items()}
+    if has_cookie_source:
+        headers.pop("Cookie", None)
+    return headers
+
+
 def _looks_like_auth_wall(message: str) -> bool:
     """True when a browser login could get past this failure (see _download_smart)."""
     lowered = message.lower()
@@ -501,6 +518,7 @@ class SmartEngine:
         session_browser: str = "chrome",
         proxy: str | None = None,
         force_generic: bool = False,
+        headers: dict[str, str] | None = None,
     ) -> MediaInfo | PlaylistInfo:
         """Metadata for a URL, reusing a recent analysis of the same URL.
 
@@ -511,7 +529,8 @@ class SmartEngine:
         only fills in the quality panel; the download re-extracts the URL when
         it runs, so nothing is ever fetched from a stale address.
         """
-        key = (url, use_session, session_browser, proxy or "", force_generic)
+        header_key = tuple(sorted((headers or {}).items()))
+        key = (url, use_session, session_browser, proxy or "", force_generic, header_key)
         now = time.monotonic()
         with self._lock:
             hit = self._inspected.get(key)
@@ -523,6 +542,7 @@ class SmartEngine:
             session_browser=session_browser,
             proxy=proxy,
             force_generic=force_generic,
+            headers=headers,
         )
         log.info("analyzed %s in %.1fs", url, time.monotonic() - now)
         with self._lock:
@@ -541,6 +561,7 @@ class SmartEngine:
         session_browser: str = "chrome",
         proxy: str | None = None,
         force_generic: bool = False,
+        headers: dict[str, str] | None = None,
     ) -> MediaInfo | PlaylistInfo:
         """Metadata for a single video, or a fast flat listing for a playlist.
 
@@ -566,6 +587,7 @@ class SmartEngine:
                 session_browser=session_browser,
                 proxy=proxy,
                 force_generic=force_generic,
+                headers=headers,
             )
         except DownloadError as exc:
             if use_session or not _runtime_might_help(str(exc)):
@@ -578,6 +600,7 @@ class SmartEngine:
                 session_browser=session_browser,
                 proxy=proxy,
                 force_generic=force_generic,
+                headers=headers,
             )
         result = self._parse_inspected(
             url, info, use_session=use_session, session_browser=session_browser, proxy=proxy
@@ -593,6 +616,7 @@ class SmartEngine:
                 session_browser=session_browser,
                 proxy=proxy,
                 force_generic=force_generic,
+                headers=headers,
             )
             result = self._parse_inspected(
                 url, info, use_session=use_session, session_browser=session_browser, proxy=proxy
@@ -608,6 +632,7 @@ class SmartEngine:
         session_browser: str,
         proxy: str | None,
         force_generic: bool,
+        headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """One yt-dlp metadata extraction. ``noplaylist`` keeps watch-URLs-
         with-a-list-param as single videos; pure playlist URLs still come back
@@ -636,6 +661,11 @@ class SmartEngine:
             opts["cookiesfrombrowser"] = (session_browser,)
         if proxy:
             opts["proxy"] = proxy
+        # The browser handoff's Referer/Cookie/User-Agent, so a gated video
+        # analyses with the same credentials its page had (matching the download).
+        forwarded = _handoff_headers(headers, has_cookie_source=use_session)
+        if forwarded:
+            opts["http_headers"] = forwarded
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -961,6 +991,12 @@ class SmartDownload:
             ydl_opts["postprocessor_args"] = {"default": list(extra_ffmpeg)}
         if self.proxy:
             ydl_opts["proxy"] = self.proxy
+        forwarded = _handoff_headers(
+            options.get("http_headers"),
+            has_cookie_source="cookiefile" in ydl_opts or "cookiesfrombrowser" in ydl_opts,
+        )
+        if forwarded:
+            ydl_opts["http_headers"] = forwarded
         ydl_opts["postprocessors"] = postprocessors
         return ydl_opts
 

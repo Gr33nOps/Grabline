@@ -575,6 +575,7 @@ class DownloadManager:
         extras: Mapping[str, Any] | None = None,
         use_session: bool = False,
         session_browser: str = "chrome",
+        headers: Mapping[str, str] | None = None,
     ) -> Job:
         """Queue a Smart Engine (yt-dlp) download with a chosen quality option."""
         return self.add_smart_entry(
@@ -587,6 +588,7 @@ class DownloadManager:
             extras=extras,
             use_session=use_session,
             session_browser=session_browser,
+            headers=headers,
         )
 
     def add_smart_entry(
@@ -601,10 +603,12 @@ class DownloadManager:
         extras: Mapping[str, Any] | None = None,
         use_session: bool = False,
         session_browser: str = "chrome",
+        headers: Mapping[str, str] | None = None,
     ) -> Job:
         """Queue one Smart Engine job from just a URL and title - the playlist
         path (F1.7), where entries were listed flat and formats resolve at
-        download time."""
+        download time. ``headers`` are the browser handoff's Referer/Cookie/
+        User-Agent, forwarded to yt-dlp so a gated video downloads."""
         extension = option.audio_format if option.kind == "audio" else "mp4"
         base = naming.sanitize_filename(title)
         filename = naming.apply_rename_rules(f"{base}.{extension}", self.settings.rename_rules)
@@ -625,6 +629,8 @@ class DownloadManager:
         }
         if self.settings.cookies_file:
             options["cookie_file"] = self.settings.cookies_file
+        if headers:
+            options["http_headers"] = dict(headers)
         if extras:
             options.update(extras)
         job = self.db.create_job(

@@ -809,3 +809,39 @@ def test_hook_does_not_block_when_the_database_lock_is_held(db: Database, dest: 
         holder.join(timeout=5)
 
     assert elapsed < 0.5, f"_hook blocked {elapsed:.2f}s on the held DB lock"
+
+
+def test_build_options_forwards_browser_headers(db: Database, dest: Path):
+    """The browser handoff's Referer/Cookie/User-Agent must reach yt-dlp so a
+    gated video downloads - many CDNs refuse the stream without the page's
+    Referer, the same failure the HLS path had before it forwarded them."""
+    headers = {
+        "Referer": "https://site.example/watch",
+        "User-Agent": "GrablineTest/1.0",
+        "Cookie": "sess=abc",
+    }
+    job = _smart_job(db, "https://site.example/v", dest, "v.mp4", http_headers=headers)
+    opts = SmartDownload(db, job, ffmpeg_path=None)._build_options()
+    assert opts["http_headers"] == headers
+
+
+def test_browser_cookie_yields_to_a_cookie_file(db: Database, dest: Path, tmp_path: Path):
+    """When yt-dlp is loading cookies itself (cookiefile), the handoff's Cookie
+    header is dropped so the two jars can't fight - Referer/User-Agent stay."""
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n")
+    headers = {"Referer": "https://site.example/watch", "Cookie": "sess=abc"}
+    job = _smart_job(
+        db, "https://site.example/v", dest, "v.mp4", http_headers=headers, cookie_file=str(cookies)
+    )
+    opts = SmartDownload(db, job, ffmpeg_path=None)._build_options()
+    assert opts["cookiefile"] == str(cookies)
+    assert opts["http_headers"] == {"Referer": "https://site.example/watch"}
+
+
+def test_no_browser_headers_leaves_http_headers_unset(db: Database, dest: Path):
+    """A plain paste (no handoff) sets no http_headers - yt-dlp keeps its own
+    defaults untouched rather than being handed an empty override."""
+    job = _smart_job(db, "https://site.example/v", dest, "v.mp4")
+    opts = SmartDownload(db, job, ffmpeg_path=None)._build_options()
+    assert "http_headers" not in opts

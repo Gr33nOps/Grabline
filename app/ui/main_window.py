@@ -1016,6 +1016,7 @@ class MainWindow(QMainWindow):
                     use_session=self.settings.use_browser_session,
                     session_browser=self.settings.session_browser,
                     extras={"name_from_metadata": True},
+                    headers=headers,
                 )
                 self.statusBar().showMessage(f"Queued ({option.label})", 5000)
                 self.refresh()
@@ -1110,6 +1111,7 @@ class MainWindow(QMainWindow):
                 dest_dir=dest or None,
                 use_session=self.settings.use_browser_session,
                 session_browser=self.settings.session_browser,
+                headers=headers,
             )
             self.statusBar().showMessage(f"Queued {resolution.media.title} ({option.label})", 5000)
             self.refresh()
@@ -1134,6 +1136,7 @@ class MainWindow(QMainWindow):
                     dest_dir=dest or None,
                     use_session=self.settings.use_browser_session,
                     session_browser=self.settings.session_browser,
+                    headers=headers,
                 )
         elif resolution.kind is JobKind.SMART and resolution.media is not None:
             quality_panel = QualityPanel(
@@ -1154,6 +1157,7 @@ class MainWindow(QMainWindow):
                 extras=quality_panel.extras_config(),
                 use_session=self.settings.use_browser_session,
                 session_browser=self.settings.session_browser,
+                headers=headers,
             )
         elif resolution.kind is JobKind.HLS:
             variant = None

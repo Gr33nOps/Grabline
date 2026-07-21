@@ -160,6 +160,7 @@ class Resolver:
                     use_session=use_session,
                     session_browser=session_browser,
                     proxy=proxy,
+                    headers=headers,
                 )
             except DownloadError as exc:
                 # A site extractor claimed the URL; its verdict is final -
@@ -202,7 +203,11 @@ class Resolver:
             # (og:video, <video>/<source>, JSON-LD, embedded m3u8) - this is how a
             # video on a site yt-dlp doesn't specifically support still downloads.
             scraped = self._try_generic(
-                url, use_session=use_session, session_browser=session_browser, proxy=proxy
+                url,
+                use_session=use_session,
+                session_browser=session_browser,
+                proxy=proxy,
+                headers=headers,
             )
             if scraped is not None:
                 return scraped
@@ -217,6 +222,7 @@ class Resolver:
         use_session: bool,
         session_browser: str,
         proxy: str | None,
+        headers: dict[str, str] | None = None,
     ) -> Resolution | None:
         """Best-effort scrape of an unsupported page. None when nothing usable
         turns up, so the caller falls back to its plain 'this is a web page'
@@ -228,6 +234,7 @@ class Resolver:
                 session_browser=session_browser,
                 proxy=proxy,
                 force_generic=True,
+                headers=headers,
             )
         except DownloadError:
             return None

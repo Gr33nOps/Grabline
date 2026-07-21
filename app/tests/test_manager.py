@@ -202,6 +202,35 @@ def test_add_smart_threads_post_processing_extras(db: Database, dest: Path):
         manager.shutdown()
 
 
+def test_add_smart_entry_stores_browser_headers_on_the_job(db: Database, dest: Path):
+    """A gated video needs the browser handoff's Referer/Cookie forwarded to
+    yt-dlp, the same convention add_hls/add_url use - stored under http_headers,
+    and absent entirely for a plain paste (not an empty dict)."""
+    from app.engines.smart import generic_quality_options
+
+    manager = DownloadManager(db, max_concurrent=0)
+    try:
+        option = generic_quality_options()[0]
+        job = manager.add_smart_entry(
+            "https://tube.example/watch?v=xyz",
+            "Gated Talk",
+            option,
+            dest_dir=dest,
+            headers={"Referer": "https://site.example/watch", "Cookie": "sess=abc"},
+        )
+        assert job.options.get("http_headers") == {
+            "Referer": "https://site.example/watch",
+            "Cookie": "sess=abc",
+        }
+
+        plain = manager.add_smart_entry(
+            "https://tube.example/watch?v=plain", "Plain", option, dest_dir=dest
+        )
+        assert "http_headers" not in plain.options
+    finally:
+        manager.shutdown()
+
+
 def test_remove_deletes_row_but_keeps_completed_file(db: Database, dest: Path):
     manager = DownloadManager(db, max_concurrent=0)
     try:
