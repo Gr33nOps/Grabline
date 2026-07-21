@@ -8,7 +8,7 @@ keeps the native OS title bar - only the main window uses custom chrome.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject, QPoint, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt
 from PySide6.QtGui import QRegion
 from PySide6.QtWidgets import (
     QDialog,
@@ -97,6 +97,21 @@ class TitleBar(QFrame):
         for btn in self._buttons:
             btn.retint()
 
+    def caption_buttons_region(self) -> QRegion:
+        """The window controls' rects, in the top-level window's coordinates.
+
+        The EdgeResizer overlay covers the window's border - including the top
+        strip and the top-right corner square, which sit right over these
+        buttons. Without carving them out, a click on the top of Maximize/Close
+        lands on the resizer (a no-op) and the button needs a second, lower
+        press (the reported bug). The resizer subtracts this from its mask."""
+        window = self.window()
+        region = QRegion()
+        for btn in self._buttons:
+            top_left = btn.mapTo(window, btn.rect().topLeft())
+            region = region.united(QRegion(QRect(top_left, btn.size())))
+        return region
+
     def _toggle_maximized(self) -> None:
         if self._window.isMaximized():
             self._window.showNormal()
@@ -149,9 +164,12 @@ class EdgeResizer(QWidget):
     its own move/press/leave events - resizing works over any child, and the
     cursor resets the moment the pointer leaves the border."""
 
-    def __init__(self, window: QWidget) -> None:
+    def __init__(self, window: QWidget, title_bar: TitleBar | None = None) -> None:
         super().__init__(window)
         self._window = window
+        # The caption buttons are carved out of the resize mask so the overlay
+        # never sits over Minimize/Maximize/Close and swallows their clicks.
+        self._title_bar = title_bar
         self.setMouseTracking(True)
         self.setStyleSheet("background: transparent;")
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
@@ -180,6 +198,9 @@ class EdgeResizer(QWidget):
         w, h = rect.width(), rect.height()
         for cx, cy in ((0, 0), (w - c, 0), (0, h - c), (w - c, h - c)):
             mask = mask.united(QRegion(cx, cy, c, c))
+        if self._title_bar is not None:
+            # Never grab where the window controls are - clicks belong to them.
+            mask = mask.subtracted(self._title_bar.caption_buttons_region())
         self.setMask(mask)
         self.show()
         self.raise_()

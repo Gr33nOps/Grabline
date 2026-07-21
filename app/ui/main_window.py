@@ -212,8 +212,10 @@ class MainWindow(QMainWindow):
         column.addWidget(self._title_bar)
         column.addWidget(shell, 1)
         self.setCentralWidget(central)
-        # Created after the content so the resize overlay stacks above it.
-        self._resizer = chrome.EdgeResizer(self)
+        # Created after the content so the resize overlay stacks above it. The
+        # title bar is passed so the overlay carves out the caption buttons and
+        # never swallows a Maximize/Close click.
+        self._resizer = chrome.EdgeResizer(self, self._title_bar)
         self.statusBar().showMessage("Ready")
         # A global activity indicator: whenever anything is working in the
         # background (analyzing, hashing, extracting, converting, listing,
