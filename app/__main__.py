@@ -11,7 +11,13 @@ from types import TracebackType
 from typing import TextIO
 
 from PySide6.QtCore import QBuffer, QIODevice, QTimer
-from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
+from PySide6.QtWidgets import (
+    QApplication,
+    QMessageBox,
+    QProxyStyle,
+    QStyle,
+    QSystemTrayIcon,
+)
 
 from app.core import alerts, instance, launcher, paths, power, scripts
 from app.core.ffmpeg import find_ffmpeg
@@ -25,6 +31,17 @@ from app.ui.main_window import MainWindow
 from app.ui.tray import GrablineTray
 
 log = logging.getLogger(__name__)
+
+
+class _TextOnlyButtons(QProxyStyle):
+    """Qt's default style paints a check on OK and a cross on Cancel in every
+    dialog button box (and QMessageBox). Grabline's buttons are text only, so
+    turn that style hint off application-wide - one place, every dialog."""
+
+    def styleHint(self, hint, option=None, widget=None, returnData=None):
+        if hint == QStyle.StyleHint.SH_DialogButtonBox_ButtonsHaveIcons:
+            return 0
+        return super().styleHint(hint, option, widget, returnData)
 
 
 def _icon_png() -> bytes:
@@ -156,16 +173,20 @@ def main() -> int:
     )
     minimized = "--minimized" in sys.argv
     open_with = _open_arg(sys.argv[1:])
-    if open_with is not None and instance.app_is_running():
-        # 'Open with Grabline' while it's already open: hand the source to the
-        # running instance (it polls the handoffs table) and bow out.
-        kind, source = open_with
+    if instance.app_is_running():
+        # Grabline is already open. A second launch must never start a second
+        # app: hand any 'open with' source to the running instance (it polls the
+        # handoffs table) and ask it to come to the front, then bow out.
         handoff_db = Database(paths.data_dir() / "grabline.db")
-        handoff_db.add_handoff(source, source=kind)
+        if open_with is not None:
+            kind, source = open_with
+            handoff_db.add_handoff(source, source=kind)
+        handoff_db.add_handoff("", source="focus")
         handoff_db.close()
         return 0
     _set_windows_app_id()  # before any window exists, or the taskbar ignores it
     app = QApplication([arg for arg in sys.argv if arg != "--minimized"])
+    app.setStyle(_TextOnlyButtons())  # no check/cross icons on dialog buttons
     app.setApplicationName("Grabline")
     app.setOrganizationName("Grabline")
     app.setApplicationDisplayName("Grabline")
