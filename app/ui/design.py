@@ -264,6 +264,13 @@ def stylesheet(p: Palette) -> str:
     }}
     QPushButton[flat="true"]:hover {{ background: {p.row_hover}; color: {p.text}; }}
     QPushButton[danger="true"]:hover {{ border-color: {p.warn}; color: {p.warn}; }}
+    /* the detail drawer's tab strip + its in-tab action buttons */
+    QPushButton[role="tab"] {{
+        background: transparent; border: none; border-bottom: 2px solid transparent;
+        color: {p.text3}; padding: 6px 8px; font-weight: 600;
+    }}
+    QPushButton[role="tab"]:hover {{ color: {p.text}; }}
+    QPushButton[role="tab"]:checked {{ color: {p.accent}; border-bottom: 2px solid {p.accent}; }}
 
     /* --- inputs --- */
     QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QComboBox,

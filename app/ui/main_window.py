@@ -317,10 +317,17 @@ class MainWindow(QMainWindow):
         srow.addWidget(self._build_table(), 1)
         self._drawer = DetailDrawer(
             self.manager,
+            ffmpeg=find_ffmpeg(self.settings),
+            on_open_file=self._open_view_file,
             on_open_folder=self._open_view_folder,
+            on_redownload=lambda v: self.begin_add_url(v.url, allow_duplicate=True),
             on_copy_url=self._copy_view_url,
+            on_copy_path=self._copy_view_path,
             on_copy_hash=lambda v: self._copy_hash(Path(v.dest_dir) / v.filename),
+            on_rename=self._rename_view,
             on_remove=self._remove_from_drawer,
+            on_extract=lambda v: self._extract(Path(v.dest_dir) / v.filename),
+            on_security=self._security_view,
         )
         srow.addWidget(self._drawer)
         col.addWidget(split, 1)
@@ -332,11 +339,52 @@ class MainWindow(QMainWindow):
         QGuiApplication.clipboard().setText(view.url)
         self.statusBar().showMessage("URL copied", 3000)
 
+    def _copy_view_path(self, view: JobView) -> None:
+        QGuiApplication.clipboard().setText(str(Path(view.dest_dir) / view.filename))
+        self.statusBar().showMessage("File path copied", 3000)
+
+    def _open_view_file(self, view: JobView) -> None:
+        path = Path(view.dest_dir) / view.filename
+        if path.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        else:
+            self.statusBar().showMessage("The file is not on disk", 3000)
+
     def _open_view_folder(self, view: JobView) -> None:
         # The file path, so the manager highlights the download when it exists;
         # open_folder falls back to the folder when it doesn't (a failed job).
         if not reveal.open_folder(Path(view.dest_dir) / view.filename):
             self.statusBar().showMessage("Could not open the folder", 3000)
+
+    def _security_view(self, view: JobView) -> None:
+        SecurityDialog(Path(view.dest_dir) / view.filename, view.url, self.settings, self).exec()
+
+    def _rename_view(self, view: JobView) -> None:
+        """Rename the file on disk and update the download's name. Refuses a
+        blank name, a name that changes folder, or one that would clobber an
+        existing file."""
+        old = Path(view.dest_dir) / view.filename
+        new_name, accepted = QInputDialog.getText(
+            self, "Rename", "New file name:", text=view.filename
+        )
+        new_name = new_name.strip()
+        if not (accepted and new_name) or new_name == view.filename:
+            return
+        if "/" in new_name or "\\" in new_name:
+            QMessageBox.warning(self, "GrabLine", "The name can't include a folder.")
+            return
+        target = old.with_name(new_name)
+        if target.exists():
+            QMessageBox.warning(self, "GrabLine", f"{new_name} already exists in this folder.")
+            return
+        try:
+            if old.exists():
+                old.rename(target)
+        except OSError as exc:
+            QMessageBox.warning(self, "GrabLine", f"Could not rename: {exc}")
+            return
+        self.manager.db.update_job_filename(view.id, new_name)
+        self.refresh()
 
     def _remove_from_drawer(self, view: JobView) -> None:
         self.manager.remove(view.id, force=True)
@@ -624,6 +672,7 @@ class MainWindow(QMainWindow):
         self._title_bar.retint()
         for btn in self._retintable:
             btn.retint()
+        self._drawer.retint()
         self._style_filter_buttons()
         # Rebuild rows so per-row widgets (pills, bars) repaint in the new theme.
         self._row_job_ids = []

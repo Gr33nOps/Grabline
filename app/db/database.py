@@ -253,6 +253,18 @@ class Database:
             row = self._conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         return _job_from_row(row) if row else None
 
+    def job_timestamps(self, job_id: int) -> tuple[str | None, str | None]:
+        """(created_at, updated_at) for a job, or (None, None) if it's gone.
+        ``updated_at`` is bumped on the completion status write, so for a
+        finished job it is effectively the finish time (detail panel History)."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT created_at, updated_at FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+        if row is None:
+            return None, None
+        return row["created_at"], row["updated_at"]
+
     def list_jobs(self) -> list[Job]:
         # Higher priority first; ties (the default 0) fall back to insertion
         # order, so an untouched queue still runs oldest-first.

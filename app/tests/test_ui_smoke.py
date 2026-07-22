@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
+
+if TYPE_CHECKING:
+    from app.ui.detail_drawer import DetailDrawer
 
 from PySide6.QtWidgets import QApplication
 
@@ -1336,5 +1340,150 @@ def test_browser_grab_of_video_runs_analysis_for_the_full_panel(
 
         # Routed to analysis with quality=None -> _on_resolved opens QualityPanel.
         assert seen == [(url, None)]
+    finally:
+        manager.shutdown()
+
+
+def _drawer(manager: DownloadManager, ffmpeg: str | None = None) -> DetailDrawer:
+    from app.ui.detail_drawer import DetailDrawer
+
+    noop = lambda _v: None  # noqa: E731
+    return DetailDrawer(
+        manager,
+        ffmpeg=ffmpeg,
+        on_open_file=noop,
+        on_open_folder=noop,
+        on_redownload=noop,
+        on_copy_url=noop,
+        on_copy_path=noop,
+        on_copy_hash=noop,
+        on_rename=noop,
+        on_remove=noop,
+        on_extract=noop,
+        on_security=noop,
+    )
+
+
+def _pump(times: int = 60) -> None:
+    import time
+
+    app = _qapp()
+    for _ in range(times):
+        app.processEvents()
+        time.sleep(0.01)
+
+
+def test_job_timestamps_round_trip(db: Database, tmp_path: Path):
+    job = db.create_job("http://example.invalid/x.bin", str(tmp_path), "x.bin")
+    created, updated = db.job_timestamps(job.id)
+    assert created and updated  # both stamped on insert
+    assert db.job_timestamps(999_999) == (None, None)
+
+
+def test_detail_drawer_populates_real_fields(db: Database, tmp_path: Path):
+    from app.core.models import JobStatus
+
+    _qapp()
+    settings = Settings(db)
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        # A finished, on-disk download of an unknown (non-media) type.
+        target = tmp_path / "report.bin"
+        target.write_bytes(b"x" * 4096)
+        job = db.create_job("https://files.example.com/a/report.bin", str(tmp_path), "report.bin")
+        db.update_job_total(job.id, 4096)
+        db.set_job_status(job.id, JobStatus.COMPLETED)
+        view = next(v for v in manager.snapshot() if v.id == job.id)
+
+        drawer = _drawer(manager, ffmpeg=None)
+        drawer.show_view(view, 0.0, [])
+
+        def cell(grid: str, key: str) -> str:
+            return str(getattr(drawer, grid)._rows[key][1].text())
+
+        assert cell("_file_grid", "Type") == "BIN file"
+        assert cell("_file_grid", "Size on disk") == "4.0 KB"
+        assert cell("_source_grid", "Server") == "files.example.com"
+        assert cell("_source_grid", "Protocol") == "HTTPS"
+        assert cell("_source_grid", "Connections") == str(manager.connections)
+        assert cell("_history_grid", "Added")  # a formatted timestamp
+        # No ffmpeg and not an archive -> the third tab is hidden.
+        assert drawer._tabs[2].isHidden()
+    finally:
+        manager.shutdown()
+
+
+def test_detail_drawer_archive_contents(db: Database, tmp_path: Path):
+    import zipfile
+
+    from app.core.models import JobStatus
+
+    _qapp()
+    settings = Settings(db)
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        archive_path = tmp_path / "bundle.zip"
+        with zipfile.ZipFile(archive_path, "w") as zf:
+            for name in ("a.txt", "b.txt", "c.txt"):
+                zf.writestr(name, "hello")
+        job = db.create_job("https://x.example/bundle.zip", str(tmp_path), "bundle.zip")
+        db.set_job_status(job.id, JobStatus.COMPLETED)
+        view = next(v for v in manager.snapshot() if v.id == job.id)
+
+        drawer = _drawer(manager)
+        drawer.show_view(view, 0.0, [])
+        _pump()  # let the archive-listing worker finish
+        assert drawer._tabs[2].text() == "Contents"
+        assert not drawer._tabs[2].isHidden()
+        assert drawer._media_grid._rows["Files"][1].text() == "3"
+    finally:
+        manager.shutdown()
+
+
+def test_detail_drawer_media_tab_stays_visible(db: Database, tmp_path: Path):
+    """A completed video's Media tab must show after the ffprobe worker fills it
+    - it lives on a non-current stacked page, so the visibility test has to read
+    the explicit flag, not 'is on screen' (the regression this guards)."""
+    import shutil
+    import subprocess
+
+    from app.core.models import JobStatus
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None or shutil.which("ffprobe") is None:
+        pytest.skip("ffmpeg/ffprobe not installed")
+
+    video = tmp_path / "clip.mp4"
+    subprocess.run(
+        [
+            ffmpeg,
+            "-v",
+            "quiet",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=1:size=320x240:rate=24",
+            "-c:v",
+            "libx264",
+            str(video),
+        ],
+        check=True,
+    )
+    _qapp()
+    settings = Settings(db)
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        job = db.create_job("https://v.example/clip.mp4", str(tmp_path), "clip.mp4")
+        db.update_job_total(job.id, video.stat().st_size)
+        db.set_job_status(job.id, JobStatus.COMPLETED)
+        view = next(v for v in manager.snapshot() if v.id == job.id)
+        drawer = _drawer(manager, ffmpeg=ffmpeg)
+        drawer.show_view(view, 0.0, [])
+        _pump()
+        assert drawer._tabs[2].text() == "Media"
+        assert not drawer._tabs[2].isHidden()
+        assert drawer._media_grid._rows["Resolution"][1].text() == "320x240"
+        assert drawer._media_grid._rows["Video"][1].text() == "H264"
     finally:
         manager.shutdown()

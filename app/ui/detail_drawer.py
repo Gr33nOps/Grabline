@@ -1,40 +1,72 @@
-"""The Downloads detail drawer: a 300px panel that shows beside the table when
-a single download is selected. Its widgets are built once and only their text /
-visibility change as the selection or live progress updates - no teardown and
-rebuild - so nothing flickers or doubles up, and it stays cheap to keep live.
+"""The Downloads detail drawer: a 324px "download inspector" beside the table
+when a single download is selected.
+
+It is a persistent header (icon, name, status, progress) over a tab strip -
+Overview / Details / Media (or Contents) / Activity - and a fixed action bar.
+Tabs that don't apply to the selection are hidden, so a PDF shows two and a
+video shows four. Widgets are built once; only their text and visibility change
+as the selection or live progress updates, so nothing flickers. The expensive
+reads (the full Job row, timestamps, an ffprobe of a media file, an archive's
+entry list) happen only when the selection changes, never on the 0.5s tick.
 """
 
 from __future__ import annotations
 
+import logging
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
+from datetime import UTC, datetime
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from app.core import archive
 from app.core.manager import DownloadManager, JobView
-from app.core.models import JobStatus
+from app.core.mediainfo import MediaSummary, read_media_info
+from app.core.models import Job, JobKind, JobStatus
 from app.ui import components, design, motion, theme
-from app.ui.format import human_bytes
+from app.ui.format import duration_text, human_bytes
 from app.ui.icons import svg_icon, type_icon_name
+from app.ui.work_threads import FileOpThread
+
+log = logging.getLogger(__name__)
 
 #: Long URLs and paths have no spaces, so a word-wrapping label can't break
-#: them - it demands its full width and pushes the panel (and the graph card
-#: beside it) past the edge. Insert zero-width spaces after the usual
-#: boundaries AND inside any long unbroken run (base64 tokens have no
-#: boundaries at all), so the label can wrap to the panel width. The value the
-#: user sees is unchanged; copy actions use the real url/path, not this.
+#: them - it demands its full width and pushes the panel past the edge. Insert
+#: zero-width spaces after the usual boundaries AND inside any long unbroken run
+#: so the label can wrap. The value the user sees is unchanged; copy actions use
+#: the real url/path, not this.
 _BREAK_AFTER = re.compile(r"([/\\._\-?&=:@])")
 _LONG_RUN = re.compile(r"(\S{18})")
+
+#: extension -> human category, for the "Type" line ("MP4 Video").
+_CATEGORY = {
+    "t-video": "Video",
+    "t-audio": "Audio",
+    "t-image": "Image",
+    "t-document": "Document",
+    "t-archive": "Archive",
+    "t-program": "Program",
+    "t-game": "Game",
+}
+_VIDEO_EXT = {"mp4", "mkv", "webm", "mov", "avi", "m4v"}
+_AUDIO_EXT = {"mp3", "m4a", "flac", "wav", "ogg", "opus", "aac", "m4b"}
+#: type_icon_name() falls back to "t-document" for anything it doesn't know, so
+#: the "Document" label is only trustworthy for these real document extensions.
+_DOC_EXT = {"pdf", "doc", "docx", "txt", "epub"}
 
 
 def _wrappable(text: str) -> str:
@@ -42,21 +74,122 @@ def _wrappable(text: str) -> str:
     return _LONG_RUN.sub("\\1​", text)
 
 
+def _type_label(filename: str) -> str:
+    """ "Me.mp4" -> "MP4 Video"; unknown -> "BIN file"; no extension -> "File"."""
+    ext = Path(filename).suffix.lower().lstrip(".")
+    if not ext:
+        return "File"
+    icon = type_icon_name(ext)
+    category = _CATEGORY.get(icon)
+    if icon == "t-document" and ext not in _DOC_EXT:
+        category = None  # an unknown type, not a real document
+    return f"{ext.upper()} {category}" if category else f"{ext.upper()} file"
+
+
+def _fmt_datetime(stamp: str | None) -> str:
+    """SQLite's UTC 'YYYY-MM-DD HH:MM:SS' -> local '22 Jul 2026, 14:30'."""
+    if not stamp:
+        return ""
+    try:
+        parsed = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+    except ValueError:
+        return stamp
+    return parsed.astimezone().strftime("%d %b %Y, %H:%M")
+
+
+def _elapsed(created: str | None, finished: str | None) -> str:
+    if not (created and finished):
+        return ""
+    try:
+        start = datetime.strptime(created, "%Y-%m-%d %H:%M:%S")
+        end = datetime.strptime(finished, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return ""
+    seconds = (end - start).total_seconds()
+    return duration_text(seconds) if seconds >= 1 else "under a second"
+
+
+class _StatGrid(QWidget):
+    """A two-column caption/value list with a fixed, pre-built set of rows. A row
+    with an empty value hides itself, so a grid only ever shows the facts it has
+    - no blank placeholders. Updating text never rebuilds a widget (no flicker)."""
+
+    def __init__(self, keys: Sequence[str], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        grid = QGridLayout(self)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(7)
+        grid.setColumnStretch(1, 1)
+        self._rows: dict[str, tuple[QLabel, QLabel]] = {}
+        for index, key in enumerate(keys):
+            caption = components.role_label(key.upper(), "caption", size=design.FONT["caption"])
+            caption.setAlignment(Qt.AlignmentFlag.AlignTop)
+            value = components.role_label("", "value", size=design.FONT["small"])
+            value.setWordWrap(True)
+            value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+            grid.addWidget(caption, index, 0)
+            grid.addWidget(value, index, 1)
+            self._rows[key] = (caption, value)
+
+    def set(self, key: str, value: str) -> None:
+        caption, label = self._rows[key]
+        label.setText(value)
+        caption.setVisible(bool(value))
+        label.setVisible(bool(value))
+
+    def clear(self) -> None:
+        for key in self._rows:
+            self.set(key, "")
+
+    def any_visible(self) -> bool:
+        # isHidden() reads the flag set() toggles, not "is on screen" - so this
+        # is right even when the grid is on a stacked page that isn't current.
+        return any(not label.isHidden() for _c, label in self._rows.values())
+
+
 class DetailDrawer(QFrame):
     def __init__(
         self,
         manager: DownloadManager,
         *,
+        ffmpeg: str | None,
+        on_open_file: Callable[[JobView], None],
         on_open_folder: Callable[[JobView], None],
+        on_redownload: Callable[[JobView], None],
         on_copy_url: Callable[[JobView], None],
+        on_copy_path: Callable[[JobView], None],
         on_copy_hash: Callable[[JobView], None],
+        on_rename: Callable[[JobView], None],
         on_remove: Callable[[JobView], None],
+        on_extract: Callable[[JobView], None],
+        on_security: Callable[[JobView], None],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.manager = manager
+        self._ffmpeg = ffmpeg
         self._view: JobView | None = None
-        self._callbacks = (on_open_folder, on_copy_url, on_copy_hash, on_remove)
+        self._job: Job | None = None
+        self._times: tuple[str | None, str | None] = (None, None)
+        #: This download's speed trail (for the live average and peak).
+        self._history: list[float] = []
+        #: Bumped every selection change; a late ffprobe result for an older
+        #: selection is dropped rather than written to the wrong file's tab.
+        self._probe_gen = 0
+        self._on = {
+            "open": on_open_file,
+            "folder": on_open_folder,
+            "redownload": on_redownload,
+            "copy_url": on_copy_url,
+            "copy_path": on_copy_path,
+            "copy_hash": on_copy_hash,
+            "rename": on_rename,
+            "remove": on_remove,
+            "extract": on_extract,
+            "security": on_security,
+        }
         self.setObjectName("Drawer")
         self.setFixedWidth(324)
 
@@ -64,55 +197,50 @@ class DetailDrawer(QFrame):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ---- header ---------------------------------------------------------
+        root.addWidget(self._build_header())
+        root.addWidget(self._build_tabstrip())
+        root.addWidget(self._build_pages(), 1)
+        root.addWidget(self._build_footer())
+
+        self._select_tab(0)
+        self.hide()
+
+    # ----------------------------------------------------------- construction
+
+    def _build_header(self) -> QWidget:
         header = QFrame()
         header.setObjectName("DrawerHeader")
-        hlay = QHBoxLayout(header)
-        hlay.setContentsMargins(14, 10, 8, 10)
-        title = components.role_label("DETAILS", "caption", size=design.FONT["caption"])
-        hlay.addWidget(title)
-        hlay.addStretch(1)
+        outer = QVBoxLayout(header)
+        outer.setContentsMargins(14, 10, 10, 10)
+        outer.setSpacing(9)
+
+        title_row = QHBoxLayout()
+        title_row.addWidget(
+            components.role_label("DETAILS", "caption", size=design.FONT["caption"])
+        )
+        title_row.addStretch(1)
         close = components.IconButton("cancel", "")
         close.clicked.connect(self.hide)
-        hlay.addWidget(close)
-        root.addWidget(header)
+        title_row.addWidget(close)
+        outer.addLayout(title_row)
 
-        # ---- body (static widgets, filled in _update) -----------------------
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        # The panel is a fixed 324px; its content must wrap to that, never push
-        # a horizontal scrollbar or spill past the edge.
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        body = QWidget()
-        self._body = QVBoxLayout(body)
-        self._body.setContentsMargins(14, 12, 14, 12)
-        self._body.setSpacing(11)
-        scroll.setWidget(body)
-        root.addWidget(scroll, 1)
-
-        # name + type icon
-        top = QWidget()
-        tl = QHBoxLayout(top)
-        tl.setContentsMargins(0, 0, 0, 0)
-        tl.setSpacing(8)
+        name_row = QHBoxLayout()
+        name_row.setSpacing(8)
         self._icon = QLabel()
         self._icon.setAlignment(Qt.AlignmentFlag.AlignTop)
         self._icon.setFixedWidth(18)
         self._name = components.role_label("", "strong", size=design.FONT["h2"], bold=True)
         self._name.setWordWrap(True)
-        tl.addWidget(self._icon)
-        tl.addWidget(self._name, 1)
-        self._body.addWidget(top)
+        name_row.addWidget(self._icon)
+        name_row.addWidget(self._name, 1)
+        outer.addLayout(name_row)
 
-        # status pill
         pill_row = QHBoxLayout()
         self._pill = components.StatusPill("queued")
         pill_row.addWidget(self._pill)
         pill_row.addStretch(1)
-        self._body.addLayout(pill_row)
+        outer.addLayout(pill_row)
 
-        # progress bar + percent
         prow = QHBoxLayout()
         prow.setSpacing(8)
         self._progress = motion.SmoothProgressBar()
@@ -121,12 +249,72 @@ class DetailDrawer(QFrame):
         self._percent.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         prow.addWidget(self._progress, 1)
         prow.addWidget(self._percent, 0, Qt.AlignmentFlag.AlignVCenter)
-        self._body.addLayout(prow)
+        outer.addLayout(prow)
 
         self._size = components.role_label("", "muted", size=design.FONT["small"])
-        self._body.addWidget(self._size)
+        outer.addWidget(self._size)
+        return header
 
-        # live speed card
+    def _build_tabstrip(self) -> QWidget:
+        strip = QFrame()
+        strip.setObjectName("DrawerTabs")
+        lay = QHBoxLayout(strip)
+        lay.setContentsMargins(10, 0, 10, 0)
+        lay.setSpacing(2)
+        self._tab_group = QButtonGroup(self)
+        self._tab_group.setExclusive(True)
+        self._tabs: list[QPushButton] = []
+        for index, label in enumerate(("Overview", "Details", "Media", "Activity")):
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setProperty("role", "tab")
+            btn.clicked.connect(lambda _c=False, i=index: self._select_tab(i))
+            self._tab_group.addButton(btn, index)
+            self._tabs.append(btn)
+            lay.addWidget(btn)
+        lay.addStretch(1)
+        return strip
+
+    def _scroll_page(self) -> tuple[QScrollArea, QVBoxLayout]:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        body = QWidget()
+        lay = QVBoxLayout(body)
+        lay.setContentsMargins(14, 12, 14, 12)
+        lay.setSpacing(12)
+        scroll.setWidget(body)
+        return scroll, lay
+
+    def _group(self, layout: QVBoxLayout, title: str, grid: _StatGrid) -> None:
+        layout.addWidget(
+            components.role_label(title.upper(), "caption", size=design.FONT["caption"])
+        )
+        layout.addWidget(grid)
+
+    def _build_pages(self) -> QWidget:
+        self._pages = QStackedWidget()
+
+        # -- Overview --------------------------------------------------------
+        over, olay = self._scroll_page()
+        self._overview = _StatGrid(
+            (
+                "Speed",
+                "Average",
+                "Peak",
+                "ETA",
+                "Downloaded",
+                "Remaining",
+                "Progress",
+                "Size",
+                "Type",
+                "Finished",
+                "Retries",
+            )
+        )
+        olay.addWidget(self._overview)
         self._spark = motion.Sparkline()
         self._spark.setFixedHeight(52)
         self._spark_card = components.card_frame()
@@ -140,59 +328,83 @@ class DetailDrawer(QFrame):
         self._spark_val = components.role_label("", "accent", size=design.FONT["h2"], bold=True)
         self._spark_val.setAlignment(Qt.AlignmentFlag.AlignRight)
         sc.addWidget(self._spark_val)
-        self._body.addWidget(self._spark_card)
+        olay.addWidget(self._spark_card)
+        self._ov_error = self._long_block(olay, "Error")
+        self._ov_notes = self._long_block(olay, "Notes")
+        self._security_btn = QPushButton("Security check…")
+        self._security_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._security_btn.clicked.connect(lambda: self._fire("security"))
+        olay.addWidget(self._security_btn)
+        olay.addStretch(1)
+        self._pages.addWidget(over)
 
-        # metadata
-        self._meta_queue = self._meta_block("Queue")
-        self._meta_server = self._meta_block("Server")
-        self._meta_eta = self._meta_block("ETA")
-        self._meta_dest = self._meta_block("Destination")
-        self._meta_url = self._meta_block("URL")
-        self._meta_error = self._meta_block("Error")
-        self._meta_notes = self._meta_block("Notes")
+        # -- Details ---------------------------------------------------------
+        det, dlay = self._scroll_page()
+        self._file_grid = _StatGrid(("Type", "Size on disk", "Location", "Added", "Finished"))
+        self._group(dlay, "File", self._file_grid)
+        self._source_grid = _StatGrid(
+            (
+                "Server",
+                "Final server",
+                "Protocol",
+                "Resume",
+                "Connections",
+                "Segments",
+                "Priority",
+                "Queue",
+                "Category",
+            )
+        )
+        self._group(dlay, "Source", self._source_grid)
+        self._det_url = self._long_block(dlay, "URL")
+        dlay.addStretch(1)
+        self._pages.addWidget(det)
 
-        # tags (the only variable-count part - rebuilt in place)
+        # -- Media / Contents ------------------------------------------------
+        med, mlay = self._scroll_page()
+        self._media_title = components.role_label("MEDIA", "caption", size=design.FONT["caption"])
+        mlay.addWidget(self._media_title)
+        self._media_status = components.role_label("", "muted", size=design.FONT["small"])
+        mlay.addWidget(self._media_status)
+        self._media_grid = _StatGrid(
+            (
+                "Resolution",
+                "Duration",
+                "FPS",
+                "Video",
+                "Audio",
+                "Container",
+                "Files",
+                "Uncompressed",
+            )
+        )
+        mlay.addWidget(self._media_grid)
+        self._extract_btn = QPushButton("Extract here")
+        self._extract_btn.setProperty("accent", "true")
+        self._extract_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._extract_btn.clicked.connect(lambda: self._fire("extract"))
+        mlay.addWidget(self._extract_btn)
+        mlay.addStretch(1)
+        self._pages.addWidget(med)
+
+        # -- Activity --------------------------------------------------------
+        act, alay = self._scroll_page()
+        self._history_grid = _StatGrid(("Added", "Finished", "Elapsed"))
+        self._group(alay, "History", self._history_grid)
+        self._stats_grid = _StatGrid(("Average", "Peak", "Retries", "Connections", "Speed limit"))
+        self._group(alay, "Statistics", self._stats_grid)
         self._tags_box = QWidget()
         self._tags_layout = QHBoxLayout(self._tags_box)
-        self._tags_layout.setContentsMargins(0, 0, 0, 0)
+        self._tags_layout.setContentsMargins(0, 6, 0, 0)
         self._tags_layout.setSpacing(4)
-        self._body.addWidget(self._tags_box)
-        self._body.addStretch(1)
+        alay.addWidget(self._tags_box)
+        alay.addStretch(1)
+        self._pages.addWidget(act)
 
-        # ---- actions footer: a 2x2 grid so no label ever clips --------------
-        footer = QFrame()
-        footer.setObjectName("DrawerFooter")
-        flay = QGridLayout(footer)
-        flay.setContentsMargins(10, 8, 10, 8)
-        flay.setHorizontalSpacing(6)
-        flay.setVerticalSpacing(6)
-        self._act_folder = components.IconButton(
-            "folder", "Open folder", tooltip="Open this download's folder"
-        )
-        self._act_url = components.IconButton("copy", "Copy URL", tooltip="Copy the download URL")
-        self._act_hash = components.IconButton(
-            "copy", "Copy hash", tooltip="Copy the file's SHA-256 checksum"
-        )
-        self._act_remove = components.IconButton(
-            "trash",
-            "Remove",
-            danger=True,
-            tooltip="Remove from the list (the file stays on disk)",
-        )
-        self._act_folder.clicked.connect(lambda: self._fire(0))
-        self._act_url.clicked.connect(lambda: self._fire(1))
-        self._act_hash.clicked.connect(lambda: self._fire(2))
-        self._act_remove.clicked.connect(lambda: self._fire(3))
-        flay.addWidget(self._act_folder, 0, 0)
-        flay.addWidget(self._act_url, 0, 1)
-        flay.addWidget(self._act_hash, 1, 0)
-        flay.addWidget(self._act_remove, 1, 1)
-        root.addWidget(footer)
+        return self._pages
 
-        self.hide()
-
-    def _meta_block(self, caption: str) -> QLabel:
-        """A caption + value pair; returns the value label to fill in later."""
+    def _long_block(self, layout: QVBoxLayout, caption: str) -> QLabel:
+        """A full-width caption + wrapping value, for URL / location / errors."""
         box = QWidget()
         lay = QVBoxLayout(box)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -204,56 +416,142 @@ class DetailDrawer(QFrame):
         value.setWordWrap(True)
         value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lay.addWidget(value)
-        self._body.addWidget(box)
+        layout.addWidget(box)
+        box.setVisible(False)
         return value
 
-    def _fire(self, index: int) -> None:
+    def _build_footer(self) -> QWidget:
+        footer = QFrame()
+        footer.setObjectName("DrawerFooter")
+        grid = QGridLayout(footer)
+        grid.setContentsMargins(10, 8, 10, 8)
+        grid.setHorizontalSpacing(6)
+        grid.setVerticalSpacing(6)
+        specs = (
+            ("open", "open", "Open", "Open the file", False),
+            ("folder", "folder", "Folder", "Open the containing folder", False),
+            ("redownload", "duplicate", "Redownload", "Download this again", False),
+            ("copy_url", "copy", "Copy URL", "Copy the download URL", False),
+            ("copy_path", "note", "Copy path", "Copy the file path", False),
+            ("copy_hash", "shield", "Copy hash", "Copy the SHA-256 checksum", False),
+            ("rename", "rename", "Rename", "Rename the file", False),
+            ("remove", "trash", "Remove", "Remove from the list (file stays on disk)", True),
+        )
+        self._act_btns: dict[str, components.IconButton] = {}
+        for index, (key, icon, label, tip, danger) in enumerate(specs):
+            btn = components.IconButton(icon, label, danger=danger, tooltip=tip)
+            btn.clicked.connect(lambda _c=False, k=key: self._fire(k))
+            grid.addWidget(btn, index // 2, index % 2)
+            self._act_btns[key] = btn
+        return footer
+
+    # -------------------------------------------------------------- behaviour
+
+    def _select_tab(self, index: int) -> None:
+        self._pages.setCurrentIndex(index)
+        button = self._tab_group.button(index)
+        if button is not None:
+            button.setChecked(True)
+
+    def _fire(self, key: str) -> None:
         if self._view is not None:
-            self._callbacks[index](self._view)
+            self._on[key](self._view)
+
+    def current_id(self) -> int | None:
+        return self._view.id if self._view is not None else None
 
     def show_view(
         self, view: JobView, speed_bps: float, history: Iterable[float] | None = None
     ) -> None:
         new = self._view is None or self._view.id != view.id
         if new:
-            # Restore this download's own speed trail instead of starting the
-            # graph over each time the details are reopened.
             self._spark.set_samples(history or ())
         self._view = view
+        self._history = list(history or []) if new else self._history
         self._update(view, speed_bps, new)
         self.show()
 
-    def current_id(self) -> int | None:
-        return self._view.id if self._view is not None else None
+    def retint(self) -> None:
+        for btn in self._act_btns.values():
+            btn.retint()
+
+    # ----------------------------------------------------------------- update
 
     def _update(self, view: JobView, speed_bps: float, new: bool) -> None:
-        p = theme.current()
+        palette = theme.current()
         if new:
-            kind = view.kind.value if view.kind.value in ("torrent", "cloud") else view.filename
-            self._icon.setPixmap(svg_icon(type_icon_name(kind), p.accent).pixmap(16, 16))
-            self._name.setText(view.display_name)
-            self._meta_queue.setText(self._queue_name(view.queue_id))
-            self._meta_server.setText(urlsplit(view.url).hostname or "")
-            self._meta_dest.setText(_wrappable(view.dest_dir))
-            self._meta_url.setText(_wrappable(view.url))
-            self._rebuild_tags(view)
-        # Notes and errors live here, not in row tooltips.
-        self._meta_notes.setText(view.notes or "")
-        notes_box = self._meta_notes.parentWidget()
-        if notes_box is not None:
-            notes_box.setVisible(bool(view.notes))
-        self._meta_error.setText(view.error or "")
-        error_box = self._meta_error.parentWidget()
-        if error_box is not None:
-            error_box.setVisible(bool(view.error))
-
+            self._probe_gen += 1
+            self._job = self.manager.db.get_job(view.id)
+            self._times = self.manager.db.job_timestamps(view.id)
+            self._fill_static(view, palette)
+            self._start_probe(view)
+        # live header
         self._pill.set_status(view.status.value)
-        self._progress.set_color(design.status_color(p, view.status.value))
+        self._progress.set_color(design.status_color(palette, view.status.value))
+        self._update_progress(view)
+        self._update_overview(view, speed_bps, new)
+        self._update_actions(view)
+
+    def _fill_static(self, view: JobView, palette: design.Palette) -> None:
+        kind = view.kind.value if view.kind.value in ("torrent", "cloud") else view.filename
+        self._icon.setPixmap(svg_icon(type_icon_name(kind), palette.accent).pixmap(16, 16))
+        self._name.setText(view.display_name)
+
+        path = Path(view.dest_dir) / view.filename
+        created, updated = self._times
+        finished = _fmt_datetime(updated) if view.status is JobStatus.COMPLETED else ""
+
+        # Details -> File
+        self._file_grid.clear()
+        self._file_grid.set("Type", _type_label(view.filename))
+        self._file_grid.set("Size on disk", self._disk_size(path))
+        self._file_grid.set("Location", _wrappable(view.dest_dir))
+        self._file_grid.set("Added", _fmt_datetime(created))
+        self._file_grid.set("Finished", finished)
+
+        # Details -> Source
+        self._source_grid.clear()
+        self._source_grid.set("Server", urlsplit(view.url).hostname or "")
+        final_host = (
+            urlsplit(self._job.final_url).hostname if self._job and self._job.final_url else ""
+        )
+        if final_host and final_host != (urlsplit(view.url).hostname or ""):
+            self._source_grid.set("Final server", final_host)
+        self._source_grid.set("Protocol", (urlsplit(view.url).scheme or "").upper())
+        if view.kind in (JobKind.DIRECT, JobKind.SMART, JobKind.HLS) and self._job is not None:
+            self._source_grid.set("Resume", "Yes" if self._job.resumable else "No")
+        if view.kind is not JobKind.TORRENT:
+            self._source_grid.set("Connections", str(self.manager.connections))
+        self._source_grid.set("Segments", self._segment_count(view))
+        self._source_grid.set("Priority", self._priority_label())
+        self._source_grid.set("Queue", self._queue_name(view.queue_id))
+        self._source_grid.set("Category", self._category(view))
+        self._det_url.setText(_wrappable(view.url))
+        url_box = self._det_url.parentWidget()
+        if url_box is not None:
+            url_box.setVisible(bool(view.url))
+
+        # Activity -> History + Statistics
+        self._history_grid.clear()
+        self._history_grid.set("Added", _fmt_datetime(created))
+        self._history_grid.set("Finished", finished)
+        self._history_grid.set("Elapsed", _elapsed(created, updated) if finished else "")
+        self._stats_grid.clear()
+        self._stats_grid.set("Retries", str(view.retry_count) if view.retry_count else "")
+        if view.kind is not JobKind.TORRENT:
+            self._stats_grid.set("Connections", str(self.manager.connections))
+        if view.speed_limit_kbps:
+            self._stats_grid.set("Speed limit", f"{view.speed_limit_kbps} KB/s")
+        self._rebuild_tags(view)
+
+    def _update_progress(self, view: JobView) -> None:
         if view.total_size:
-            fraction = view.downloaded / view.total_size
+            # A finished download reads full, even if the byte counter lagged.
+            downloaded = view.total_size if view.status is JobStatus.COMPLETED else view.downloaded
+            fraction = min(1.0, downloaded / view.total_size)
             self._progress.set_value(fraction)
             self._percent.setText(f"{int(fraction * 100)}%")
-            self._size.setText(f"{human_bytes(view.downloaded)} of {human_bytes(view.total_size)}")
+            self._size.setText(f"{human_bytes(downloaded)} of {human_bytes(view.total_size)}")
         elif view.status is JobStatus.DOWNLOADING:
             self._progress.set_indeterminate(True)
             self._percent.setText("")
@@ -263,30 +561,188 @@ class DetailDrawer(QFrame):
             self._percent.setText("")
             self._size.setText("")
 
+    def _update_overview(self, view: JobView, speed_bps: float, new: bool) -> None:
         downloading = view.status is JobStatus.DOWNLOADING
         self._spark_card.setVisible(downloading)
+        if downloading and not new:
+            self._spark.push(speed_bps)
+            self._history.append(speed_bps)
+        average = sum(self._history) / len(self._history) if self._history else 0.0
+        peak = max(self._history) if self._history else 0.0
+
+        self._overview.clear()
         if downloading:
-            # On a fresh open the trail was just restored via set_samples (which
-            # already holds this poll's sample); only append on later ticks.
-            if not new:
-                self._spark.push(speed_bps)
             self._spark_val.setText(motion.fmt_speed(speed_bps))
+            self._overview.set("Speed", motion.fmt_speed(speed_bps))
+            self._overview.set("Average", motion.fmt_speed(average) if average > 0 else "")
             eta = ""
             if speed_bps > 1 and view.total_size:
                 eta = motion.fmt_eta((view.total_size - view.downloaded) / speed_bps)
-            self._meta_eta.setText(eta)
+            self._overview.set("ETA", eta)
+            self._overview.set("Downloaded", human_bytes(view.downloaded))
+            if view.total_size:
+                self._overview.set(
+                    "Remaining", human_bytes(max(0, view.total_size - view.downloaded))
+                )
+                self._overview.set("Progress", f"{int(view.downloaded / view.total_size * 100)}%")
         else:
-            self._meta_eta.setText("")
-        self._act_hash.setVisible(view.status is JobStatus.COMPLETED)
+            if view.total_size:
+                self._overview.set("Size", human_bytes(view.total_size))
+            self._overview.set("Type", _type_label(view.filename))
+            if view.status is JobStatus.COMPLETED:
+                self._overview.set("Finished", _fmt_datetime(self._times[1]))
+            if peak > 0:
+                self._overview.set("Average", motion.fmt_speed(average))
+                self._overview.set("Peak", motion.fmt_speed(peak))
+            self._overview.set("Retries", str(view.retry_count) if view.retry_count else "")
+
+        # Activity statistics mirror the live average/peak.
+        self._stats_grid.set("Average", motion.fmt_speed(average) if average > 0 else "")
+        self._stats_grid.set("Peak", motion.fmt_speed(peak) if peak > 0 else "")
+
+        self._ov_error.setText(view.error or "")
+        err_box = self._ov_error.parentWidget()
+        if err_box is not None:
+            err_box.setVisible(bool(view.error))
+        self._ov_notes.setText(view.notes or "")
+        notes_box = self._ov_notes.parentWidget()
+        if notes_box is not None:
+            notes_box.setVisible(bool(view.notes))
+        done = view.status is JobStatus.COMPLETED
+        self._security_btn.setVisible(done and (Path(view.dest_dir) / view.filename).exists())
+
+    def _update_actions(self, view: JobView) -> None:
+        path = Path(view.dest_dir) / view.filename
+        done = view.status is JobStatus.COMPLETED and path.exists()
+        self._act_btns["open"].setEnabled(done)
+        self._act_btns["copy_hash"].setEnabled(done)
+        self._act_btns["rename"].setEnabled(path.exists())
+
+    # -------------------------------------------------------- media / archive
+
+    def _start_probe(self, view: JobView) -> None:
+        """Kick a background read for the third tab: ffprobe for media, an entry
+        list for archives. Hide the tab until we know it has something to show."""
+        self._media_grid.clear()
+        self._extract_btn.setVisible(False)
+        self._media_status.setText("")
+        path = Path(view.dest_dir) / view.filename
+        ext = path.suffix.lower().lstrip(".")
+        completed = view.status is JobStatus.COMPLETED and path.exists()
+        is_media = ext in _VIDEO_EXT or ext in _AUDIO_EXT
+        is_arch = completed and archive.is_archive(path)
+
+        if completed and is_media and self._ffmpeg:
+            self._show_third_tab("Media")
+            self._media_status.setText("Reading…")
+            gen = self._probe_gen
+            ffmpeg = self._ffmpeg
+            self._run(lambda: read_media_info(path, ffmpeg), lambda r: self._fill_media(r, gen))
+        elif is_arch:
+            self._show_third_tab("Contents")
+            self._media_status.setText("Reading…")
+            gen = self._probe_gen
+            self._run(lambda: archive.list_entries(path), lambda r: self._fill_archive(r, gen))
+        else:
+            self._hide_third_tab()
+
+    def _run(self, work: Callable[[], object], done: Callable[[object], None]) -> None:
+        thread = FileOpThread(work, self)
+
+        def deliver(result: object, error: object) -> None:
+            if error is None:
+                done(result)
+            else:
+                log.info("detail probe failed: %s", error)
+                self._media_status.setText("")
+
+        thread.done.connect(deliver)
+        thread.start()
+
+    def _fill_media(self, result: object, gen: int) -> None:
+        if gen != self._probe_gen:
+            return  # selection moved on; this is a stale file's answer
+        if not isinstance(result, MediaSummary):
+            self._hide_third_tab()
+            return
+        self._media_status.setText("")
+        if result.width and result.height:
+            self._media_grid.set("Resolution", f"{result.width}x{result.height}")
+        self._media_grid.set("Duration", duration_text(result.duration) if result.duration else "")
+        self._media_grid.set("FPS", f"{result.fps:g}" if result.fps else "")
+        self._media_grid.set("Video", result.vcodec or "")
+        self._media_grid.set("Audio", result.acodec or "")
+        self._media_grid.set("Container", result.container or "")
+        if not self._media_grid.any_visible():
+            self._hide_third_tab()
+
+    def _fill_archive(self, result: object, gen: int) -> None:
+        if gen != self._probe_gen:
+            return
+        entries = result if isinstance(result, tuple) else ()
+        files = [entry for entry in entries if not getattr(entry, "is_dir", False)]
+        self._media_status.setText("")
+        self._media_grid.set("Files", str(len(files)) if files else "")
+        total = sum(getattr(entry, "size", 0) or 0 for entry in files)
+        if total:
+            self._media_grid.set("Uncompressed", human_bytes(total))
+        self._extract_btn.setVisible(True)
+
+    def _show_third_tab(self, label: str) -> None:
+        self._tabs[2].setText(label)
+        self._tabs[2].setVisible(True)
+
+    def _hide_third_tab(self) -> None:
+        self._tabs[2].setVisible(False)
+        if self._pages.currentIndex() == 2:
+            self._select_tab(0)
+
+    # ------------------------------------------------------------- small bits
+
+    def _disk_size(self, path: Path) -> str:
+        try:
+            return human_bytes(path.stat().st_size)
+        except OSError:
+            return ""
+
+    def _segment_count(self, view: JobView) -> str:
+        if view.kind is not JobKind.HLS or self._job is None:
+            return ""
+        work = self._job.part_path.parent / f".{self._job.part_path.name}.hls"
+        if not work.is_dir():
+            return ""
+        count = sum(1 for _ in work.glob("*") if not _.name.endswith(".part"))
+        return str(count) if count else ""
+
+    def _priority_label(self) -> str:
+        if self._job is None or self._job.priority == 0:
+            return "Normal"
+        return "High" if self._job.priority > 0 else "Low"
+
+    def _category(self, view: JobView) -> str:
+        if not self.manager.settings.categories_enabled:
+            return ""
+        folder = Path(view.dest_dir).name
+        known = {
+            "Video",
+            "Music",
+            "Images",
+            "Documents",
+            "Archives",
+            "Programs",
+            "Games",
+            "Torrents",
+        }
+        return folder if folder in known else ""
 
     def _rebuild_tags(self, view: JobView) -> None:
         while self._tags_layout.count():
             item = self._tags_layout.takeAt(0)
             if item is None:
                 break
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
         tags = [t.strip() for t in view.tags.split(",") if t.strip()] if view.tags else []
         for tag in tags:
             self._tags_layout.addWidget(components.Chip(tag))
@@ -296,7 +752,7 @@ class DetailDrawer(QFrame):
     def _queue_name(self, queue_id: int | None) -> str:
         if queue_id is None:
             return "Default"
-        for q in self.manager.list_queues():
-            if q.id == queue_id:
-                return q.name
+        for queue in self.manager.list_queues():
+            if queue.id == queue_id:
+                return queue.name
         return "Default"
