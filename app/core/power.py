@@ -13,6 +13,8 @@ import subprocess
 import sys
 import time
 
+from app.core import proc
+
 log = logging.getLogger(__name__)
 
 _SLEEP = {
@@ -44,7 +46,7 @@ _LOCK = {
 
 def _run(command: list[str]) -> bool:
     try:
-        subprocess.Popen(command)  # argument list only - no shell (S1)
+        subprocess.Popen(command, env=proc.clean_env())  # arg list only, no shell (S1)
         return True
     except OSError as exc:
         log.warning("power command failed (%s): %s", command[0], exc)

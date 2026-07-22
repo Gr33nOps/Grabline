@@ -12,6 +12,8 @@ import logging
 import shlex
 import subprocess
 
+from app.core import proc
+
 log = logging.getLogger(__name__)
 
 
@@ -29,7 +31,9 @@ def run_script(command: str, file_path: str) -> bool:
     if not parts:
         return False
     try:
-        subprocess.Popen([*parts, file_path])  # arg list only, no shell (S1)
+        # env=clean_env() so the user's command runs against system libraries,
+        # not the frozen app's bundled ones (see proc.clean_env).
+        subprocess.Popen([*parts, file_path], env=proc.clean_env())  # arg list, no shell (S1)
         return True
     except OSError as exc:
         log.warning("script failed to start (%s): %s", parts[0], exc)

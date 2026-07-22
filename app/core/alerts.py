@@ -15,6 +15,8 @@ import sys
 import threading
 from pathlib import Path
 
+from app.core import proc
+
 log = logging.getLogger(__name__)
 
 #: A stock sound most Linux desktops ship (freedesktop sound theme).
@@ -34,7 +36,7 @@ def _play(sound_file: str) -> None:
             return
         if sys.platform == "darwin":
             path = sound_file or _MAC_DEFAULT
-            subprocess.run(["afplay", path], timeout=15)  # arg list only (S1)
+            subprocess.run(["afplay", path], timeout=15, env=proc.clean_env())  # arg list (S1)
             return
         path = sound_file or _LINUX_DEFAULT
         if not Path(path).is_file():
@@ -47,7 +49,7 @@ def _play(sound_file: str) -> None:
             command = [tool, path]
             if player == "ffplay":
                 command = [tool, "-nodisp", "-autoexit", "-loglevel", "quiet", path]
-            subprocess.run(command, timeout=15)
+            subprocess.run(command, timeout=15, env=proc.clean_env())
             return
         log.info("no audio player found for the completion sound")
     except Exception:  # never let a sound break a download flow

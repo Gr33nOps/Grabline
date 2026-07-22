@@ -21,6 +21,8 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from app.core import proc
+
 # Linux file managers to try, best first: xdg-open honours the desktop's
 # default, gio is the GLib opener, and the rest are the common concrete apps.
 _LINUX_OPENERS = ("xdg-open", "gio", "nautilus", "dolphin", "nemo", "thunar", "pcmanfm", "caja")
@@ -72,7 +74,10 @@ def open_folder(path: str | Path) -> bool:
     if command is None:
         return False
     try:
-        subprocess.Popen(command)  # arg list only, no shell (S1); GUI, not hidden
+        # env=clean_env(): launch the file manager with the system's own
+        # libraries, not the frozen app's bundled ones. Without this the AppImage
+        # broke xdg-open and "Open folder" opened a browser/terminal instead.
+        subprocess.Popen(command, env=proc.clean_env())  # arg list only, no shell (S1)
     except OSError:
         return False
     return True

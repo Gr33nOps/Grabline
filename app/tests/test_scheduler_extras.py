@@ -22,7 +22,7 @@ from app.db.database import Database
 
 def test_power_actions_launch_platform_commands(monkeypatch: pytest.MonkeyPatch):
     launched: list[list[str]] = []
-    monkeypatch.setattr("app.core.power.subprocess.Popen", lambda cmd: launched.append(cmd))
+    monkeypatch.setattr("app.core.power.subprocess.Popen", lambda cmd, **kw: launched.append(cmd))
     assert power.sleep() and power.shutdown() and power.hibernate() and power.lock()
     assert len(launched) == 4
     if sys.platform == "linux":

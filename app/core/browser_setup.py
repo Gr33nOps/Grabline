@@ -15,7 +15,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.core import paths
+from app.core import paths, proc
 
 #: Public store listing for each browser family, where the user clicks a single
 #: "Add" to install. No app can install an extension silently - a browser will
@@ -109,6 +109,7 @@ def _linux_default_browser_id() -> str | None:
         capture_output=True,
         text=True,
         timeout=5,
+        env=proc.clean_env(),  # system libs, not the frozen app's bundled ones
     )
     return result.stdout.strip() or None if result.returncode == 0 else None
 
