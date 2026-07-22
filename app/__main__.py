@@ -10,9 +10,12 @@ import traceback
 from types import TracebackType
 from typing import TextIO
 
-from PySide6.QtCore import QBuffer, QIODevice, QTimer
+from PySide6.QtCore import QBuffer, QEvent, QIODevice, QObject, QTimer
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
+    QDialogButtonBox,
     QMessageBox,
     QProxyStyle,
     QStyle,
@@ -42,6 +45,22 @@ class _TextOnlyButtons(QProxyStyle):
         if hint == QStyle.StyleHint.SH_DialogButtonBox_ButtonsHaveIcons:
             return 0
         return super().styleHint(hint, option, widget, returnData)
+
+
+class _NoDialogIcons(QObject):
+    """The style hint above turns off dialog-button icons for Qt's own styles,
+    but a Linux GTK/Cinnamon platform theme (as bundled in the packaged build)
+    paints the check/cross back regardless. Clearing the icons whenever a dialog
+    is shown removes them no matter where the theme set them - the belt to the
+    style hint's braces, so no OK/Cancel icon slips through on any platform."""
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.Show and isinstance(obj, QDialog):
+            for box in obj.findChildren(QDialogButtonBox):
+                for button in box.buttons():
+                    if not button.icon().isNull():
+                        button.setIcon(QIcon())
+        return False
 
 
 def _icon_png() -> bytes:
@@ -187,6 +206,8 @@ def main() -> int:
     _set_windows_app_id()  # before any window exists, or the taskbar ignores it
     app = QApplication([arg for arg in sys.argv if arg != "--minimized"])
     app.setStyle(_TextOnlyButtons())  # no check/cross icons on dialog buttons
+    _no_dialog_icons = _NoDialogIcons(app)  # parented to the app so it stays alive
+    app.installEventFilter(_no_dialog_icons)  # strip any icons the theme paints back
     # Internal QStandardPaths identifiers: kept as "Grabline" so the data folder
     # (settings, database, cached binaries) stays where it already is. The
     # user-visible name is set via setApplicationDisplayName below.

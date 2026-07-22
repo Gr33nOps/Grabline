@@ -245,6 +245,10 @@ class MainWindow(QMainWindow):
         self._was_active = False
         self._resolve_threads: list[work_threads.ResolveThread] = []
         self._file_ops: set[work_threads.FileOpThread] = set()
+        # Cancel flags for unbounded file ops (the installer download): set on
+        # shutdown so the worker stops promptly and the exit wait doesn't time
+        # out on a still-running QThread (which Qt aborts the process over).
+        self._op_cancels: set[threading.Event] = set()
         self._auto_extracted: set[int] = set()
         self._scanned: set[int] = set()
         self._timer = QTimer(self)
@@ -639,6 +643,11 @@ class MainWindow(QMainWindow):
         self._shutting_down = True
         for timer in (self._timer, self._handoff_timer, self._rss_timer):
             timer.stop()
+        # Ask any unbounded op (an in-flight installer download) to stop first, so
+        # its worker returns quickly and the wait below doesn't time out on a
+        # still-running thread - the abort in the update-download crash report.
+        for cancel in self._op_cancels:
+            cancel.set()
         for worker in [*self._file_ops, *self._resolve_threads]:
             worker.wait(8000)
 
@@ -839,6 +848,9 @@ class MainWindow(QMainWindow):
         # streaming loop checks each chunk; clicking Cancel (or Esc) sets it.
         cancel_event = threading.Event()
         progress.canceled.connect(cancel_event.set)
+        # Also cancelled on app shutdown, so quitting mid-download stops the
+        # worker instead of leaving a running thread for Qt to abort over.
+        self._op_cancels.add(cancel_event)
 
         relay = work_threads.ProgressRelay(self)
         relay.tick.connect(progress.setValue)
@@ -850,6 +862,7 @@ class MainWindow(QMainWindow):
                 relay.tick.emit(int(received / total * 100))
 
         def done(result: object) -> None:
+            self._op_cancels.discard(cancel_event)
             progress.close()
             path = str(result)
             self.statusBar().showMessage(f"Update downloaded: {path}", 8000)
@@ -857,6 +870,7 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
         def failed(error: object) -> None:
+            self._op_cancels.discard(cancel_event)
             progress.close()
             if isinstance(error, update.UpdateCancelled):
                 self.statusBar().showMessage("Update cancelled", 5000)

@@ -1255,6 +1255,60 @@ def test_add_download_dialog_file_has_no_quality(db: Database):
     assert not dialog.dont_ask_again()
 
 
+def test_shutdown_cancels_in_flight_file_ops(db: Database, tmp_path: Path):
+    """An unbounded op (an installer download) must be cancelled on shutdown, so
+    its worker returns and the exit wait doesn't time out on a running QThread -
+    the abort in the update-download crash report."""
+    import threading as _threading
+
+    _qapp()
+    settings = Settings(db)
+    settings.download_dir = tmp_path
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        window = MainWindow(manager, settings)
+        cancel = _threading.Event()
+        window._op_cancels.add(cancel)
+        assert not cancel.is_set()
+
+        window.shutdown()
+
+        assert cancel.is_set()  # shutdown asked the in-flight download to stop
+    finally:
+        manager.shutdown()
+
+
+def test_dialog_buttons_are_stripped_of_icons():
+    """A Linux GTK/Cinnamon platform theme paints a check on OK and a cross on
+    Cancel even when the style hint that controls it is off. The app's event
+    filter clears any such icon when a dialog is shown, so buttons stay text
+    only. Icons are forced on here to stand in for the theme."""
+    from PySide6.QtGui import QIcon
+    from PySide6.QtWidgets import QDialog, QDialogButtonBox, QStyle, QVBoxLayout
+
+    from app.__main__ import _NoDialogIcons
+
+    app = _qapp()
+    strip = _NoDialogIcons(app)
+    app.installEventFilter(strip)
+    dialog = QDialog()
+    try:
+        QVBoxLayout(dialog)
+        box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, dialog
+        )
+        painted = QIcon(app.style().standardIcon(QStyle.StandardPixmap.SP_DialogOkButton))
+        for button in box.buttons():
+            button.setIcon(painted)  # a theme has painted an icon on
+        assert any(not b.icon().isNull() for b in box.buttons())  # sanity: icons are on
+        dialog.show()
+        app.processEvents()
+        assert all(b.icon().isNull() for b in box.buttons())  # the filter cleared them
+    finally:
+        app.removeEventFilter(strip)
+        dialog.close()
+
+
 def test_browser_grab_of_video_runs_analysis_for_the_full_panel(
     db: Database, tmp_path: Path, monkeypatch
 ):
