@@ -175,6 +175,39 @@ def test_native_fetch_skips_segments_already_on_disk(
     assert not (work / "video-00001.ts.part").exists()  # temp renamed away
 
 
+def test_native_fetch_retries_a_dropped_segment(
+    server: MediaServer, db: Database, dest: Path, tmp_path: Path
+):
+    """A segment whose connection drops mid-transfer is retried on a fresh one,
+    so one flaky part cannot stall a worker or fail the whole stream - the cause
+    of the '0-byte .part files and a crawling speed' report."""
+    good = b"x" * 40_000
+    server.add("/s/seg000.ts", good, content_type="video/mp2t")
+    # seg001 drops after 100 body bytes on the FIRST request, then serves fully.
+    server.add(
+        "/s/seg001.ts", good, content_type="video/mp2t", cut_after=100, cut_from=1, cut_until=1
+    )
+    server.add("/s/seg002.ts", good, content_type="video/mp2t")
+
+    job = _hls_job(db, server.url("/s/index.m3u8"), dest)
+    task = HlsDownload(db, job, ffmpeg_path="ffmpeg")  # ffmpeg is not invoked here
+    work = tmp_path / "work"
+    work.mkdir()
+    downloads = [
+        (server.url("/s/seg000.ts"), "video-00000.ts"),
+        (server.url("/s/seg001.ts"), "video-00001.ts"),
+        (server.url("/s/seg002.ts"), "video-00002.ts"),
+    ]
+
+    ok = task._fetch_segments(downloads, work)
+
+    assert ok is True
+    for i in range(3):
+        assert (work / f"video-0000{i}.ts").read_bytes() == good  # all complete despite the drop
+    assert server.request_count("/s/seg001.ts") >= 2  # the dropped part was retried
+    assert not any(p.name.endswith(".part") for p in work.iterdir())  # no leftovers
+
+
 def test_paused_native_fetch_keeps_its_progress(db: Database, dest: Path):
     """A paused native fetch keeps its segments on disk, so its progress count
     must survive the pause; only the non-resumable FFmpeg path zeroes it."""

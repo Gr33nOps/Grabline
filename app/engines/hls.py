@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -39,9 +40,17 @@ from app.engines.manifest import is_master_playlist, playlist_duration
 
 #: The URI="..." on an #EXT-X-KEY / #EXT-X-MAP tag.
 _TAG_URI = re.compile(r'URI="([^"]*)"')
-#: Local segment fetch concurrency - enough to saturate a CDN, not so many that
-#: a segment server rate-limits us the way one greedy connection would.
-_SEGMENT_WORKERS = 8
+#: Local segment fetch concurrency. An HLS stream is thousands of small parts,
+#: so real parallelism is what makes it fast; 8 was too few to hide the latency
+#: of a slow CDN. A hung part must never stall the rest (see the retry below).
+_SEGMENT_WORKERS = 16
+#: Per-segment retry budget. A stalled or dropped connection is abandoned and
+#: retried on a fresh one instead of holding a worker for the whole read timeout
+#: - the "0-byte .part sitting for minutes" that collapsed throughput to a crawl.
+_SEGMENT_RETRIES = 4
+#: Read timeout per segment: short, so a server that accepts the connection then
+#: sends nothing is dropped in seconds and retried, not after a full minute.
+_SEGMENT_READ_TIMEOUT = 20.0
 
 log = logging.getLogger(__name__)
 
@@ -410,6 +419,7 @@ class HlsDownload:
         keep_work = False
         try:
             work.mkdir(parents=True, exist_ok=True)
+            _hide_dir(work)  # a big stream's thousands of parts shouldn't clutter the folder
             video = self._prepare_local_manifest(text, base_url, work, "video")
             if video is None:
                 if self._stop_event.is_set():
@@ -504,41 +514,69 @@ class HlsDownload:
         # name, and refetch everything else. This is what lets pausing a big HLS
         # download keep its progress instead of starting from zero.
         pending: list[tuple[str, str]] = []
-        done = 0
-        total_bytes = 0
+        confirmed = 0  # bytes of parts fully fetched and renamed into place
         for seg_url, seg_name in downloads:
             existing = work / seg_name
             if existing.exists():
-                done += 1
-                total_bytes += existing.stat().st_size
+                confirmed += existing.stat().st_size
             else:
                 pending.append((seg_url, seg_name))
-        self._downloaded = total_bytes
+        done = total - len(pending)
+        inflight = 0  # bytes streamed for parts not yet confirmed (for a smooth bar)
+        last_write = 0.0
+        self._downloaded = confirmed
         if not pending:
             return not self._stop_event.is_set()
 
         def fetch_one(client: httpx.Client, url: str, name: str) -> None:
-            nonlocal done, total_bytes
-            if self._stop_event.is_set():
-                return
+            nonlocal confirmed, inflight, done, last_write
             dest = work / name
             tmp = work / f"{name}.part"
-            with client.stream("GET", url, headers=self._headers or None) as response:
-                response.raise_for_status()
-                with open(tmp, "wb") as fh:
-                    for chunk in response.iter_bytes(65536):
-                        if self._stop_event.is_set():
-                            return  # leave the .part behind; it is refetched next run
-                        fh.write(chunk)
-            os.replace(tmp, dest)  # atomic: only a complete segment becomes `name`
-            with lock:
-                done += 1
-                total_bytes += dest.stat().st_size
-                self._downloaded = total_bytes
-                if done % 5 == 0 or done == total:
-                    self.db.update_job_downloaded(self.job.id, total_bytes)
-                    # Extrapolate the total from the average part so the bar moves.
-                    self.db.update_job_total(self.job.id, int(total_bytes / done * total))
+            for attempt in range(_SEGMENT_RETRIES + 1):
+                if self._stop_event.is_set():
+                    return
+                wrote = 0
+                try:
+                    with client.stream("GET", url, headers=self._headers or None) as response:
+                        response.raise_for_status()
+                        with open(tmp, "wb") as fh:
+                            for chunk in response.iter_bytes(65536):
+                                if self._stop_event.is_set():
+                                    with lock:
+                                        inflight -= wrote  # abandon this part's bytes
+                                    return  # leave the .part; it is refetched next run
+                                fh.write(chunk)
+                                wrote += len(chunk)
+                                with lock:
+                                    inflight += len(chunk)
+                                    self._downloaded = confirmed + inflight
+                                    now = time.monotonic()
+                                    # Report streamed bytes as they arrive (not only
+                                    # on whole-part completion), so the speed graph is
+                                    # steady instead of spiking once per segment.
+                                    if now - last_write >= 0.5:
+                                        last_write = now
+                                        self.db.update_job_downloaded(self.job.id, self._downloaded)
+                                        if done:
+                                            self.db.update_job_total(
+                                                self.job.id, int(confirmed / done * total)
+                                            )
+                    os.replace(tmp, dest)  # atomic: only a complete segment becomes `name`
+                    with lock:
+                        confirmed += dest.stat().st_size
+                        inflight -= wrote  # its bytes are now counted as confirmed
+                        done += 1
+                        self._downloaded = confirmed + inflight
+                    return
+                except (httpx.HTTPError, OSError):
+                    with lock:
+                        inflight -= wrote  # drop this attempt's partial bytes
+                    tmp.unlink(missing_ok=True)
+                    if attempt >= _SEGMENT_RETRIES or self._stop_event.is_set():
+                        raise  # every retry exhausted - fail the fetch (caught above)
+                    # Back off briefly, then retry on a fresh connection; the
+                    # stalled or dropped one is gone and no longer holds a worker.
+                    self._stop_event.wait(min(0.5 * 2**attempt, 4.0))
 
         with (
             net.build_client(
@@ -548,17 +586,23 @@ class HlsDownload:
                 # not multiplexed onto one h2 socket - the latter throttled the
                 # native fetch to a crawl. One kept-alive connection per worker.
                 http2=False,
-                timeout=60,
+                # A short read timeout so a server that accepts the connection and
+                # then sends nothing is dropped and retried in seconds, instead of
+                # pinning a worker for a whole minute and collapsing parallelism.
+                timeout=httpx.Timeout(_SEGMENT_READ_TIMEOUT, connect=15.0, pool=30.0),
                 limits=httpx.Limits(
-                    max_connections=_SEGMENT_WORKERS + 2,
-                    max_keepalive_connections=_SEGMENT_WORKERS + 2,
+                    max_connections=_SEGMENT_WORKERS + 4,
+                    max_keepalive_connections=_SEGMENT_WORKERS + 4,
                 ),
             ) as client,
             ThreadPoolExecutor(max_workers=_SEGMENT_WORKERS) as pool,
         ):
             futures = [pool.submit(fetch_one, client, url, name) for url, name in pending]
             for future in futures:
-                future.result()  # re-raises a refused part (caught in _attempt_native)
+                future.result()  # re-raises a part that failed every retry
+        # Final flush so the persisted progress matches what is on disk.
+        with lock:
+            self.db.update_job_downloaded(self.job.id, confirmed)
         return not self._stop_event.is_set()
 
     def _remux_local(self, inputs: list[Path], part: Path) -> JobStatus | None:
@@ -642,6 +686,20 @@ class HlsDownload:
         log.warning("hls job %s failed: %s", self.job.id, message)
         self.db.set_job_status(self.job.id, JobStatus.FAILED, error=message)
         return JobStatus.FAILED
+
+
+def _hide_dir(path: Path) -> None:
+    """Best-effort: hide the scratch segment folder on Windows so a big stream's
+    thousands of .ts parts don't clutter the download folder while it runs. The
+    folder is deleted on completion regardless; a leading '.' already hides it on
+    Unix, so this only changes how it looks mid-download on Windows."""
+    if sys.platform == "win32":  # pragma: no cover - windows-only
+        try:
+            import ctypes
+
+            ctypes.windll.kernel32.SetFileAttributesW(str(path), 0x02)  # FILE_ATTRIBUTE_HIDDEN
+        except Exception:
+            pass
 
 
 def _discard(part: Path) -> None:
