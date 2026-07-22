@@ -932,8 +932,16 @@ class SmartDownload:
                 }
             )
             postprocessors.append({"key": "FFmpegMetadata", "add_metadata": True})
-            postprocessors.append({"key": "EmbedThumbnail"})
-            ydl_opts["writethumbnail"] = True
+            # Embed cover art only for MP3. MP3 uses a reliable ffmpeg ID3 embed;
+            # M4A (and other MP4-family audio) needs AtomicParsley, which we do
+            # not bundle, and yt-dlp's ffmpeg fallback then fails ("Unable to
+            # embed using ffprobe & ffmpeg") - which used to mark the whole
+            # download failed even though the audio file was fine. Skipping the
+            # embed for those formats lets them finish (without a cover) instead
+            # of failing, and leaves no stray thumbnail file behind.
+            if audio_format == "mp3":
+                postprocessors.append({"key": "EmbedThumbnail"})
+                ydl_opts["writethumbnail"] = True
         elif has_ffmpeg:
             postprocessors.append({"key": "FFmpegMetadata", "add_metadata": True})
         subtitles = options.get("subtitles")

@@ -32,6 +32,29 @@ def _smart_job(db: Database, url: str, dest: Path, filename: str, **options):
     )
 
 
+def test_thumbnail_embed_only_for_mp3(db: Database, dest: Path):
+    """Embedding cover art into m4a/flac needs AtomicParsley; without it yt-dlp's
+    ffmpeg fallback fails and used to mark an otherwise-good audio download
+    failed. So EmbedThumbnail (and the thumbnail write) is requested only for
+    mp3, where the ffmpeg ID3 embed is reliable - m4a/flac finish without a
+    cover instead of failing, and leave no stray thumbnail behind."""
+
+    def build(fmt: str) -> tuple[list[str], bool]:
+        job = _smart_job(db, "https://x/v", dest, "v", audio_format=fmt)
+        task = SmartDownload(db, job, ffmpeg_path="ffmpeg")  # has_ffmpeg is True
+        opts = task._build_options()
+        return [p["key"] for p in opts.get("postprocessors", [])], bool(opts.get("writethumbnail"))
+
+    mp3_keys, mp3_thumb = build("mp3")
+    assert "EmbedThumbnail" in mp3_keys and mp3_thumb  # mp3 keeps its cover art
+
+    for fmt in ("m4a", "flac"):
+        keys, thumb = build(fmt)
+        assert "FFmpegExtractAudio" in keys  # the audio is still extracted
+        assert "EmbedThumbnail" not in keys  # but no embed that would fail the job
+        assert thumb is False  # and no thumbnail file written to leave behind
+
+
 def test_smart_download_direct_file(server: MediaServer, db: Database, dest: Path):
     data = payload(1 * MB, 55)
     url = server.add("/video.mp4", data, content_type="video/mp4")
