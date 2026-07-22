@@ -440,7 +440,22 @@ class HlsDownload:
             if self._stop_event.is_set():
                 keep_work = not self._cancelled
                 return self._settle_stopped(part, keep_progress=not self._cancelled)
-            return self._remux_local(inputs, part)
+            status = self._remux_local(inputs, part)
+            if status is not None:
+                return status  # remuxed into the final MP4 - done
+            if self._stop_event.is_set():
+                keep_work = not self._cancelled
+                return self._settle_stopped(part, keep_progress=not self._cancelled)
+            # Every segment was fetched, but FFmpeg could not combine them. Do NOT
+            # fall through to a full FFmpeg re-download: the gated CDN that needed
+            # our native fetch won't serve FFmpeg either, and re-downloading would
+            # throw away gigabytes of an already-complete stream (the "finished,
+            # then restarted from scratch" bug). Keep the fetched parts so a retry
+            # just re-combines them, and fail cleanly.
+            keep_work = True
+            return self._finish_failed(
+                self._failure or "downloaded the stream but could not combine its parts into an MP4"
+            )
         except (OSError, httpx.HTTPError) as exc:
             log.info("hls job %s: native fetch failed (%s)", self.job.id, exc)
             if self._headers:
@@ -608,9 +623,17 @@ class HlsDownload:
     def _remux_local(self, inputs: list[Path], part: Path) -> JobStatus | None:
         """Remux the already-downloaded local manifest(s) into an MP4. No network
         - only file/crypto/data, so FFmpeg just muxes and (for AES-128) decrypts
-        with the local key. None on failure so the caller can still try FFmpeg."""
+        with the local key.
+
+        Two tries: a fast lossless stream copy, then, if that fails, copy the
+        video but re-encode the audio to AAC and regenerate timestamps. The
+        second handles the usual HLS-to-MP4 snags (ADTS-AAC audio and timestamp
+        gaps that a plain ``-c copy`` rejects) that would otherwise waste an
+        already-downloaded stream. None on failure - the caller keeps the fetched
+        parts for a retry rather than re-downloading them.
+        """
         assert self.ffmpeg_path is not None
-        command = [
+        base = [
             self.ffmpeg_path,
             "-y",
             "-nostdin",
@@ -622,29 +645,54 @@ class HlsDownload:
             "-protocol_whitelist",
             "file,crypto,data",
         ]
+        input_args: list[str] = []
         for manifest in inputs:
-            command += ["-i", str(manifest)]
+            input_args += ["-i", str(manifest)]
+        maps: list[str] = []
         if len(inputs) > 1:
             for index in range(len(inputs)):
-                command += ["-map", str(index)]
-        command += ["-c", "copy", "-f", "mp4", str(part)]
-        try:
-            result = subprocess.run(
-                command, capture_output=True, text=True, timeout=1800, **proc.hidden()
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            log.info("hls job %s: local remux could not run (%s)", self.job.id, exc)
-            return None
-        if result.returncode != 0 or not part.exists() or part.stat().st_size == 0:
+                maps += ["-map", str(index)]
+        attempts = [
+            [*base, *input_args, *maps, "-c", "copy", "-f", "mp4", str(part)],
+            [
+                *base,
+                "-fflags",
+                "+genpts",
+                *input_args,
+                *maps,
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-f",
+                "mp4",
+                str(part),
+            ],
+        ]
+        last_error = ""
+        for command in attempts:
+            try:
+                result = subprocess.run(
+                    command, capture_output=True, text=True, timeout=1800, **proc.hidden()
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                log.info("hls job %s: local remux could not run (%s)", self.job.id, exc)
+                self._failure = f"could not run FFmpeg to combine the stream ({exc})"
+                return None
+            if result.returncode == 0 and part.exists() and part.stat().st_size > 0:
+                return self._finalize(part)
             tail = (result.stderr or "").strip().splitlines()
+            last_error = tail[-1] if tail else ""
             log.info(
-                "hls job %s: local remux failed%s",
+                "hls job %s: local remux attempt failed%s",
                 self.job.id,
-                f" ({tail[-1]})" if tail else "",
+                f" ({last_error})" if last_error else "",
             )
-            _discard(part)
-            return None
-        return self._finalize(part)
+            _discard(part)  # clear the half-written output before the next try
+        self._failure = "downloaded the whole stream but FFmpeg could not combine the parts" + (
+            f" ({last_error})" if last_error else ""
+        )
+        return None
 
     # ------------------------------------------------------------- outcomes
 

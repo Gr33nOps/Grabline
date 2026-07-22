@@ -129,6 +129,31 @@ def test_transient_failure_is_retried_once(server: MediaServer, db: Database, de
     assert not (dest / "lecture.mp4.gl-part").exists()
 
 
+def test_remux_failure_keeps_segments_and_does_not_redownload(
+    server: MediaServer, db: Database, dest: Path, tmp_path: Path
+):
+    """Every segment was fetched but FFmpeg can't combine them: the job must fail
+    cleanly and KEEP the fetched parts for a retry - never wipe them and
+    re-download the whole stream from scratch (the reported bug). Only the two
+    remux attempts run; the FFmpeg-direct fallback does not."""
+    files = make_hls(tmp_path / "hls", seconds=2)
+    for name, content in files.items():
+        ct = "application/vnd.apple.mpegurl" if name.endswith(".m3u8") else "video/mp2t"
+        server.add(f"/hls/{name}", content, content_type=ct)
+    marker = dest / "invocations.txt"
+    stub = dest / "fake-ffmpeg.sh"
+    stub.write_text(f'#!/bin/sh\necho run >> "{marker}"\nexit 1\n')  # remux always fails
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+
+    job = _hls_job(db, server.url("/hls/index.m3u8"), dest)
+    status = HlsDownload(db, job, ffmpeg_path=str(stub)).run()
+
+    assert status is JobStatus.FAILED
+    assert marker.read_text().count("run") == 2  # two remux tries, NOT a re-download
+    work = job.part_path.parent / f".{job.part_path.name}.hls"
+    assert work.exists() and any(work.glob("*.ts"))  # fetched segments kept for retry
+
+
 def test_looks_complete_accepts_full_stream(db: Database, dest: Path):
     """A stream FFmpeg muxed to ~its full duration is kept even on a nonzero
     exit (a trailing segment 404 must not throw away a finished file)."""
