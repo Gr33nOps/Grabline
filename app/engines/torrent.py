@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -202,6 +202,23 @@ def _proxy_settings(proxy: str | None) -> dict[str, Any]:
     return pack
 
 
+@dataclass(frozen=True)
+class TorrentStats:
+    """A live swarm snapshot for one torrent, for the detail panel's Peers tab.
+    ``swarm_seeds``/``swarm_peers`` are -1 until a tracker has reported them."""
+
+    seeds: int  # seeds we're connected to
+    peers: int  # leechers we're connected to
+    swarm_seeds: int  # seeds in the whole swarm (tracker scrape)
+    swarm_peers: int
+    down_rate: float
+    up_rate: float
+    downloaded: int  # all-time, this run
+    uploaded: int
+    ratio: float
+    seeding: bool
+
+
 class TorrentSession:
     """The one libtorrent session shared by every torrent job."""
 
@@ -282,6 +299,41 @@ class TorrentSession:
             # handle read must not break the dashboard, but leave a trace.
             log.debug("upload-rate read failed", exc_info=True)
             return 0.0
+
+    def stats_for(self, info_hash_hex: str) -> TorrentStats | None:
+        """Live swarm stats for the torrent with this info-hash, or None if it
+        isn't in the session (not downloading and not seeding). Matched by
+        iterating the handles, so it works long after the download task ended."""
+        target = info_hash_hex.strip().lower()
+        if not target:
+            return None
+        with self._lock:
+            session = self._session
+        if session is None:
+            return None
+        try:
+            for handle in session.get_torrents():
+                status = handle.status()
+                if str(status.info_hash).lower() != target:
+                    continue
+                uploaded = int(status.all_time_upload)
+                done = max(int(status.total_done), 1)
+                return TorrentStats(
+                    seeds=int(status.num_seeds),
+                    peers=int(status.num_peers),
+                    swarm_seeds=int(status.num_complete),
+                    swarm_peers=int(status.num_incomplete),
+                    down_rate=float(status.download_rate),
+                    up_rate=float(status.upload_rate),
+                    downloaded=int(status.all_time_download),
+                    uploaded=uploaded,
+                    ratio=uploaded / done,  # same definition the ratio limit uses
+                    seeding=bool(status.is_seeding),
+                )
+        except Exception:  # libtorrent's exceptions are opaque; a bad read must
+            # never break the detail panel, but leave a trace.
+            log.debug("torrent stats read failed", exc_info=True)
+        return None
 
     def _tick(self) -> None:
         """Seed-ratio enforcement: pause any seeding torrent whose ratio
@@ -367,6 +419,7 @@ class TorrentDownload:
             return JobStatus.FAILED
         handle = SESSION.add(params)
         handle.resume()  # a re-added (resumed) torrent may still be paused
+        self._persist_info_hash(handle)
         self._apply_options(lt, handle)
         for peer in self.job.options.get("peers") or ():
             host, _, port = str(peer).rpartition(":")
@@ -386,6 +439,22 @@ class TorrentDownload:
             params.ti = lt.torrent_info(lt.bdecode(fetch_torrent_bytes(source)))
         params.save_path = self.job.dest_dir
         return params
+
+    def _persist_info_hash(self, handle: Any) -> None:
+        """Record the torrent's info-hash on the job so the detail panel can find
+        this handle's live stats later - including while it seeds, after this
+        task has returned."""
+        try:
+            info_hash = str(handle.status().info_hash)
+        except Exception:  # opaque libtorrent read; not worth failing the job
+            return
+        if not info_hash or set(info_hash) == {"0"}:  # unknown (v2-only magnet)
+            return
+        if self.job.options.get("info_hash") == info_hash:
+            return
+        merged = {**self.job.options, "info_hash": info_hash}
+        self.db.update_job_options(self.job.id, merged)
+        self.job = replace(self.job, options=merged)
 
     def _apply_options(self, lt: Any, handle: Any) -> None:
         options = self.job.options

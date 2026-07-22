@@ -31,7 +31,7 @@ from app.engines.hls import HlsDownload
 from app.engines.manifest import HlsVariant
 from app.engines.smart import MediaInfo, QualityOption, SmartDownload
 from app.engines.torrent import SESSION as TORRENT_SESSION
-from app.engines.torrent import TorrentDownload
+from app.engines.torrent import TorrentDownload, TorrentStats
 
 log = logging.getLogger(__name__)
 
@@ -1086,6 +1086,18 @@ class DownloadManager:
     def torrent_upload_rate(self) -> float:
         """Live upload throughput to torrent peers (dashboard upload graph)."""
         return TORRENT_SESSION.upload_rate()
+
+    def torrent_stats(self, job_id: int) -> TorrentStats | None:
+        """Live swarm stats (seeds/peers/ratio/up/down) for a torrent job, for
+        the detail panel's Peers tab. None when it isn't a torrent, has no
+        recorded info-hash yet, or isn't currently in the session."""
+        job = self.db.get_job(job_id)
+        if job is None or job.kind is not JobKind.TORRENT:
+            return None
+        info_hash = job.options.get("info_hash")
+        if not info_hash:
+            return None
+        return TORRENT_SESSION.stats_for(str(info_hash))
 
     def stat_totals(self) -> dict[str, int]:
         """Downloaded-bytes rollups for the dashboard: today / this week /

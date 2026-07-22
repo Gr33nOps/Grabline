@@ -109,6 +109,12 @@ def _elapsed(created: str | None, finished: str | None) -> str:
     return duration_text(seconds) if seconds >= 1 else "under a second"
 
 
+def _swarm(connected: int, swarm: int) -> str:
+    """ "12 of 340" when the tracker has reported the swarm size, else just the
+    count we're connected to (libtorrent reports -1 before the first scrape)."""
+    return f"{connected} of {swarm}" if swarm >= 0 else str(connected)
+
+
 class _StatGrid(QWidget):
     """A two-column caption/value list with a fixed, pre-built set of rows. A row
     with an empty value hides itself, so a grid only ever shows the facts it has
@@ -379,6 +385,20 @@ class DetailDrawer(QFrame):
             )
         )
         mlay.addWidget(self._media_grid)
+        # The same third page carries a torrent's live swarm stats (Peers).
+        self._peers_grid = _StatGrid(
+            (
+                "Status",
+                "Seeds",
+                "Peers",
+                "Down speed",
+                "Up speed",
+                "Downloaded",
+                "Uploaded",
+                "Ratio",
+            )
+        )
+        mlay.addWidget(self._peers_grid)
         self._extract_btn = QPushButton("Extract here")
         self._extract_btn.setProperty("accent", "true")
         self._extract_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -490,6 +510,10 @@ class DetailDrawer(QFrame):
         self._progress.set_color(design.status_color(palette, view.status.value))
         self._update_progress(view)
         self._update_overview(view, speed_bps, new)
+        # A torrent's swarm changes constantly, so refresh the Peers tab live
+        # (the initial fill + visibility decision happened in _start_probe).
+        if not new and view.kind is JobKind.TORRENT and not self._tabs[2].isHidden():
+            self._update_peers(view)
         self._update_actions(view)
 
     def _fill_static(self, view: JobView, palette: design.Palette) -> None:
@@ -618,33 +642,69 @@ class DetailDrawer(QFrame):
         self._act_btns["copy_hash"].setEnabled(done)
         self._act_btns["rename"].setEnabled(path.exists())
 
-    # -------------------------------------------------------- media / archive
+    # ------------------------------------------------- third tab: media/peers
 
     def _start_probe(self, view: JobView) -> None:
-        """Kick a background read for the third tab: ffprobe for media, an entry
-        list for archives. Hide the tab until we know it has something to show."""
+        """Set up the kind-adaptive third tab on a selection change: live swarm
+        stats for a torrent, ffprobe for media, an entry list for an archive -
+        or hidden. The torrent tab then refreshes each tick in _update."""
         self._media_grid.clear()
+        self._peers_grid.clear()
         self._extract_btn.setVisible(False)
         self._media_status.setText("")
+        self._media_grid.setVisible(True)
+        self._peers_grid.setVisible(False)
         path = Path(view.dest_dir) / view.filename
         ext = path.suffix.lower().lstrip(".")
         completed = view.status is JobStatus.COMPLETED and path.exists()
         is_media = ext in _VIDEO_EXT or ext in _AUDIO_EXT
         is_arch = completed and archive.is_archive(path)
 
-        if completed and is_media and self._ffmpeg:
+        if view.kind is JobKind.TORRENT:
+            # Peers exist while downloading and while seeding; None means the
+            # torrent isn't in the session (e.g. a finished one after restart).
+            if self._update_peers(view):
+                self._media_title.setText("PEERS")
+                self._media_grid.setVisible(False)
+                self._peers_grid.setVisible(True)
+                self._show_third_tab("Peers")
+            else:
+                self._hide_third_tab()
+        elif completed and is_media and self._ffmpeg:
+            self._media_title.setText("MEDIA")
             self._show_third_tab("Media")
             self._media_status.setText("Reading…")
             gen = self._probe_gen
             ffmpeg = self._ffmpeg
             self._run(lambda: read_media_info(path, ffmpeg), lambda r: self._fill_media(r, gen))
         elif is_arch:
+            self._media_title.setText("CONTENTS")
             self._show_third_tab("Contents")
             self._media_status.setText("Reading…")
             gen = self._probe_gen
             self._run(lambda: archive.list_entries(path), lambda r: self._fill_archive(r, gen))
         else:
             self._hide_third_tab()
+
+    def _update_peers(self, view: JobView) -> bool:
+        """Fill the Peers grid from the torrent's live swarm stats; return False
+        (so the caller can hide the tab) when the torrent isn't in the session."""
+        stats = self.manager.torrent_stats(view.id)
+        if stats is None:
+            return False
+        self._peers_grid.set("Status", "Seeding" if stats.seeding else "Downloading")
+        self._peers_grid.set("Seeds", _swarm(stats.seeds, stats.swarm_seeds))
+        self._peers_grid.set("Peers", _swarm(stats.peers, stats.swarm_peers))
+        self._peers_grid.set(
+            "Down speed", motion.fmt_speed(stats.down_rate) if stats.down_rate else ""
+        )
+        self._peers_grid.set("Up speed", motion.fmt_speed(stats.up_rate) if stats.up_rate else "")
+        self._peers_grid.set(
+            "Downloaded", human_bytes(stats.downloaded) if stats.downloaded else ""
+        )
+        self._peers_grid.set("Uploaded", human_bytes(stats.uploaded) if stats.uploaded else "")
+        self._peers_grid.set("Ratio", f"{stats.ratio:.2f}")
+        return True
 
     def _run(self, work: Callable[[], object], done: Callable[[object], None]) -> None:
         thread = FileOpThread(work, self)

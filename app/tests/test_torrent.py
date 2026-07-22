@@ -231,5 +231,28 @@ def test_torrent_loopback_transfer(db: Database, tmp_path: Path):
         assert fresh.filename == "payload.bin"  # named from metadata
         assert fresh.total_size == len(payload)
         assert (dest / "payload.bin").read_bytes() == payload
+        # The run records the info-hash, so the detail panel's Peers tab can
+        # resolve this torrent's live swarm stats from the session.
+        assert fresh.options.get("info_hash")
+        stats = manager.torrent_stats(job.id)
+        assert stats is not None
+        assert stats.downloaded >= len(payload) and stats.uploaded >= 0
+    finally:
+        manager.shutdown()
+
+
+def test_torrent_stats_guards(db: Database, tmp_path: Path):
+    """torrent_stats returns None (never raises, never touches the session) for
+    a non-torrent job or a torrent that has no recorded info-hash yet."""
+    settings = Settings(db)
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        plain = db.create_job("http://x.example/y.bin", str(tmp_path), "y.bin")
+        assert manager.torrent_stats(plain.id) is None
+        torrent = db.create_job(
+            "magnet:?xt=urn:btih:" + "a" * 40, str(tmp_path), "t", kind=JobKind.TORRENT
+        )
+        assert manager.torrent_stats(torrent.id) is None  # no info-hash recorded
+        assert manager.torrent_stats(999_999) is None  # no such job
     finally:
         manager.shutdown()
