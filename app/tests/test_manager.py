@@ -300,12 +300,14 @@ def test_snapshot_reports_progress(server: MediaServer, db: Database, dest: Path
 
 
 def test_connection_budget_is_shared_across_active_jobs(db: Database, dest: Path):
-    # A job starting while others run gets a slice of the connection budget,
-    # not another full set of sockets that would starve its siblings.
+    # Simultaneous downloads split the connection budget equally, and the split
+    # is *live*: every active download's share shrinks as a sibling starts and
+    # grows back as one finishes - so no single download hogs the line.
     from app.core.downloader import SegmentedDownload
 
-    def segmented(url: str, name: str) -> SegmentedDownload:
-        job = db.create_job(url, str(dest), name)
+    def segmented(url: str, name: str, connections: int | None = None) -> SegmentedDownload:
+        options = {"connections": connections} if connections else None
+        job = db.create_job(url, str(dest), name, options=options)
         # Park it defensively; the scheduler is already stopped below, so the
         # budget math just needs the task objects.
         db.set_job_status(job.id, JobStatus.PAUSED)
@@ -314,25 +316,37 @@ def test_connection_budget_is_shared_across_active_jobs(db: Database, dest: Path
         return task
 
     manager = DownloadManager(db, max_concurrent=3)
-    # Stop the scheduler before creating any jobs. Otherwise it claims each row
-    # during the QUEUED window before segmented() pauses it, starts a phantom
-    # download thread, and mutates _active out from under the assertions - the
-    # race the original comment describes but pausing-after-create didn't close.
+    # Stop the scheduler before creating any jobs, so it can't start a phantom
+    # download thread and mutate _active out from under the assertions.
     manager._running = False
     manager._kick()
     manager._scheduler.join(timeout=5)
     try:
         manager._connections_override = 16
         alone = segmented("https://x.test/a.bin", "a.bin")
-        assert alone.connections == 16  # nothing else running: full budget
+        # An unpinned download plans for the full budget; the live target is what
+        # limits its running connections.
+        assert alone.connections == 16 and alone.shares_budget is True
+        manager._active[1] = alone
+        assert alone._target_connections() == 16  # nothing else running: all 16
 
-        manager._active[1] = alone  # simulate one running download
         second = segmented("https://x.test/b.bin", "b.bin")
-        assert second.connections == 8  # 16 // 2
-
         manager._active[2] = second
+        # Both drop to half - the first is rebalanced live, not frozen at 16.
+        assert second._target_connections() == 8
+        assert alone._target_connections() == 8
+
         third = segmented("https://x.test/c.bin", "c.bin")
-        assert third.connections == 5  # 16 // 3
+        manager._active[3] = third
+        assert alone._target_connections() == 5  # 16 // 3, for every sharer
+        assert third._target_connections() == 5
+
+        # A pinned download keeps its exact count and stays out of the split.
+        pinned = segmented("https://x.test/d.bin", "d.bin", connections=20)
+        assert pinned.connections == 20 and pinned.shares_budget is False
+        assert pinned._target_connections() == 20
+        manager._active[4] = pinned
+        assert alone._target_connections() == 5  # the pin didn't change the share
     finally:
         manager._active.clear()
         manager.shutdown()

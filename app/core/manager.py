@@ -894,26 +894,24 @@ class DownloadManager:
             return TorrentDownload(self.db, job, settings=self.settings)
         if job.kind is JobKind.CLOUD:
             return CloudDownload(self.db, job, credentials=self.credentials)
-        # Share the link: a job starting while others run takes a proportional
-        # slice of the connection budget instead of piling another full set of
-        # sockets onto the same line - N established flows starve a late
-        # sibling down to a trickle (TCP fairness is per-flow, not per-job).
-        # A lone job still gets everything, and dynamic segmentation makes the
-        # most of whatever slice a busy start receives. A per-download pin
-        # (right-click -> Connections...) is an explicit choice and bypasses
-        # the sharing entirely.
+        # Fair sharing of the connection budget across simultaneous downloads.
+        # TCP fairness is per-flow, so without this the first download's N flows
+        # starve every later sibling. Each unpinned download instead runs its
+        # equal share of the budget (_fair_share_connections), recomputed *live*
+        # by the downloader's worker pool - so a lone job uses the whole budget,
+        # two split it in half, and a download reclaims connections the moment a
+        # sibling finishes. A per-download pin (right-click -> Connections...) is
+        # an explicit choice that keeps its full count and stays out of the split.
         pinned = int(job.options.get("connections") or 0)
-        if pinned:
-            connections = max(1, min(128, pinned))
-        else:
-            active = len(self._active)
-            connections = (
-                self.connections if active == 0 else max(3, self.connections // (active + 1))
-            )
+        # A pin keeps its full fixed count and stays out of the split; an
+        # unpinned download runs its fair share, recomputed live by the pool.
+        fixed = max(1, min(128, pinned)) if pinned else self.connections
         return SegmentedDownload(
             self.db,
             job,
-            connections=connections,
+            connections=fixed,
+            connections_target=None if pinned else self._fair_share_connections,
+            shares_budget=not pinned,
             limiter=self.limiter,
             job_limiter=self._job_limiter_for(job),
             host_limiter=self._host_limiter_for(job),
@@ -922,6 +920,22 @@ class DownloadManager:
             bypass_hosts=self.settings.proxy_bypass,
             user_agent=self.settings.user_agent or None,
         )
+
+    #: A shared download never drops below this many connections, however many
+    #: run at once - enough to keep each one moving.
+    MIN_SHARED_CONNECTIONS = 4
+
+    def _fair_share_connections(self) -> int:
+        """One unpinned download's live, equal slice of the connection budget:
+        ``budget // (number of unpinned downloads running now)``, floored so no
+        download starves and capped at the budget so a lone job gets it all."""
+        with self._cond:
+            sharers = sum(
+                1 for task in self._active.values() if getattr(task, "shares_budget", False)
+            )
+        budget = self.connections
+        share = budget // max(1, sharers)
+        return max(1, min(budget, max(self.MIN_SHARED_CONNECTIONS, share)))
 
     def _kick(self) -> None:
         with self._cond:

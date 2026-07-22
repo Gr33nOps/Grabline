@@ -19,6 +19,7 @@ import os
 import random
 import shutil
 import threading
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
 from typing import IO
@@ -117,6 +118,8 @@ class SegmentedDownload:
         limiter: RateLimiter | None = None,
         job_limiter: RateLimiter | None = None,
         host_limiter: RateLimiter | None = None,
+        connections_target: Callable[[], int] | None = None,
+        shares_budget: bool = False,
         proxy: str | None = None,
         headers: dict[str, str] | None = None,
         bypass_hosts: tuple[str, ...] = (),
@@ -129,6 +132,13 @@ class SegmentedDownload:
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
         self.limiter = limiter
+        # How many connections this download may run *right now*. With several
+        # downloads active it returns each one's fair share of the budget, live,
+        # so they split the line instead of the first one hogging it; None (CLI,
+        # tests) means "use the full fixed count". ``shares_budget`` marks a
+        # download that participates in that split (an unpinned one).
+        self._connections_target_fn = connections_target
+        self.shares_budget = shares_budget
         # Extra caps applied in series with the global one; the tightest wins,
         # which is exactly right. job_limiter = this download's own cap;
         # host_limiter = shared across every download from the same server.
@@ -162,6 +172,13 @@ class SegmentedDownload:
         self._reason_lock = threading.Lock()
         self._steal_lock = threading.Lock()
         self._error: str | None = None
+        # Worker pool: segment ids currently owned by a worker, the live worker
+        # count, and the threads. The pool size tracks the connection target.
+        self._claimed: set[int] = set()
+        self._worker_lock = threading.Lock()
+        self._active_workers = 0
+        self._pool: list[threading.Thread] = []
+        self._worker_seq = 0
 
     # ------------------------------------------------------------ control
 
@@ -194,22 +211,9 @@ class SegmentedDownload:
         self._prepare()
         if self._stop_event.is_set():
             return self._settle_stopped()
-        pending = [segment for segment in self._segments if not segment.is_complete]
-        if pending:
+        if any(not segment.is_complete for segment in self._segments):
             self._checkpointer.start()
-            workers = [
-                threading.Thread(
-                    target=self._worker,
-                    args=(segment,),
-                    name=f"gl-seg-{self.job.id}-{segment.index}",
-                    daemon=True,
-                )
-                for segment in pending
-            ]
-            for worker in workers:
-                worker.start()
-            for worker in workers:
-                worker.join()
+            self._run_workers()
             self._checkpointer.close()
         if self._reason is StopReason.ERROR:
             return self._finish_failed(self._error or "download failed")
@@ -285,22 +289,117 @@ class SegmentedDownload:
 
     # ------------------------------------------------------------ workers
 
-    def _worker(self, segment: Segment | None) -> None:
+    def _target_connections(self) -> int:
+        """This download's connection budget right now - its fair share when
+        siblings run, the full fixed count otherwise."""
+        if self._connections_target_fn is None:
+            return self.connections
+        try:
+            return max(1, self._connections_target_fn())
+        except Exception:  # a broken callback must never stall the download
+            log.debug("connection-target callback failed", exc_info=True)
+            return self.connections
+
+    def _run_workers(self) -> None:
+        """Supervise a pool of connection workers whose size follows the live
+        target. Each worker claims an incomplete segment (or steals a tail) and
+        retires itself when the target drops, so concurrent downloads share the
+        connection budget fairly - and reclaim it as siblings finish."""
+        while not self._stop_event.is_set():
+            with self._worker_lock:
+                self._pool = [worker for worker in self._pool if worker.is_alive()]
+            if all(segment.is_complete for segment in self._segments):
+                break
+            self._spawn_to_target()
+            self._stop_event.wait(0.25)
+        for worker in list(self._pool):
+            worker.join()
+
+    def _spawn_to_target(self) -> None:
+        # Read the target and probe for work outside the worker lock, so it never
+        # nests with the steal lock or the manager's scheduler lock.
+        while not self._stop_event.is_set():
+            target = self._target_connections()
+            if not self._has_claimable_work():
+                return
+            with self._worker_lock:
+                if self._active_workers >= target:
+                    return
+                self._active_workers += 1  # reserve the slot before the thread runs
+                self._worker_seq += 1
+                worker = threading.Thread(
+                    target=self._worker_loop,
+                    name=f"gl-seg-{self.job.id}-{self._worker_seq}",
+                    daemon=True,
+                )
+                self._pool.append(worker)
+            worker.start()
+
+    def _worker_loop(self) -> None:
+        retired = False
         try:
             with open(self.job.part_path, "r+b", buffering=0) as handle:
-                while segment is not None and not self._stop_event.is_set():
-                    self._download_segment(handle, segment)
-                    if self._stop_event.is_set():
+                while not self._stop_event.is_set():
+                    segment = self._next_work()
+                    if segment is None:
+                        break  # nothing left to claim or steal
+                    try:
+                        self._download_segment(handle, segment)
+                    finally:
+                        with self._steal_lock:
+                            self._claimed.discard(segment.id)
+                    if self._stop_event.is_set() or self._retire_if_over_target():
+                        retired = True
                         break
-                    # Finished early? Help the slowest segment instead of idling
-                    # (dynamic segmentation: reallocate work to free connections).
-                    segment = self._steal_segment()
         except DownloadError as exc:
             self._record_error(str(exc))
         except Exception as exc:
-            index = segment.index if segment is not None else -1
-            log.exception("job %s segment %s crashed", self.job.id, index)
-            self._record_error(f"segment {index}: {exc}")
+            log.exception("job %s worker crashed", self.job.id)
+            self._record_error(str(exc))
+        finally:
+            if not retired:  # _retire_if_over_target already released the slot
+                with self._worker_lock:
+                    self._active_workers -= 1
+
+    def _retire_if_over_target(self) -> bool:
+        """Give a connection back to a sibling download when this one is over its
+        fair share. Decrements the count under the lock so two workers can't both
+        decide to leave and overshoot."""
+        with self._worker_lock:
+            if self._active_workers > self._target_connections():
+                self._active_workers -= 1
+                return True
+        return False
+
+    def _next_work(self) -> Segment | None:
+        """The next segment for a free worker: an unclaimed incomplete segment
+        if one exists (covers a pool smaller than the segment count), otherwise
+        the tail split off the biggest in-progress segment."""
+        with self._steal_lock:
+            for segment in self._segments:
+                if segment.id not in self._claimed and not segment.is_complete:
+                    self._claimed.add(segment.id)
+                    return segment
+        stolen = self._steal_segment()
+        if stolen is not None:
+            with self._steal_lock:
+                self._claimed.add(stolen.id)
+        return stolen
+
+    def _has_claimable_work(self) -> bool:
+        """Is there work a newly-spawned worker could pick up - an unclaimed
+        incomplete segment, or a claimed one big enough to split?"""
+        with self._steal_lock:
+            for segment in self._segments:
+                if segment.id not in self._claimed and not segment.is_complete:
+                    return True
+            for segment in self._segments:
+                if segment.end is None:
+                    continue
+                remaining = segment.end - (segment.start + segment.downloaded) + 1
+                if remaining >= self.STEAL_THRESHOLD:
+                    return True
+        return False
 
     def _download_segment(self, handle: IO[bytes], segment: Segment) -> None:
         attempts = 0

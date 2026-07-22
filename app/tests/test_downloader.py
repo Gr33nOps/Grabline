@@ -358,3 +358,98 @@ def test_never_overwrites_existing_file(server: MediaServer, db: Database, dest:
     fresh = db.get_job(job.id)
     assert fresh is not None
     assert fresh.filename == "taken (1).bin"
+
+
+# --------------------------------------------------------- fair connection sharing
+
+
+def test_pool_with_low_target_still_downloads_every_segment(
+    server: MediaServer, db: Database, dest: Path
+):
+    """The claim-or-steal pool must cover every planned segment even when far
+    fewer workers run than there are segments (the shared-budget case)."""
+    data = payload(4 * MB, 91)
+    url = server.add("/pool.bin", data)
+    job = db.create_job(url, str(dest), "pool.bin")
+    job.resumable = True
+    # 16 segments planned, but only 2 connections allowed at any moment.
+    status = SegmentedDownload(db, job, connections=16, connections_target=lambda: 2).run()
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "pool.bin") == sha256(data)
+
+
+def test_pool_never_exceeds_the_connection_target(server: MediaServer, db: Database, dest: Path):
+    """The live worker count must stay within the target, so a download can't
+    hog more than its fair share of the connection budget."""
+    from app.core.ratelimit import RateLimiter
+
+    data = payload(4 * MB, 77)
+    url = server.add("/cap.bin", data)
+    job = db.create_job(url, str(dest), "cap.bin")
+    task = SegmentedDownload(
+        db,
+        job,
+        connections=16,
+        connections_target=lambda: 3,
+        job_limiter=RateLimiter(2 * MB),  # slow it enough to sample the pool
+    )
+    peak = 0
+    stop = threading.Event()
+
+    def sample() -> None:
+        nonlocal peak
+        while not stop.is_set():
+            peak = max(peak, task._active_workers)
+            time.sleep(0.005)
+
+    sampler = threading.Thread(target=sample, daemon=True)
+    sampler.start()
+    status = task.run()
+    stop.set()
+    sampler.join(timeout=1)
+
+    assert status is JobStatus.COMPLETED
+    assert sha256_file(dest / "cap.bin") == sha256(data)
+    assert 1 <= peak <= 3  # ran in parallel, but never above the target
+
+
+def test_fair_share_connections_splits_the_budget(db: Database):
+    """Each unpinned download gets budget // (number running); a lone one gets
+    the whole budget; a pinned download doesn't count against the split."""
+    from app.core.manager import DownloadManager
+    from app.core.settings import Settings
+
+    class _Task:
+        def __init__(self, shares: bool) -> None:
+            self.shares_budget = shares
+
+        def run(self) -> JobStatus:
+            return JobStatus.COMPLETED
+
+        def pause(self) -> None: ...
+        def cancel(self) -> None: ...
+
+        @property
+        def bytes_downloaded(self) -> int:
+            return 0
+
+    manager = DownloadManager(db, settings=Settings(db), max_concurrent=0, connections=16)
+    try:
+        assert manager._fair_share_connections() == 16  # a lone job: whole budget
+        with manager._cond:
+            manager._active[1] = _Task(shares=True)
+        assert manager._fair_share_connections() == 16
+        with manager._cond:
+            manager._active[2] = _Task(shares=True)
+        assert manager._fair_share_connections() == 8  # two share -> half each
+        with manager._cond:
+            manager._active[3] = _Task(shares=True)
+            manager._active[4] = _Task(shares=True)
+        assert manager._fair_share_connections() == 4  # four -> a quarter each
+        with manager._cond:
+            manager._active[5] = _Task(shares=False)  # a pinned download
+        assert manager._fair_share_connections() == 4  # ...doesn't change the split
+    finally:
+        with manager._cond:
+            manager._active.clear()
+        manager.shutdown()
