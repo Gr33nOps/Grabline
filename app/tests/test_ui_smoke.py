@@ -98,8 +98,8 @@ def test_main_window_lists_jobs(db: Database, tmp_path: Path):
 
 
 def test_settings_sections_and_new_fields(db: Database, monkeypatch):
-    """The Settings page shows the agreed 18 sections, in order, and the
-    fields new to the restructure (playlist cap, FFmpeg override) persist."""
+    """The Settings page shows the agreed sections, in order, and the fields new
+    to the restructure (playlist cap, FFmpeg override) persist."""
     from app.core import launcher
     from app.ui.settings_dialog import SettingsDialog
 
@@ -125,6 +125,7 @@ def test_settings_sections_and_new_fields(db: Database, monkeypatch):
         "Statistics",
         "Appearance",
         "Advanced",
+        "Shortcuts",
         "About",
     ]
     monkeypatch.setattr(launcher, "set_autostart", lambda enabled: None)

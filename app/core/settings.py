@@ -200,6 +200,29 @@ class Settings:
         self._db.set_setting("host_limits", json.dumps(cleaned))
 
     @property
+    def shortcuts(self) -> dict[str, str]:
+        """Per-user keyboard-shortcut overrides: ``{action_id: key_sequence}``.
+        An entry maps an action to a custom key; an empty-string value unbinds
+        it. Actions with no entry keep their coded default (see
+        ``app.ui.shortcuts``). Absent from ``reset()``'s keep-list, so a settings
+        reset restores every default key."""
+        raw = self._db.get_setting("shortcut_overrides")
+        if not raw:
+            return {}
+        try:
+            values = json.loads(raw)
+        except ValueError:
+            return {}
+        if not isinstance(values, dict):
+            return {}
+        return {str(key): str(seq) for key, seq in values.items()}
+
+    @shortcuts.setter
+    def shortcuts(self, value: Mapping[str, str]) -> None:
+        cleaned = {str(key): str(seq) for key, seq in value.items()}
+        self._db.set_setting("shortcut_overrides", json.dumps(cleaned))
+
+    @property
     def auto_throttle(self) -> bool:
         """'Polite mode': automatically slow downloads when other apps are
         using the network heavily, and speed back up when they stop."""

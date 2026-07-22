@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTime, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtGui import QDesktopServices, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -20,8 +20,11 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QKeySequenceEdit,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -29,6 +32,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QProgressDialog,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTabWidget,
     QTimeEdit,
@@ -90,6 +94,124 @@ def _parse_host_limits(text: str) -> dict[str, int]:
         if host and kbps > 0:
             limits[host] = kbps
     return limits
+
+
+class _ShortcutsPage(QWidget):
+    """Settings -> Shortcuts: one capture field per action, with per-row reset,
+    a Reset-all, a live conflict warning, and a link to the cheat-sheet. On
+    Save, :meth:`overrides` yields only the bindings that differ from the coded
+    default, so the stored map stays small and future default changes flow
+    through to anyone who never customized that key."""
+
+    def __init__(self, settings: Settings, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        from app.ui.shortcuts import DEFAULTS, by_category, normalize
+
+        self._settings = settings
+        self._normalize = normalize
+        self._defaults = {shortcut.id: shortcut.default for shortcut in DEFAULTS}
+        self._edits: dict[str, QKeySequenceEdit] = {}
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(
+            _note(
+                "Click a shortcut and press the new key combination. Backspace "
+                "clears it (unbinds the action). Changes apply when you Save."
+            )
+        )
+        self._warning = components.role_label("", "muted")
+        self._warning.setWordWrap(True)
+        self._warning.setStyleSheet(f"color: {theme.current().warn};")
+        outer.addWidget(self._warning)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        body = QWidget()
+        grid = QGridLayout(body)
+        grid.setContentsMargins(2, 4, 12, 4)
+        grid.setColumnStretch(0, 1)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(6)
+        overrides = settings.shortcuts
+        row = 0
+        for category, shortcuts in by_category():
+            grid.addWidget(components.role_label(category, "strong", bold=True), row, 0, 1, 3)
+            row += 1
+            for shortcut in shortcuts:
+                grid.addWidget(QLabel(shortcut.label), row, 0)
+                edit = QKeySequenceEdit()
+                edit.setMaximumSequenceLength(1)  # one chord (Ctrl+N), not a Qt sequence
+                raw = overrides.get(shortcut.id, shortcut.default)
+                edit.setKeySequence(QKeySequence(normalize(raw)))
+                edit.keySequenceChanged.connect(self._check_conflicts)
+                self._edits[shortcut.id] = edit
+                grid.addWidget(edit, row, 1)
+                reset = QPushButton("Reset")
+                reset.clicked.connect(lambda _checked=False, sid=shortcut.id: self._reset_one(sid))
+                grid.addWidget(reset, row, 2)
+                row += 1
+        scroll.setWidget(body)
+        outer.addWidget(scroll, 1)
+
+        bottom = QHBoxLayout()
+        cheatsheet = QPushButton("View all shortcuts…")
+        cheatsheet.clicked.connect(self._open_cheatsheet)
+        bottom.addWidget(cheatsheet)
+        bottom.addStretch(1)
+        reset_all = QPushButton("Reset all to defaults")
+        reset_all.clicked.connect(self._reset_all)
+        bottom.addWidget(reset_all)
+        outer.addLayout(bottom)
+
+        self._check_conflicts()
+
+    def _current(self) -> dict[str, str]:
+        return {
+            shortcut_id: self._normalize(
+                edit.keySequence().toString(QKeySequence.SequenceFormat.PortableText)
+            )
+            for shortcut_id, edit in self._edits.items()
+        }
+
+    def overrides(self) -> dict[str, str]:
+        """Only the bindings that differ from their default, ready for
+        ``Settings.shortcuts``."""
+        current = self._current()
+        return {
+            shortcut_id: sequence
+            for shortcut_id, sequence in current.items()
+            if sequence != self._normalize(self._defaults[shortcut_id])
+        }
+
+    def _reset_one(self, shortcut_id: str) -> None:
+        self._edits[shortcut_id].setKeySequence(QKeySequence(self._defaults[shortcut_id]))
+        self._check_conflicts()
+
+    def _reset_all(self) -> None:
+        for shortcut_id, edit in self._edits.items():
+            edit.setKeySequence(QKeySequence(self._defaults[shortcut_id]))
+        self._check_conflicts()
+
+    def _check_conflicts(self) -> None:
+        from app.ui.shortcuts import BY_ID, conflicts
+
+        clashes = conflicts(self._current())
+        if not clashes:
+            self._warning.setText("")
+            return
+        parts = []
+        for sequence, ids in clashes.items():
+            keys = QKeySequence(sequence).toString(QKeySequence.SequenceFormat.NativeText)
+            names = ", ".join(BY_ID[i].label for i in ids if i in BY_ID)
+            parts.append(f"{keys} is bound to {names}")
+        self._warning.setText("Conflict: " + "; ".join(parts))
+
+    def _open_cheatsheet(self) -> None:
+        from app.ui.shortcuts_dialog import ShortcutsDialog
+
+        ShortcutsDialog(self._current(), self).exec()
 
 
 class _FfmpegInstaller(QThread):
@@ -833,6 +955,11 @@ class SettingsDialog(chrome.Dialog):
             )
         )
         about_layout.addStretch(1)
+
+        # ---- Shortcuts -------------------------------------------------------
+        self._shortcuts_page = _ShortcutsPage(settings)
+        tabs.addTab(self._shortcuts_page, "Shortcuts")
+
         tabs.addTab(about_tab, "About")
 
         self._load_values()
@@ -1402,6 +1529,7 @@ class SettingsDialog(chrome.Dialog):
         self.settings.rss_feeds = self.rss_edit.toPlainText().splitlines()
         self.settings.rss_interval_minutes = self.rss_interval_spin.value()
         self.settings.after_queue_action = self.after_combo.currentData()
+        self.settings.shortcuts = self._shortcuts_page.overrides()
         try:
             # The autostart file/registry entry IS the setting - no DB copy
             # that could drift from what the OS will actually do at login.

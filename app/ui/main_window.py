@@ -240,6 +240,8 @@ class MainWindow(QMainWindow):
         #: Speed measured once per poll, shared by the rows, drawer and toolbar.
         self._speeds: dict[int, float] = {}
         self._selected_ids: set[int] = set()
+        #: The sidebar page currently shown, so Ctrl+Tab can cycle from it.
+        self._current_page = "downloads"
         self.clipboard_suppressor: Callable[[str], None] | None = None
         self._prev_status: dict[int, JobStatus] = {}
         self._was_active = False
@@ -268,6 +270,7 @@ class MainWindow(QMainWindow):
         self._rss_timer.start(self.settings.rss_interval_minutes * 60_000)
         QTimer.singleShot(15_000, self._poll_rss)
         self.refresh()
+        self._install_shortcuts()
 
     # ------------------------------------------------------------- shell
 
@@ -601,6 +604,7 @@ class MainWindow(QMainWindow):
         for nav_key, btn in self._nav.items():
             btn.set_active(nav_key == key)
         self._pages.setCurrentIndex(index)
+        self._current_page = key
 
     def _on_settings_applied(self) -> None:
         """Live-apply after the Settings page saves: theme (may have changed),
@@ -611,6 +615,9 @@ class MainWindow(QMainWindow):
         self.manager.reload_settings()
         self._apply_table_prefs()
         self._retint_all()
+        # A rebind in Settings -> Shortcuts takes effect now, no restart.
+        if getattr(self, "_shortcuts", None) is not None:
+            self._shortcuts.reload()
         self.statusBar().showMessage("Settings saved", 4000)
 
     def _retint_all(self) -> None:
@@ -623,6 +630,190 @@ class MainWindow(QMainWindow):
         self._progress_bars.clear()
         self._pills.clear()
         self.refresh()
+
+    # -------------------------------------------------- keyboard shortcuts
+
+    def _install_shortcuts(self) -> None:
+        """Map the shortcut registry (app/ui/shortcuts.py) to the real handlers
+        and install the live QShortcuts. Rebuilt on demand by ``reload()`` after
+        a change in Settings -> Shortcuts."""
+        from app.ui.shortcuts import ShortcutManager
+
+        actions: dict[str, Callable[[], None]] = {
+            # General
+            "download.add": self._add_url,
+            "download.batch": self._import_links,
+            "download.paste": self._paste_and_download,
+            "torrent.add": self._add_torrent_file,
+            "import.links": self._import_links,
+            "list.export": self._export_list,
+            "site.grab": self._grab_site,
+            "url.inspect": self._inspect_url_prompt,
+            "folder.open": self._open_folder,
+            "search.focus": self._focus_search,
+            "settings.open": lambda: self._switch_view("settings"),
+            "app.quit": self._quit,
+            "view.refresh": self.refresh,
+            "help.shortcuts": self._show_shortcuts,
+            # Navigation
+            "nav.downloads": lambda: self._switch_view("downloads"),
+            "nav.dashboard": lambda: self._switch_view("dashboard"),
+            "nav.queue": lambda: self._switch_view("queue"),
+            "nav.settings": lambda: self._switch_view("settings"),
+            "nav.next": lambda: self._cycle_page(1),
+            "nav.prev": lambda: self._cycle_page(-1),
+            # Filters
+            "filter.all": lambda: self._set_filter("all"),
+            "filter.active": lambda: self._set_filter("active"),
+            "filter.completed": lambda: self._set_filter("completed"),
+            "filter.failed": lambda: self._set_filter("failed"),
+            # Downloads (list scope)
+            "dl.toggle": self._toggle_selected,
+            "dl.pause": self._pause_selected,
+            "dl.resume": self._resume_selected,
+            "dl.remove": self._remove_selected,
+            "dl.openfile": self._open_selected_file,
+            "dl.openfolder": self._open_selected_folder,
+            "dl.redownload": self._redownload_selected,
+            "dl.copyurl": self._copy_selected_url,
+            "dl.copyhash": self._copy_selected_hash,
+            # Downloads (all-jobs, app scope)
+            "dl.pauseall": self._pause_all,
+            "dl.resumeall": self._resume_all,
+            "dl.clear": self._clear_completed,
+            # View
+            "view.theme": self._toggle_theme,
+        }
+        self._shortcuts = ShortcutManager(self, self.settings, actions, self.table)
+        self._shortcuts.install()
+
+    def _selected_views(self) -> list[JobView]:
+        """The JobViews for the currently selected rows (drops any that have
+        since left the list)."""
+        return [
+            view
+            for job_id in self._selected_job_ids()
+            if (view := self._last_views.get(job_id)) is not None
+        ]
+
+    def _paste_and_download(self) -> None:
+        text = QGuiApplication.clipboard().text().strip()
+        urls = extract_urls(text)
+        if not urls and text.lower().startswith(("http://", "https://", "magnet:", "ftp://")):
+            urls = [text]
+        if not urls:
+            self.statusBar().showMessage("No downloadable link on the clipboard", 4000)
+            return
+        if len(urls) == 1:
+            self.begin_add_url(urls[0])
+        else:
+            self._run_batch(urls)
+
+    def _focus_search(self) -> None:
+        self._switch_view("downloads")
+        self.search_box.setFocus()
+        self.search_box.selectAll()
+
+    def _quit(self) -> None:
+        """A real quit that bypasses close-to-tray (Ctrl+Q / the tray menu)."""
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.quit()
+
+    def _show_shortcuts(self) -> None:
+        from app.ui.shortcuts_dialog import ShortcutsDialog
+
+        with guard.single_flight(self._in_flight, "shortcuts") as go:
+            if not go:
+                return
+            ShortcutsDialog(self._shortcuts.effective(), self).exec()
+
+    def _cycle_page(self, delta: int) -> None:
+        order = ("downloads", "dashboard", "queue", "settings")
+        try:
+            index = order.index(self._current_page)
+        except ValueError:
+            index = 0
+        self._switch_view(order[(index + delta) % len(order)])
+
+    def _toggle_selected(self) -> None:
+        views = self._selected_views()
+        if not views:
+            return
+        # If anything selected is live, the toggle pauses everything selected;
+        # otherwise it resumes. One key, both directions, like a play/pause.
+        active = any(v.status in (JobStatus.DOWNLOADING, JobStatus.QUEUED) for v in views)
+        for view in views:
+            if active:
+                self._pause_job(view.id)
+            else:
+                self._resume_job(view.id)
+        self.refresh()
+
+    def _pause_all(self) -> None:
+        for view in list(self._last_views.values()):
+            if view.status in (JobStatus.DOWNLOADING, JobStatus.QUEUED):
+                self._pause_job(view.id)
+        self.refresh()
+
+    def _resume_all(self) -> None:
+        for view in list(self._last_views.values()):
+            if view.status in (JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED):
+                self._resume_job(view.id)
+        self.refresh()
+
+    def _open_selected_file(self) -> None:
+        views = self._selected_views()
+        if not views:
+            return
+        view = views[0]
+        path = Path(view.dest_dir) / view.filename
+        if view.status is JobStatus.COMPLETED and path.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        else:
+            self.statusBar().showMessage("That download isn't finished yet", 3000)
+
+    def _open_selected_folder(self) -> None:
+        views = self._selected_views()
+        if not views:
+            return
+        view = views[0]
+        if not reveal.open_folder(Path(view.dest_dir) / view.filename):
+            self.statusBar().showMessage("Could not open the folder", 3000)
+
+    def _redownload_selected(self) -> None:
+        for view in self._selected_views():
+            self.begin_add_url(view.url, allow_duplicate=True)
+
+    def _copy_selected_url(self) -> None:
+        views = self._selected_views()
+        if not views:
+            return
+        url = views[0].url
+        if self.clipboard_suppressor is not None:
+            self.clipboard_suppressor(url)  # don't offer our own copy back
+        QGuiApplication.clipboard().setText(url)
+        self.statusBar().showMessage("URL copied", 3000)
+
+    def _copy_selected_hash(self) -> None:
+        views = self._selected_views()
+        if not views:
+            return
+        view = views[0]
+        path = Path(view.dest_dir) / view.filename
+        if view.status is JobStatus.COMPLETED and path.exists():
+            self._copy_hash(path)
+        else:
+            self.statusBar().showMessage("Finish the download first to hash it", 3000)
+
+    def _toggle_theme(self) -> None:
+        """Flip between light and dark and repaint live (Ctrl+Shift+L). Writes
+        an explicit theme, so it also pins a 'system' theme to a real choice."""
+        self.settings.theme = "light" if theme.is_dark() else "dark"
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            theme.apply_theme(app, self.settings.theme, accent=self.settings.accent_color or None)
+        self._retint_all()
 
     def open_setup(self) -> None:
         # Reachable from both the first-run timer and the menu, so guard it: the
