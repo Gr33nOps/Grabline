@@ -188,8 +188,9 @@ class SetupDialog(chrome.Dialog):
         box.addButton(t("Later"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         if box.clickedButton() is restart_btn:
-            from app.core import launcher
             from PySide6.QtWidgets import QApplication
+
+            from app.core import launcher
 
             if launcher.restart_current():
                 app = QApplication.instance()

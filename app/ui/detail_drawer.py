@@ -646,9 +646,7 @@ class DetailDrawer(QFrame):
                 # Bytes are flowing but yt-dlp has not given a total yet
                 # (common early in a DASH merge). Prefer that over a stuck
                 # "Fetching metadata…" label that looked like a hang.
-                self._size.setText(
-                    t("{size} downloaded", size=human_bytes(view.downloaded))
-                )
+                self._size.setText(t("{size} downloaded", size=human_bytes(view.downloaded)))
             else:
                 self._size.setText(t("Fetching metadata…"))
         else:

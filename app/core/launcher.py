@@ -220,7 +220,7 @@ def restart_current() -> bool:
     import subprocess
 
     try:
-        subprocess.Popen(command, close_fds=True)  # noqa: S603 - our own argv
+        subprocess.Popen(command, close_fds=True)
         return True
     except OSError:
         return False
