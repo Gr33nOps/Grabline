@@ -65,7 +65,7 @@ def check_for_update(proxy: str | None = None) -> tuple[str, str] | None:
 
 #: Where the "Download update" fallback points: the website's download
 #: section, which always links the current installers.
-WEBSITE_DOWNLOAD_URL = "https://gr33nops.github.io/GrabLine/#download"
+WEBSITE_DOWNLOAD_URL = "https://gr33nops.github.io/Grabline/#download"
 
 
 def _asset_matches(name: str, platform: str) -> bool:

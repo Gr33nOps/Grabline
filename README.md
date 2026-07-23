@@ -15,7 +15,7 @@ Splits each transfer across parallel connections, resumes after a crash, and pai
 ![Platforms][platform-badge]
 [![Tests][ci-badge]][ci]
 
-**[Download][releases]** · **[Website](https://gr33nops.github.io/GrabLine/)** · **[Firefox add-on][amo]** · [Install guide](docs/install.md)
+**[Download][releases]** · **[Website](https://gr33nops.github.io/Grabline/)** · **[Firefox add-on][amo]** · [Install guide](docs/install.md)
 
 <img src="docs/screenshots/queue.png" width="860" alt="GrabLine downloads window with live speeds" />
 
