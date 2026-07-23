@@ -15,7 +15,7 @@ Splits each transfer across parallel connections, resumes after an interruption,
 
 **[Download][releases]** · **[Website](https://gr33nops.github.io/Grabline/)** · **[Firefox add on][amo]** · [Install guide](docs/install.md)
 
-<img src="docs/screenshots/queue.png" width="860" alt="GrabLine downloads window with live speeds" />
+<img src="docs/screenshots/queue.png" width="900" alt="GrabLine main window with three active downloads and live speeds" />
 
 </div>
 
@@ -35,9 +35,11 @@ Files run over many connections (up to 128). Videos and audio open a quality pan
 No ads. No paid tier. No usage telemetry to us. AGPL 3.0.
 
 <p align="center">
-  <img src="docs/screenshots/quality.png" width="320" alt="GrabLine video quality picker" />
-  &nbsp;&nbsp;
-  <img src="docs/screenshots/dashboard.png" width="480" alt="GrabLine live dashboard" />
+  <img src="docs/screenshots/dashboard.png" width="720" alt="GrabLine dashboard with live speed, volume, and graphs" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/quality.png" width="300" alt="GrabLine video quality picker" />
 </p>
 
 ## What you get
