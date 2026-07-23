@@ -33,7 +33,6 @@ def test_restart_current_spawns_launch_command(monkeypatch: pytest.MonkeyPatch):
     assert seen and seen[0] == launcher.launch_command()
 
 
-
 def test_launch_command_frozen_is_the_exe_itself(monkeypatch: pytest.MonkeyPatch):
     # A frozen build's executable IS Grabline; there's no "-m app" to run.
     monkeypatch.setattr(sys, "frozen", True, raising=False)
