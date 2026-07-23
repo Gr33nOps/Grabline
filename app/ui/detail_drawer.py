@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import archive
+from app.core.i18n import N_, t
 from app.core.manager import DownloadManager, JobView
 from app.core.mediainfo import MediaSummary, read_media_info
 from app.core.models import Job, JobKind, JobStatus
@@ -54,19 +55,70 @@ _LONG_RUN = re.compile(r"(\S{18})")
 
 #: extension -> human category, for the "Type" line ("MP4 Video").
 _CATEGORY = {
-    "t-video": "Video",
-    "t-audio": "Audio",
-    "t-image": "Image",
-    "t-document": "Document",
-    "t-archive": "Archive",
-    "t-program": "Program",
-    "t-game": "Game",
+    "t-video": N_("Video"),
+    "t-audio": N_("Audio"),
+    "t-image": N_("Image"),
+    "t-document": N_("Document"),
+    "t-archive": N_("Archive"),
+    "t-program": N_("Program"),
+    "t-game": N_("Game"),
 }
 _VIDEO_EXT = {"mp4", "mkv", "webm", "mov", "avi", "m4v"}
 _AUDIO_EXT = {"mp3", "m4a", "flac", "wav", "ogg", "opus", "aac", "m4b"}
 #: type_icon_name() falls back to "t-document" for anything it doesn't know, so
 #: the "Document" label is only trustworthy for these real document extensions.
 _DOC_EXT = {"pdf", "doc", "docx", "txt", "epub"}
+
+#: Every stat-grid caption and section title, listed as literals so the string
+#: extractor sees them - the grids and _group() translate their keys via
+#: t(<variable>), which the extractor can't follow. Keep in sync with the grids
+#: built in _build_pages().
+_CAPTIONS = (
+    N_("Speed"),
+    N_("Average"),
+    N_("Peak"),
+    N_("ETA"),
+    N_("Downloaded"),
+    N_("Remaining"),
+    N_("Progress"),
+    N_("Size"),
+    N_("Type"),
+    N_("Finished"),
+    N_("Retries"),
+    N_("Size on disk"),
+    N_("Location"),
+    N_("Added"),
+    N_("Server"),
+    N_("Final server"),
+    N_("Protocol"),
+    N_("Resume"),
+    N_("Connections"),
+    N_("Segments"),
+    N_("Priority"),
+    N_("Queue"),
+    N_("Category"),
+    N_("Resolution"),
+    N_("Duration"),
+    N_("FPS"),
+    N_("Video"),
+    N_("Audio"),
+    N_("Container"),
+    N_("Files"),
+    N_("Uncompressed"),
+    N_("Status"),
+    N_("Seeds"),
+    N_("Peers"),
+    N_("Down speed"),
+    N_("Up speed"),
+    N_("Uploaded"),
+    N_("Ratio"),
+    N_("Elapsed"),
+    N_("Speed limit"),
+    N_("File"),
+    N_("Source"),
+    N_("History"),
+    N_("Statistics"),
+)
 
 
 def _wrappable(text: str) -> str:
@@ -78,12 +130,14 @@ def _type_label(filename: str) -> str:
     """ "Me.mp4" -> "MP4 Video"; unknown -> "BIN file"; no extension -> "File"."""
     ext = Path(filename).suffix.lower().lstrip(".")
     if not ext:
-        return "File"
+        return t("File")
     icon = type_icon_name(ext)
     category = _CATEGORY.get(icon)
     if icon == "t-document" and ext not in _DOC_EXT:
         category = None  # an unknown type, not a real document
-    return f"{ext.upper()} {category}" if category else f"{ext.upper()} file"
+    if category:
+        return f"{ext.upper()} {t(category)}"
+    return t("{ext} file", ext=ext.upper())
 
 
 def _fmt_datetime(stamp: str | None) -> str:
@@ -112,7 +166,11 @@ def _elapsed(created: str | None, finished: str | None) -> str:
 def _swarm(connected: int, swarm: int) -> str:
     """ "12 of 340" when the tracker has reported the swarm size, else just the
     count we're connected to (libtorrent reports -1 before the first scrape)."""
-    return f"{connected} of {swarm}" if swarm >= 0 else str(connected)
+    return (
+        t("{connected} of {swarm}", connected=connected, swarm=swarm)
+        if swarm >= 0
+        else str(connected)
+    )
 
 
 class _StatGrid(QWidget):
@@ -129,7 +187,9 @@ class _StatGrid(QWidget):
         grid.setColumnStretch(1, 1)
         self._rows: dict[str, tuple[QLabel, QLabel]] = {}
         for index, key in enumerate(keys):
-            caption = components.role_label(key.upper(), "caption", size=design.FONT["caption"])
+            # The key is a stable English identifier used for lookups; the shown
+            # caption is its translation, upper-cased (a no-op for CJK scripts).
+            caption = components.role_label(t(key).upper(), "caption", size=design.FONT["caption"])
             caption.setAlignment(Qt.AlignmentFlag.AlignTop)
             value = components.role_label("", "value", size=design.FONT["small"])
             value.setWordWrap(True)
@@ -222,7 +282,7 @@ class DetailDrawer(QFrame):
 
         title_row = QHBoxLayout()
         title_row.addWidget(
-            components.role_label("DETAILS", "caption", size=design.FONT["caption"])
+            components.role_label(t("DETAILS"), "caption", size=design.FONT["caption"])
         )
         title_row.addStretch(1)
         close = components.IconButton("cancel", "")
@@ -270,8 +330,9 @@ class DetailDrawer(QFrame):
         self._tab_group = QButtonGroup(self)
         self._tab_group.setExclusive(True)
         self._tabs: list[QPushButton] = []
-        for index, label in enumerate(("Overview", "Details", "Media", "Activity")):
-            btn = QPushButton(label)
+        tab_labels = (N_("Overview"), N_("Details"), N_("Media"), N_("Activity"))
+        for index, label in enumerate(tab_labels):
+            btn = QPushButton(t(label))
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setProperty("role", "tab")
@@ -296,7 +357,7 @@ class DetailDrawer(QFrame):
 
     def _group(self, layout: QVBoxLayout, title: str, grid: _StatGrid) -> None:
         layout.addWidget(
-            components.role_label(title.upper(), "caption", size=design.FONT["caption"])
+            components.role_label(t(title).upper(), "caption", size=design.FONT["caption"])
         )
         layout.addWidget(grid)
 
@@ -328,16 +389,16 @@ class DetailDrawer(QFrame):
         sc.setContentsMargins(11, 9, 11, 9)
         sc.setSpacing(4)
         sc.addWidget(
-            components.role_label("SPEED · LAST 30s", "caption", size=design.FONT["caption"])
+            components.role_label(t("SPEED · LAST 30s"), "caption", size=design.FONT["caption"])
         )
         sc.addWidget(self._spark)
         self._spark_val = components.role_label("", "accent", size=design.FONT["h2"], bold=True)
         self._spark_val.setAlignment(Qt.AlignmentFlag.AlignRight)
         sc.addWidget(self._spark_val)
         olay.addWidget(self._spark_card)
-        self._ov_error = self._long_block(olay, "Error")
-        self._ov_notes = self._long_block(olay, "Notes")
-        self._security_btn = QPushButton("Security check…")
+        self._ov_error = self._long_block(olay, N_("Error"))
+        self._ov_notes = self._long_block(olay, N_("Notes"))
+        self._security_btn = QPushButton(t("Security check…"))
         self._security_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._security_btn.clicked.connect(lambda: self._fire("security"))
         olay.addWidget(self._security_btn)
@@ -362,13 +423,15 @@ class DetailDrawer(QFrame):
             )
         )
         self._group(dlay, "Source", self._source_grid)
-        self._det_url = self._long_block(dlay, "URL")
+        self._det_url = self._long_block(dlay, N_("URL"))
         dlay.addStretch(1)
         self._pages.addWidget(det)
 
         # -- Media / Contents ------------------------------------------------
         med, mlay = self._scroll_page()
-        self._media_title = components.role_label("MEDIA", "caption", size=design.FONT["caption"])
+        self._media_title = components.role_label(
+            t("MEDIA"), "caption", size=design.FONT["caption"]
+        )
         mlay.addWidget(self._media_title)
         self._media_status = components.role_label("", "muted", size=design.FONT["small"])
         mlay.addWidget(self._media_status)
@@ -399,7 +462,7 @@ class DetailDrawer(QFrame):
             )
         )
         mlay.addWidget(self._peers_grid)
-        self._extract_btn = QPushButton("Extract here")
+        self._extract_btn = QPushButton(t("Extract here"))
         self._extract_btn.setProperty("accent", "true")
         self._extract_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._extract_btn.clicked.connect(lambda: self._fire("extract"))
@@ -430,7 +493,7 @@ class DetailDrawer(QFrame):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(2)
         lay.addWidget(
-            components.role_label(caption.upper(), "caption", size=design.FONT["caption"])
+            components.role_label(t(caption).upper(), "caption", size=design.FONT["caption"])
         )
         value = components.role_label("", "value", size=design.FONT["small"])
         value.setWordWrap(True)
@@ -448,14 +511,14 @@ class DetailDrawer(QFrame):
         grid.setHorizontalSpacing(6)
         grid.setVerticalSpacing(6)
         specs = (
-            ("open", "open", "Open", "Open the file", False),
-            ("folder", "folder", "Folder", "Open the containing folder", False),
-            ("redownload", "duplicate", "Redownload", "Download this again", False),
-            ("copy_url", "copy", "Copy URL", "Copy the download URL", False),
-            ("copy_path", "note", "Copy path", "Copy the file path", False),
-            ("copy_hash", "shield", "Copy hash", "Copy the SHA-256 checksum", False),
-            ("rename", "rename", "Rename", "Rename the file", False),
-            ("remove", "trash", "Remove", "Remove from the list (file stays on disk)", True),
+            ("open", "open", t("Open"), t("Open the file"), False),
+            ("folder", "folder", t("Folder"), t("Open the containing folder"), False),
+            ("redownload", "duplicate", t("Redownload"), t("Download this again"), False),
+            ("copy_url", "copy", t("Copy URL"), t("Copy the download URL"), False),
+            ("copy_path", "note", t("Copy path"), t("Copy the file path"), False),
+            ("copy_hash", "shield", t("Copy hash"), t("Copy the SHA-256 checksum"), False),
+            ("rename", "rename", t("Rename"), t("Rename the file"), False),
+            ("remove", "trash", t("Remove"), t("Remove from the list (file stays on disk)"), True),
         )
         self._act_btns: dict[str, components.IconButton] = {}
         for index, (key, icon, label, tip, danger) in enumerate(specs):
@@ -664,23 +727,23 @@ class DetailDrawer(QFrame):
             # Peers exist while downloading and while seeding; None means the
             # torrent isn't in the session (e.g. a finished one after restart).
             if self._update_peers(view):
-                self._media_title.setText("PEERS")
+                self._media_title.setText(t("PEERS"))
                 self._media_grid.setVisible(False)
                 self._peers_grid.setVisible(True)
-                self._show_third_tab("Peers")
+                self._show_third_tab(t("Peers"))
             else:
                 self._hide_third_tab()
         elif completed and is_media and self._ffmpeg:
-            self._media_title.setText("MEDIA")
-            self._show_third_tab("Media")
-            self._media_status.setText("Reading…")
+            self._media_title.setText(t("MEDIA"))
+            self._show_third_tab(t("Media"))
+            self._media_status.setText(t("Reading…"))
             gen = self._probe_gen
             ffmpeg = self._ffmpeg
             self._run(lambda: read_media_info(path, ffmpeg), lambda r: self._fill_media(r, gen))
         elif is_arch:
-            self._media_title.setText("CONTENTS")
-            self._show_third_tab("Contents")
-            self._media_status.setText("Reading…")
+            self._media_title.setText(t("CONTENTS"))
+            self._show_third_tab(t("Contents"))
+            self._media_status.setText(t("Reading…"))
             gen = self._probe_gen
             self._run(lambda: archive.list_entries(path), lambda r: self._fill_archive(r, gen))
         else:
@@ -692,7 +755,7 @@ class DetailDrawer(QFrame):
         stats = self.manager.torrent_stats(view.id)
         if stats is None:
             return False
-        self._peers_grid.set("Status", "Seeding" if stats.seeding else "Downloading")
+        self._peers_grid.set("Status", t("Seeding") if stats.seeding else t("Downloading"))
         self._peers_grid.set("Seeds", _swarm(stats.seeds, stats.swarm_seeds))
         self._peers_grid.set("Peers", _swarm(stats.peers, stats.swarm_peers))
         self._peers_grid.set(

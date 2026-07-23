@@ -19,18 +19,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import N_, t
 from app.ui import design, theme
 from app.ui.icons import svg_icon
 
 _GRAPH_HISTORY = 120
 
 _STATUS_LABEL = {
-    "downloading": "Downloading",
-    "queued": "Queued",
-    "paused": "Paused",
-    "completed": "Completed",
-    "failed": "Failed",
-    "cancelled": "Cancelled",
+    "downloading": N_("Downloading"),
+    "queued": N_("Queued"),
+    "paused": N_("Paused"),
+    "completed": N_("Completed"),
+    "failed": N_("Failed"),
+    "cancelled": N_("Cancelled"),
 }
 
 
@@ -66,7 +67,7 @@ class StatusPill(QLabel):
     def set_status(self, status: str) -> None:
         p = theme.current()
         color = design.status_color(p, status)
-        label = _STATUS_LABEL.get(status, status.title())
+        label = t(_STATUS_LABEL.get(status, status.title()))
         self.setText(f"●  {label}")
         self.setStyleSheet(
             f"QLabel {{ color: {color}; background: transparent;"

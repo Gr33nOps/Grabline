@@ -1779,37 +1779,37 @@ class MainWindow(QMainWindow):
         # Pause / Resume up top, one or the other depending on state, so the
         # most common control is the first thing under the cursor.
         can_pause = view.status in (JobStatus.DOWNLOADING, JobStatus.QUEUED)
-        pause_action = menu.addAction("Pause")
+        pause_action = menu.addAction(t("Pause"))
         pause_action.setVisible(can_pause)
-        resume_label = "Resume" if view.status is JobStatus.PAUSED else "Start"
+        resume_label = t("Resume") if view.status is JobStatus.PAUSED else t("Start")
         resume_action = menu.addAction(resume_label)
         resume_action.setVisible(
             view.status in (JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED)
         )
         menu.addSeparator()
 
-        open_file = menu.addAction("Open file")
+        open_file = menu.addAction(t("Open file"))
         open_file.setEnabled(view.status is JobStatus.COMPLETED and file_path.exists())
-        open_folder = menu.addAction("Open folder")
-        copy_url = menu.addAction("Copy URL")
-        copy_magnet = menu.addAction("Copy magnet link")
+        open_folder = menu.addAction(t("Open folder"))
+        copy_url = menu.addAction(t("Copy URL"))
+        copy_magnet = menu.addAction(t("Copy magnet link"))
         copy_magnet.setVisible(view.kind is JobKind.TORRENT)
-        redownload = menu.addAction("Download again")
+        redownload = menu.addAction(t("Download again"))
         # Convert to… - every FFmpeg target that makes sense for this file,
         # grouped Video / Audio / Image, plus the tuned GIF dialog.
         ffmpeg_path = find_ffmpeg(self.settings)
-        convert_menu = menu.addMenu("Convert to")
+        convert_menu = menu.addMenu(t("Convert to"))
         convertible = (
             view.status is JobStatus.COMPLETED and file_path.exists() and ffmpeg_path is not None
         )
         sections = convert.targets_for(file_path) if convertible else {}
         convert_menu.setEnabled(bool(sections))
         if ffmpeg_path is None:
-            convert_menu.setToolTip("Install FFmpeg in Settings, under Video Downloader")
+            convert_menu.setToolTip(t("Install FFmpeg in Settings, under Video Downloader"))
         convert_actions: dict[QAction, str] = {}
         to_gif: QAction | None = None
         if file_path.suffix.lower() in _VIDEO_SUFFIXES:
-            to_gif = convert_menu.addAction("GIF…")
+            to_gif = convert_menu.addAction(t("GIF…"))
             convert_menu.addSeparator()
         for section, formats in sections.items():
             section_action = convert_menu.addAction(section)
@@ -1820,35 +1820,35 @@ class MainWindow(QMainWindow):
                 action = convert_menu.addAction(fmt.upper())
                 convert_actions[action] = fmt
             convert_menu.addSeparator()
-        limit_speed = menu.addAction("Limit speed…")
+        limit_speed = menu.addAction(t("Limit speed…"))
         limit_speed.setEnabled(view.status is not JobStatus.COMPLETED)
-        set_connections = menu.addAction("Connections…")
+        set_connections = menu.addAction(t("Connections…"))
         set_connections.setEnabled(view.status is not JobStatus.COMPLETED)
 
         done = view.status is JobStatus.COMPLETED and file_path.exists()
-        copy_hash = menu.addAction("Copy SHA-256")
+        copy_hash = menu.addAction(t("Copy SHA-256"))
         copy_hash.setEnabled(done)
-        verify_hash = menu.addAction("Verify checksum…")
+        verify_hash = menu.addAction(t("Verify checksum…"))
         verify_hash.setEnabled(done)
-        security_action = menu.addAction("Security check…")
+        security_action = menu.addAction(t("Security check…"))
         security_action.setEnabled(done)
-        inspect_action = menu.addAction("Inspect…")
+        inspect_action = menu.addAction(t("Inspect…"))
         inspect_action.setEnabled(view.kind in (JobKind.DIRECT, JobKind.SMART, JobKind.HLS))
-        extract_here = menu.addAction("Extract here")
+        extract_here = menu.addAction(t("Extract here"))
         extract_here.setEnabled(done and archive.is_archive(file_path))
-        preview_archive = menu.addAction("Preview archive…")
+        preview_archive = menu.addAction(t("Preview archive…"))
         preview_archive.setEnabled(done and archive.is_archive(file_path))
 
-        move_menu = menu.addMenu("Move to")
+        move_menu = menu.addMenu(t("Move to"))
         favorites = self.settings.favorite_folders
         move_menu.setEnabled(done and bool(favorites))
         if not favorites:
-            move_menu.setToolTip("Add favorite folders in Settings")
+            move_menu.setToolTip(t("Add favorite folders in Settings"))
         move_actions = {move_menu.addAction(folder): folder for folder in favorites}
-        tags_action = menu.addAction("Tags && notes…")
+        tags_action = menu.addAction(t("Tags && notes…"))
 
-        queue_menu = menu.addMenu("Queue")
-        default_queue_action = queue_menu.addAction("Default")
+        queue_menu = menu.addMenu(t("Queue"))
+        default_queue_action = queue_menu.addAction(t("Default"))
         default_queue_action.setCheckable(True)
         default_queue_action.setChecked(view.queue_id is None)
         queue_actions: dict[QAction, int] = {}
@@ -1857,22 +1857,22 @@ class MainWindow(QMainWindow):
             queue_action.setCheckable(True)
             queue_action.setChecked(view.queue_id == named_queue.id)
             queue_actions[queue_action] = named_queue.id
-        start_after = menu.addAction("Start after…")
+        start_after = menu.addAction(t("Start after…"))
         start_after.setEnabled(view.status in (JobStatus.QUEUED, JobStatus.PAUSED))
-        start_at = menu.addAction("Start at…")
+        start_at = menu.addAction(t("Start at…"))
         start_at.setEnabled(view.status in (JobStatus.QUEUED, JobStatus.PAUSED))
 
         pending = view.status in (JobStatus.QUEUED, JobStatus.PAUSED)
-        queue_menu = menu.addMenu("Move in queue")
+        queue_menu = menu.addMenu(t("Move in queue"))
         queue_menu.setEnabled(pending)
-        move_top = queue_menu.addAction("To top")
-        move_up = queue_menu.addAction("Up")
-        move_down = queue_menu.addAction("Down")
-        move_bottom = queue_menu.addAction("To bottom")
+        move_top = queue_menu.addAction(t("To top"))
+        move_up = queue_menu.addAction(t("Up"))
+        move_down = queue_menu.addAction(t("Down"))
+        move_bottom = queue_menu.addAction(t("To bottom"))
 
         menu.addSeparator()
         # Force remove: works whatever the state, mid-download included.
-        remove = menu.addAction("Remove from list")
+        remove = menu.addAction(t("Remove from list"))
         chosen = menu.exec(self.table.viewport().mapToGlobal(position))
         if chosen is pause_action:
             self._pause_job(view.id)
