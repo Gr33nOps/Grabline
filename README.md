@@ -288,7 +288,7 @@ Windows, macOS, and Linux. **No ads, no telemetry, no paid tier.** AGPL-3.0.
 
 </details>
 
-**Honest by design:** no DRM circumvention, no login bypass, no telemetry. The
+**Honest by design:** no DRM circumvention, no login bypass, no usage telemetry to us. The
 VirusTotal and Safe Browsing checks are opt-in and use *your* API keys.
 
 ---

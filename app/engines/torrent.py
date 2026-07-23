@@ -335,20 +335,30 @@ class TorrentSession:
             log.debug("torrent stats read failed", exc_info=True)
         return None
 
+    def detach(self) -> None:
+        """Drop the Settings pointer so the ratio ticker cannot touch a DB
+        that tests (or a shutting-down app) have already closed. The libtorrent
+        session itself stays up for process lifetime."""
+        with self._lock:
+            self._settings = None
+
     def _tick(self) -> None:
         """Seed-ratio enforcement: pause any seeding torrent whose ratio
         passed the limit (0 = seed forever)."""
         while True:
             time.sleep(_RATIO_TICK_SECONDS)
-            settings = self._settings
-            session = self._session
-            if session is None or settings is None:
-                continue
-            limit = settings.torrent_ratio_limit
-            minutes = settings.torrent_seed_minutes
-            if not settings.torrent_seed or (limit <= 0 and minutes <= 0):
-                continue
+            # Settings reads + libtorrent reads share one try: the Settings
+            # object may outlive a closed SQLite connection (test teardown /
+            # app exit), and libtorrent's binding exceptions are opaque.
             try:
+                settings = self._settings
+                session = self._session
+                if session is None or settings is None:
+                    continue
+                limit = settings.torrent_ratio_limit
+                minutes = settings.torrent_seed_minutes
+                if not settings.torrent_seed or (limit <= 0 and minutes <= 0):
+                    continue
                 for handle in session.get_torrents():
                     status = handle.status()
                     if not status.is_seeding or status.paused:
@@ -360,8 +370,7 @@ class TorrentSession:
                     # Seeding-time limit (Settings -> Torrent): stop after N minutes.
                     if minutes > 0 and int(status.seeding_duration) >= minutes * 60:
                         handle.pause()
-            except Exception:  # libtorrent's binding exceptions are opaque; one
-                # bad tick must not kill the ratio-enforcement loop, but log it.
+            except Exception:
                 log.debug("seed-ratio tick failed", exc_info=True)
 
 

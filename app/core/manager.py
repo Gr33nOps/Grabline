@@ -871,6 +871,9 @@ class DownloadManager:
             threads = list(self._threads.values())
         for thread in threads:
             thread.join(timeout=timeout)
+        # The torrent ratio ticker is a process-wide daemon that holds a
+        # Settings reference; drop it so a closed test DB cannot trip it.
+        TORRENT_SESSION.detach()
 
     # ---------------------------------------------------------- scheduler
 

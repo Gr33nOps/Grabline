@@ -33,6 +33,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-timeout>=2.3",
     "ruff>=0.5",
     "mypy>=1.10",
     # A local FTP server for the cloud engine's loopback test.
@@ -89,3 +90,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["app/tests"]
 addopts = "-q"
+# Per-test ceiling so a hung download / libtorrent wait fails the job instead
+# of parking a CI runner for half an hour. CI also passes --timeout=90.
+timeout = 120
+timeout_method = "thread"

@@ -121,6 +121,23 @@ def test_torrent_settings_roundtrip(db: Database):
     assert fresh.rss_feeds == ("https://feed.example/rss | linux",)
 
 
+def test_ratio_ticker_survives_closed_database(db: Database, tmp_path: Path):
+    """Manager.shutdown must detach Settings from the process-wide torrent
+    session so the daemon ratio thread cannot hit a closed SQLite connection
+    (the PytestUnhandledThreadExceptionWarning that used to fire on teardown)."""
+    from app.engines.torrent import SESSION
+
+    settings = Settings(db)
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        SESSION.configure(settings)
+        assert SESSION._settings is settings
+    finally:
+        manager.shutdown()
+    assert SESSION._settings is None
+    # Fixture closes ``db`` after this; with detach the ticker cannot touch it.
+
+
 def test_rss_seen_is_capped(db: Database):
     settings = Settings(db)
     settings.rss_seen = [f"guid-{i}" for i in range(600)]

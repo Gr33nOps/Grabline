@@ -91,9 +91,10 @@ deliberate product decision, not an oversight.
 ## Reporting a vulnerability
 
 Found something that lets a malicious server, web page, or archive act outside
-these boundaries? Please report it privately through the repository's security
-advisories (**Security → Report a vulnerability** on GitHub) rather than a
-public issue, so a fix can ship before the details are public.
+these boundaries? Please report it privately via the repository
+[SECURITY.md](../SECURITY.md) policy (**Security → Report a vulnerability** on
+GitHub) rather than a public issue, so a fix can ship before the details are
+public.
 
 ---
 
