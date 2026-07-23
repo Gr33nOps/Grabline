@@ -768,10 +768,10 @@ def test_persister_stop_is_idempotent(db: Database, dest: Path):
     assert fresh.downloaded == 2048
 
 
-def test_progress_snapshot_withholds_total_until_every_file_reports(db: Database, dest: Path):
-    """A merge's video+audio tracks must both know their size before the
-    combined total means anything - reporting early would show a wrong,
-    shrinking-then-growing total size mid-download."""
+def test_progress_snapshot_shows_known_size_during_partial_merge(db: Database, dest: Path):
+    """A merge's video track often reports size before audio starts. Show the
+    known size immediately - waiting for every track left the UI stuck on
+    'Fetching metadata…' while tens of MB were already downloading."""
     job = _smart_job(db, "https://x/v", dest, "v.mp4")
     task = SmartDownload(db, job, ffmpeg_path=None)
     task._hook(
@@ -785,9 +785,11 @@ def test_progress_snapshot_withholds_total_until_every_file_reports(db: Database
     downloaded, total = task._progress_snapshot()
     assert downloaded == 100 and total == 500  # one file, fully known
 
+    # Audio starts without a size yet: keep showing the video total so Size
+    # and ETA stay useful instead of vanishing into "Fetching metadata…".
     task._hook({"status": "downloading", "filename": "v.f140.m4a", "downloaded_bytes": 10})
     downloaded, total = task._progress_snapshot()
-    assert downloaded == 110 and total is None  # second file's size not known yet
+    assert downloaded == 110 and total == 500
 
     task._hook(
         {
@@ -799,6 +801,29 @@ def test_progress_snapshot_withholds_total_until_every_file_reports(db: Database
     )
     downloaded, total = task._progress_snapshot()
     assert downloaded == 150 and total == 580  # both known -> combined total
+
+
+def test_progress_snapshot_uses_info_dict_size_hint(db: Database, dest: Path):
+    """When per-file totals are not in the hook yet, filesize from info_dict
+    still populates the Size column."""
+    job = _smart_job(db, "https://x/v", dest, "v.mp4")
+    task = SmartDownload(db, job, ffmpeg_path=None)
+    task._hook(
+        {
+            "status": "downloading",
+            "filename": "v.mp4.part",
+            "downloaded_bytes": 1_000,
+            "info_dict": {
+                "title": "Demo",
+                "requested_formats": [
+                    {"filesize": 80_000},
+                    {"filesize_approx": 20_000},
+                ],
+            },
+        }
+    )
+    downloaded, total = task._progress_snapshot()
+    assert downloaded == 1_000 and total == 100_000
 
 
 def test_hook_does_not_block_when_the_database_lock_is_held(db: Database, dest: Path):

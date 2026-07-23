@@ -643,6 +643,11 @@ class DownloadManager:
             queue_id=self._queue_for(filename),
         )
         job = self._apply_add_defaults(job)
+        # Show an estimated size in the list immediately when analysis already
+        # knew one - live hook totals refine it once the download is flowing.
+        if option.estimated_size:
+            self.db.update_job_total(job.id, option.estimated_size)
+            job = self.db.get_job(job.id) or job
         self._kick()
         return job
 

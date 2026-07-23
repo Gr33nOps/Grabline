@@ -642,7 +642,15 @@ class DetailDrawer(QFrame):
         elif view.status is JobStatus.DOWNLOADING:
             self._progress.set_indeterminate(True)
             self._percent.setText("")
-            self._size.setText(t("Fetching metadata…"))
+            if view.downloaded:
+                # Bytes are flowing but yt-dlp has not given a total yet
+                # (common early in a DASH merge). Prefer that over a stuck
+                # "Fetching metadata…" label that looked like a hang.
+                self._size.setText(
+                    t("{size} downloaded", size=human_bytes(view.downloaded))
+                )
+            else:
+                self._size.setText(t("Fetching metadata…"))
         else:
             self._progress.set_value(1.0 if view.status is JobStatus.COMPLETED else 0.0)
             self._percent.setText("")

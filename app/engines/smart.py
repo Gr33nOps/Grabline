@@ -753,6 +753,10 @@ class _StopRequested(Exception):
 class _LiveProgress:
     per_file: dict[str, int] = field(default_factory=dict)
     totals: dict[str, int | None] = field(default_factory=dict)
+    #: Best-effort overall size from yt-dlp's info_dict (requested formats),
+    #: used until per-file totals catch up. Without this, DASH merges sat at
+    #: "Fetching metadata…" while tens of MB were already on disk.
+    expected_total: int | None = None
 
 
 class _ProgressPersister:
@@ -926,6 +930,14 @@ class SmartDownload:
             "retries": 3,
             "fragment_retries": 5,
             "continuedl": True,
+            # YouTube (and other DASH/HLS) ships many small fragments; one at a
+            # time leaves the pipe idle between requests. A modest parallel
+            # count cuts time-to-first-byte wait and overall wall time without
+            # hammering the CDN the way a huge connection count would.
+            "concurrent_fragment_downloads": 8,
+            # Larger HTTP chunks also help progressive (non-fragment) URLs
+            # start transferring sooner and keep the socket busy.
+            "http_chunk_size": 10 * 1024 * 1024,
         }
         _apply_network_guards(ydl_opts, self.proxy)
         if self.ffmpeg_path:
@@ -1233,17 +1245,45 @@ class SmartDownload:
         self.job.title = str(title)
         self.db.update_job_title(self.job.id, self.job.title)
 
+    def _adopt_size_hint(self, event: dict[str, Any]) -> None:
+        """Seed an overall size from info_dict as soon as formats are known.
+
+        Per-file progress totals arrive later (and a merge's audio track may
+        not report a size until it starts), so without this the UI stays on
+        "Fetching metadata…" while video data is already flowing."""
+        if self._live.expected_total:
+            return
+        info = event.get("info_dict") or {}
+        if not isinstance(info, dict):
+            return
+        formats = info.get("requested_formats")
+        if isinstance(formats, list) and formats:
+            sizes = [_format_size(fmt) for fmt in formats if isinstance(fmt, dict)]
+            known = [size for size in sizes if size]
+            if known:
+                self._live.expected_total = sum(known)
+                return
+        size = info.get("filesize") or info.get("filesize_approx")
+        if size:
+            self._live.expected_total = int(size)
+
     def _hook(self, event: dict[str, Any]) -> None:
         if self._stop_event.is_set():
             raise _StopRequested
         self._adopt_title(event)
+        self._adopt_size_hint(event)
         status = event.get("status")
         filename = event.get("tmpfilename") or event.get("filename") or ""
         if status == "downloading":
             self._known_files.add(filename)
             self._live.per_file[filename] = int(event.get("downloaded_bytes") or 0)
             total = event.get("total_bytes") or event.get("total_bytes_estimate")
-            self._live.totals[filename] = int(total) if total else None
+            if total:
+                self._live.totals[filename] = int(total)
+            elif filename not in self._live.totals:
+                # Don't overwrite a known size with None if a later hook
+                # temporarily omits the field; only record "unknown" once.
+                self._live.totals[filename] = None
             # In-memory only. yt-dlp calls this hook synchronously and won't
             # read the next chunk until it returns - a database write here
             # would make this job's throughput hostage to whatever else the
@@ -1253,20 +1293,31 @@ class SmartDownload:
             final = event.get("total_bytes") or event.get("downloaded_bytes")
             if final:
                 self._live.per_file[filename] = int(final)
+                self._live.totals[filename] = int(final)
 
     def _postprocessor_hook(self, event: dict[str, Any]) -> None:
         if self._stop_event.is_set() and event.get("status") == "started":
             raise _StopRequested
 
     def _progress_snapshot(self) -> tuple[int, int | None]:
-        """The current (downloaded, total) for _persister to write - total is
-        None until every requested file has reported one (a merge's audio and
-        video tracks must both know their size before the sum means anything).
-        """
-        totals = list(self._live.totals.values())
-        if totals and all(t is not None for t in totals):
-            return self.bytes_downloaded, sum(t for t in totals if t is not None)
-        return self.bytes_downloaded, None
+        """The current (downloaded, total) for _persister to write.
+
+        Prefer the sum of per-file totals that are already known. A YouTube
+        DASH merge often has video size early and audio size only later - the
+        old rule waited for every track and left the UI stuck on "Fetching
+        metadata…" for the whole video phase. When some tracks are still
+        unknown, bump the shown total up to the live downloaded count so the
+        progress bar never exceeds 100%."""
+        downloaded = self.bytes_downloaded
+        known = [size for size in self._live.totals.values() if size is not None]
+        if known:
+            total = sum(known)
+            if any(size is None for size in self._live.totals.values()):
+                total = max(total, downloaded)
+            return downloaded, total
+        if self._live.expected_total:
+            return downloaded, max(self._live.expected_total, downloaded)
+        return downloaded, None
 
     # ---------------------------------------------------------- completion
 

@@ -2866,7 +2866,12 @@ class MainWindow(QMainWindow):
             name_item.setIcon(QIcon())
             name_item.setToolTip("")
 
-        self._cell(row, _COL_SIZE).setText(human_bytes(view.total_size) if view.total_size else "")
+        if view.total_size:
+            self._cell(row, _COL_SIZE).setText(human_bytes(view.total_size))
+        elif view.status is JobStatus.DOWNLOADING and view.downloaded:
+            self._cell(row, _COL_SIZE).setText(human_bytes(view.downloaded))
+        else:
+            self._cell(row, _COL_SIZE).setText("")
 
         bar = self._progress_bars.get(view.id)
         if bar is not None:
