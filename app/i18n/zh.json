@@ -855,5 +855,9 @@
   "{page}: {count} links": "{page}：{count} 个链接",
   "{scanner} flagged this file{detail}. Antivirus false positives happen. Decide based on where it came from.": "{scanner} 标记了此文件{detail}。杀毒误报时有发生。请根据来源自行判断。",
   "{sets} set(s) of identical files, {extra} redundant cop(ies). Checked files will be deleted; the first of each set is kept.": "{sets} 组相同文件，{extra} 个多余副本。勾选的文件将被删除；每组保留第一个。",
-  "── Checksums ──": "── 校验和 ──"
+  "── Checksums ──": "── 校验和 ──",
+  "Changing the language asks you to restart GrabLine so the UI can rebuild.": "更改语言后需要重启 GrabLine，以便重新构建界面。",
+  "Restart now": "立即重启",
+  "Later": "稍后",
+  "Could not restart GrabLine. Please quit and open it again.": "无法重启 GrabLine。请退出后重新打开。"
 }

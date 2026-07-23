@@ -855,5 +855,9 @@
   "{page}: {count} links": "{page}: {count} links",
   "{scanner} flagged this file{detail}. Antivirus false positives happen. Decide based on where it came from.": "{scanner} sinalizou este arquivo{detail}. Falsos positivos de antivírus acontecem. Decida pela origem.",
   "{sets} set(s) of identical files, {extra} redundant cop(ies). Checked files will be deleted; the first of each set is kept.": "{sets} conjunto(s) de arquivos idênticos, {extra} cópia(s) redundante(s). Os marcados serão excluídos; o primeiro de cada conjunto é mantido.",
-  "── Checksums ──": "── Checksums ──"
+  "── Checksums ──": "── Checksums ──",
+  "Changing the language asks you to restart GrabLine so the UI can rebuild.": "Ao mudar o idioma, pedimos para reiniciar o GrabLine para reconstruir a interface.",
+  "Restart now": "Reiniciar agora",
+  "Later": "Mais tarde",
+  "Could not restart GrabLine. Please quit and open it again.": "Não foi possível reiniciar o GrabLine. Feche e abra novamente."
 }

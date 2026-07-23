@@ -260,7 +260,9 @@ class SettingsDialog(chrome.Dialog):
         for code, name, native in i18n.available_languages():
             self.language_combo.addItem(native if native == name else f"{native} ({name})", code)
         general_form.addRow(t("Language:"), self.language_combo)
-        general_form.addRow(_note("A new language takes effect after you restart GrabLine."))
+        general_form.addRow(
+            _note("Changing the language asks you to restart GrabLine so the UI can rebuild.")
+        )
         self.autostart_check = QCheckBox(t("Start GrabLine when I log in (minimized to the tray)"))
         general_form.addRow(self.autostart_check)
         self.updates_check = QCheckBox(t("Check for GrabLine updates on startup"))
@@ -1488,11 +1490,8 @@ class SettingsDialog(chrome.Dialog):
             QMessageBox.warning(self, "GrabLine", proxy_error)
             return False
         language = str(self.language_combo.currentData())
+        language_changed = language != i18n.current_language()
         self.settings.language = language
-        if language != i18n.current_language():
-            QMessageBox.information(
-                self, "GrabLine", t("Restart GrabLine to apply the new language.")
-            )
         self.settings.download_dir = self.folder_edit.text().strip() or str(
             self.settings.download_dir
         )
@@ -1598,4 +1597,25 @@ class SettingsDialog(chrome.Dialog):
             launcher.set_autostart(self.autostart_check.isChecked())
         except OSError as exc:
             QMessageBox.warning(self, "GrabLine", t("Could not update autostart: {exc}", exc=exc))
+        if language_changed:
+            # Offer an immediate restart so the new catalog + layout direction
+            # apply; "Later" keeps the current UI until the next launch.
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Information)
+            box.setWindowTitle("GrabLine")
+            box.setText(t("Restart GrabLine to apply the new language."))
+            restart_btn = box.addButton(t("Restart now"), QMessageBox.ButtonRole.AcceptRole)
+            box.addButton(t("Later"), QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            if box.clickedButton() is restart_btn:
+                if launcher.restart_current():
+                    app = QApplication.instance()
+                    if app is not None:
+                        app.quit()
+                else:
+                    QMessageBox.warning(
+                        self,
+                        "GrabLine",
+                        t("Could not restart GrabLine. Please quit and open it again."),
+                    )
         return True

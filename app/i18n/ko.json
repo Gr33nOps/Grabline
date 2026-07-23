@@ -855,5 +855,9 @@
   "{page}: {count} links": "{page}: 링크 {count}개",
   "{scanner} flagged this file{detail}. Antivirus false positives happen. Decide based on where it came from.": "{scanner}이(가) 이 파일을 표시했습니다{detail}. 백신 오탐은 있습니다. 출처를 보고 결정하세요.",
   "{sets} set(s) of identical files, {extra} redundant cop(ies). Checked files will be deleted; the first of each set is kept.": "동일 파일 {sets}세트, 중복 복사본 {extra}개. 선택한 파일은 삭제되고 각 세트의 첫 번째는 유지됩니다.",
-  "── Checksums ──": "── 체크섬 ──"
+  "── Checksums ──": "── 체크섬 ──",
+  "Changing the language asks you to restart GrabLine so the UI can rebuild.": "언어를 바꾸면 UI를 다시 구성하기 위해 GrabLine 재시작을 요청합니다.",
+  "Restart now": "지금 다시 시작",
+  "Later": "나중에",
+  "Could not restart GrabLine. Please quit and open it again.": "GrabLine을 다시 시작할 수 없습니다. 종료한 뒤 다시 열어 주세요."
 }

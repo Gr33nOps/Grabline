@@ -855,5 +855,9 @@
   "{page}: {count} links": "{page}: {count} リンク",
   "{scanner} flagged this file{detail}. Antivirus false positives happen. Decide based on where it came from.": "{scanner} がこのファイルを検出しました{detail}。アンチウイルスの誤検知は起こります。出所で判断してください。",
   "{sets} set(s) of identical files, {extra} redundant cop(ies). Checked files will be deleted; the first of each set is kept.": "{sets} 組の同一ファイル、{extra} 個の余剰コピー。チェックしたファイルは削除され、各セットの先頭は残ります。",
-  "── Checksums ──": "── チェックサム ──"
+  "── Checksums ──": "── チェックサム ──",
+  "Changing the language asks you to restart GrabLine so the UI can rebuild.": "言語を変更すると、UI を再構築するために GrabLine の再起動を求められます。",
+  "Restart now": "今すぐ再起動",
+  "Later": "後で",
+  "Could not restart GrabLine. Please quit and open it again.": "GrabLine を再起動できませんでした。終了してからもう一度開いてください。"
 }

@@ -42,6 +42,7 @@ LANGUAGES: tuple[tuple[str, str, str], ...] = (
     ("ja", "Japanese", "日本語"),
     ("ko", "Korean", "한국어"),
     ("tr", "Turkish", "Türkçe"),
+    ("ur", "Urdu", "اردو"),
 )
 
 #: Right-to-left languages: the app sets Qt's layout direction for these.

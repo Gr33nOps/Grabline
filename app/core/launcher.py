@@ -200,3 +200,27 @@ def set_autostart(enabled: bool) -> None:
         path,
         _desktop_entry(command, icon=icon if icon.exists() else None, autostart=True),
     )
+
+
+def restart_current() -> bool:
+    """Spawn a fresh GrabLine process for this install, then return True so the
+    caller can quit the running one. Used when a setting (e.g. language) needs a
+    clean UI rebuild. Returns False if the new process could not be started."""
+    command = launch_command()
+    try:
+        # Prefer Qt's detached spawn when a QApplication is alive (GUI path);
+        # fall back to subprocess for tests / non-Qt callers.
+        from PySide6.QtCore import QProcess
+        from PySide6.QtWidgets import QApplication
+
+        if QApplication.instance() is not None:
+            return bool(QProcess.startDetached(command[0], command[1:]))
+    except Exception:
+        pass
+    import subprocess
+
+    try:
+        subprocess.Popen(command, close_fds=True)  # noqa: S603 - our own argv
+        return True
+    except OSError:
+        return False

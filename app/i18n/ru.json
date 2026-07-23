@@ -855,5 +855,9 @@
   "{page}: {count} links": "{page}: {count} ссылок",
   "{scanner} flagged this file{detail}. Antivirus false positives happen. Decide based on where it came from.": "{scanner} пометил этот файл{detail}. Ложные срабатывания антивируса бывают. Решайте по источнику.",
   "{sets} set(s) of identical files, {extra} redundant cop(ies). Checked files will be deleted; the first of each set is kept.": "{sets} набор(ов) одинаковых файлов, {extra} лишн(их) копий. Отмеченные будут удалены; первый в каждом наборе сохраняется.",
-  "── Checksums ──": "── Контрольные суммы ──"
+  "── Checksums ──": "── Контрольные суммы ──",
+  "Changing the language asks you to restart GrabLine so the UI can rebuild.": "При смене языка GrabLine предложит перезапуск, чтобы пересобрать интерфейс.",
+  "Restart now": "Перезапустить сейчас",
+  "Later": "Позже",
+  "Could not restart GrabLine. Please quit and open it again.": "Не удалось перезапустить GrabLine. Закройте приложение и откройте снова."
 }

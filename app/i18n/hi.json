@@ -855,5 +855,9 @@
   "{page}: {count} links": "{page}: {count} लिंक",
   "{scanner} flagged this file{detail}. Antivirus false positives happen. Decide based on where it came from.": "{scanner} ने इस फ़ाइल को फ़्लैग किया{detail}। एंटीवायरस गलत सकारात्मक होते हैं। स्रोत के आधार पर तय करें।",
   "{sets} set(s) of identical files, {extra} redundant cop(ies). Checked files will be deleted; the first of each set is kept.": "{sets} समान फ़ाइलों के सेट, {extra} अतिरिक्त प्रति(याँ)। चेक की गई फ़ाइलें हटाई जाएँगी; प्रत्येक सेट की पहली रखी जाएगी।",
-  "── Checksums ──": "── चेकसम ──"
+  "── Checksums ──": "── चेकसम ──",
+  "Changing the language asks you to restart GrabLine so the UI can rebuild.": "भाषा बदलने पर UI फिर से बनाने के लिए GrabLine को पुनः आरंभ करने को कहा जाता है।",
+  "Restart now": "अभी पुनः आरंभ करें",
+  "Later": "बाद में",
+  "Could not restart GrabLine. Please quit and open it again.": "GrabLine पुनः आरंभ नहीं हो सका। कृपया बंद करके फिर खोलें।"
 }

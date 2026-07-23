@@ -855,5 +855,9 @@
   "{page}: {count} links": "{page}: {count} روابط",
   "{scanner} flagged this file{detail}. Antivirus false positives happen. Decide based on where it came from.": "أشار {scanner} إلى هذا الملف{detail}. تحدث نتائج خاطئة لمكافحة الفيروسات. قرّر حسب المصدر.",
   "{sets} set(s) of identical files, {extra} redundant cop(ies). Checked files will be deleted; the first of each set is kept.": "{sets} مجموعة/مجموعات من ملفات متطابقة، {extra} نسخة/نسخ زائدة. ستُحذف الملفات المحددة؛ تُبقى الأولى من كل مجموعة.",
-  "── Checksums ──": "── المجاميع التحقق ──"
+  "── Checksums ──": "── المجاميع التحقق ──",
+  "Changing the language asks you to restart GrabLine so the UI can rebuild.": "عند تغيير اللغة يُطلب منك إعادة تشغيل GrabLine لإعادة بناء الواجهة.",
+  "Restart now": "أعد التشغيل الآن",
+  "Later": "لاحقًا",
+  "Could not restart GrabLine. Please quit and open it again.": "تعذّر إعادة تشغيل GrabLine. أغلقه وافتحه مرة أخرى."
 }

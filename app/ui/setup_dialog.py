@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -174,10 +175,32 @@ class SetupDialog(chrome.Dialog):
         if self._settings is not None:
             self._settings.language = code
         # The already-built UI stays in the current language; the new one takes
-        # effect on the next launch.
-        self._lang_note.setText(
-            "" if code == i18n.current_language() else t("Restart GrabLine to apply the language.")
-        )
+        # effect on the next launch (or immediately via Restart now).
+        if code == i18n.current_language():
+            self._lang_note.setText("")
+            return
+        self._lang_note.setText(t("Restart GrabLine to apply the language."))
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("GrabLine")
+        box.setText(t("Restart GrabLine to apply the new language."))
+        restart_btn = box.addButton(t("Restart now"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(t("Later"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is restart_btn:
+            from app.core import launcher
+            from PySide6.QtWidgets import QApplication
+
+            if launcher.restart_current():
+                app = QApplication.instance()
+                if app is not None:
+                    app.quit()
+            else:
+                QMessageBox.warning(
+                    self,
+                    "GrabLine",
+                    t("Could not restart GrabLine. Please quit and open it again."),
+                )
 
     def _prepare_extension(self) -> None:
         try:
