@@ -144,10 +144,10 @@ class _ShortcutsPage(QWidget):
         overrides = settings.shortcuts
         row = 0
         for category, shortcuts in by_category():
-            grid.addWidget(components.role_label(category, "strong", bold=True), row, 0, 1, 3)
+            grid.addWidget(components.role_label(t(category), "strong", bold=True), row, 0, 1, 3)
             row += 1
             for shortcut in shortcuts:
-                grid.addWidget(QLabel(shortcut.label), row, 0)
+                grid.addWidget(QLabel(t(shortcut.label)), row, 0)
                 edit = QKeySequenceEdit()
                 edit.setMaximumSequenceLength(1)  # one chord (Ctrl+N), not a Qt sequence
                 raw = overrides.get(shortcut.id, shortcut.default)
@@ -211,7 +211,7 @@ class _ShortcutsPage(QWidget):
         parts = []
         for sequence, ids in clashes.items():
             keys = QKeySequence(sequence).toString(QKeySequence.SequenceFormat.NativeText)
-            names = ", ".join(BY_ID[i].label for i in ids if i in BY_ID)
+            names = ", ".join(t(BY_ID[i].label) for i in ids if i in BY_ID)
             parts.append(f"{keys} is bound to {names}")
         self._warning.setText("Conflict: " + "; ".join(parts))
 

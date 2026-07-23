@@ -8,6 +8,7 @@ from PySide6.QtCore import QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
 
+from app.core.i18n import t
 from app.ui.format import human_bytes
 
 _HISTORY = 60  # data points shown (about 30s at the 500ms refresh)
@@ -20,7 +21,7 @@ class Sparkline(QWidget):
         super().__init__(parent)
         self._samples: deque[float] = deque(maxlen=_HISTORY)
         self.setMinimumSize(150, 26)
-        self.setToolTip("Total download speed")
+        self.setToolTip(t("Total download speed"))
 
     def push(self, bytes_per_second: float) -> None:
         self._samples.append(max(0.0, bytes_per_second))

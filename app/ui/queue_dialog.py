@@ -28,20 +28,21 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import N_, t
 from app.core.manager import DownloadManager
 from app.core.models import Queue
 from app.ui import chrome
 
 _CATEGORIES = (
     "",
-    "Video",
-    "Music",
-    "Images",
-    "Documents",
-    "Archives",
-    "Programs",
-    "Games",
-    "Torrents",
+    N_("Video"),
+    N_("Music"),
+    N_("Images"),
+    N_("Documents"),
+    N_("Archives"),
+    N_("Programs"),
+    N_("Games"),
+    N_("Torrents"),
 )
 
 
@@ -63,14 +64,16 @@ class QueueManagerDialog(chrome.Dialog):
     def __init__(self, manager: DownloadManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.manager = manager
-        self.setWindowTitle("Queue manager")
+        self.setWindowTitle(t("Queue manager"))
         self.setMinimumSize(460, 360)
         layout = QVBoxLayout(self)
         layout.addWidget(
             QLabel(
-                "Queues run in this order. Each can be sequential (1 at a "
-                "time) or parallel, paused, scheduled, tied to a category, or "
-                "made to wait for another queue."
+                t(
+                    "Queues run in this order. Each can be sequential (1 at a "
+                    "time) or parallel, paused, scheduled, tied to a category, or "
+                    "made to wait for another queue."
+                )
             )
         )
         self.list = QListWidget()
@@ -79,17 +82,17 @@ class QueueManagerDialog(chrome.Dialog):
 
         buttons = QHBoxLayout()
         for label, handler in (
-            ("Add…", self._add),
-            ("Edit…", self._edit),
-            ("Up", lambda: self._nudge(-1)),
-            ("Down", lambda: self._nudge(1)),
-            ("Delete", self._delete),
+            (t("Add…"), self._add),
+            (t("Edit…"), self._edit),
+            (t("Up"), lambda: self._nudge(-1)),
+            (t("Down"), lambda: self._nudge(1)),
+            (t("Delete"), self._delete),
         ):
             button = QPushButton(label)
             button.clicked.connect(handler)
             buttons.addWidget(button)
         buttons.addStretch(1)
-        close = QPushButton("Close")
+        close = QPushButton(t("Close"))
         close.clicked.connect(self.accept)
         buttons.addWidget(close)
         layout.addLayout(buttons)
@@ -103,17 +106,17 @@ class QueueManagerDialog(chrome.Dialog):
         for queue in queues.values():
             traits = []
             if queue.max_concurrent == 1:
-                traits.append("sequential")
+                traits.append(t("sequential"))
             elif queue.max_concurrent > 1:
-                traits.append(f"parallel x{queue.max_concurrent}")
+                traits.append(t("parallel x{count}", count=queue.max_concurrent))
             if queue.paused:
-                traits.append("paused")
+                traits.append(t("paused"))
             if queue.schedule_enabled:
                 traits.append(f"{queue.start_time}-{queue.stop_time}")
             if queue.category:
-                traits.append(queue.category.lower())
+                traits.append(t(queue.category).lower())
             if queue.depends_on and queue.depends_on in queues:
-                traits.append(f"after '{queues[queue.depends_on].name}'")
+                traits.append(t("after '{name}'", name=queues[queue.depends_on].name))
             suffix = f"   ({', '.join(traits)})" if traits else ""
             item = QListWidgetItem(f"{queue.name}{suffix}")
             item.setData(Qt.ItemDataRole.UserRole, queue.id)
@@ -132,7 +135,7 @@ class QueueManagerDialog(chrome.Dialog):
     # -------------------------------------------------------------- actions
 
     def _add(self) -> None:
-        name, accepted = QInputDialog.getText(self, "New queue", "Queue name:")
+        name, accepted = QInputDialog.getText(self, t("New queue"), t("Queue name:"))
         if accepted and name.strip():
             queue = self.manager.create_queue(name.strip())
             self._reload()
@@ -173,8 +176,11 @@ class QueueManagerDialog(chrome.Dialog):
         answer = QMessageBox.question(
             self,
             "GrabLine",
-            f"Delete queue '{queue.name}'? Its downloads go back to the "
-            "default queue (nothing is removed).",
+            t(
+                "Delete queue '{name}'? Its downloads go back to the "
+                "default queue (nothing is removed).",
+                name=queue.name,
+            ),
         )
         if answer == QMessageBox.StandardButton.Yes:
             self.manager.delete_queue(queue.id)
@@ -186,26 +192,26 @@ class _QueueEditor(chrome.Dialog):
         super().__init__(parent)
         self.queue = queue
         self._queues = {q.id: q for q in queues}
-        self.setWindowTitle(f"Queue: {queue.name}")
+        self.setWindowTitle(t("Queue: {name}", name=queue.name))
         self.setMinimumWidth(400)
         form = QFormLayout(self)
 
         self.name_edit = QLineEdit(queue.name)
-        form.addRow("Name:", self.name_edit)
+        form.addRow(t("Name:"), self.name_edit)
 
         self.concurrent_spin = QSpinBox()
         self.concurrent_spin.setRange(0, 10)
         self.concurrent_spin.setValue(queue.max_concurrent)
-        self.concurrent_spin.setSpecialValueText("Global setting")
-        self.concurrent_spin.setToolTip("1 = sequential (one at a time, in order)")
-        form.addRow("Downloads at once:", self.concurrent_spin)
+        self.concurrent_spin.setSpecialValueText(t("Global setting"))
+        self.concurrent_spin.setToolTip(t("1 = sequential (one at a time, in order)"))
+        form.addRow(t("Downloads at once:"), self.concurrent_spin)
 
-        self.paused_check = QCheckBox("Paused (holds every download in this queue)")
+        self.paused_check = QCheckBox(t("Paused (holds every download in this queue)"))
         self.paused_check.setChecked(queue.paused)
         form.addRow("", self.paused_check)
 
         schedule_row = QHBoxLayout()
-        self.schedule_check = QCheckBox("Only between")
+        self.schedule_check = QCheckBox(t("Only between"))
         self.schedule_check.setChecked(queue.schedule_enabled)
         self.start_edit = QTimeEdit(QTime.fromString(queue.start_time, "HH:mm"))
         self.start_edit.setDisplayFormat("HH:mm")
@@ -213,20 +219,22 @@ class _QueueEditor(chrome.Dialog):
         self.stop_edit.setDisplayFormat("HH:mm")
         schedule_row.addWidget(self.schedule_check)
         schedule_row.addWidget(self.start_edit)
-        schedule_row.addWidget(QLabel("and"))
+        schedule_row.addWidget(QLabel(t("and")))
         schedule_row.addWidget(self.stop_edit)
         schedule_row.addStretch(1)
-        form.addRow("Schedule:", schedule_row)
+        form.addRow(t("Schedule:"), schedule_row)
 
         self.category_combo = QComboBox()
         for category in _CATEGORIES:
-            self.category_combo.addItem(category or "(none)", category)
+            self.category_combo.addItem(t(category) if category else t("(none)"), category)
         self.category_combo.setCurrentIndex(max(0, self.category_combo.findData(queue.category)))
-        self.category_combo.setToolTip("New downloads of this type join this queue automatically")
-        form.addRow("Category:", self.category_combo)
+        self.category_combo.setToolTip(
+            t("New downloads of this type join this queue automatically")
+        )
+        form.addRow(t("Category:"), self.category_combo)
 
         self.depends_combo = QComboBox()
-        self.depends_combo.addItem("(nothing)", None)
+        self.depends_combo.addItem(t("(nothing)"), None)
         for other in queues:
             if other.id != queue.id:
                 self.depends_combo.addItem(other.name, other.id)
@@ -234,8 +242,8 @@ class _QueueEditor(chrome.Dialog):
             self.depends_combo.setCurrentIndex(
                 max(0, self.depends_combo.findData(queue.depends_on))
             )
-        self.depends_combo.setToolTip("This queue starts only after that queue has finished")
-        form.addRow("Wait for queue:", self.depends_combo)
+        self.depends_combo.setToolTip(t("This queue starts only after that queue has finished"))
+        form.addRow(t("Wait for queue:"), self.depends_combo)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -248,7 +256,9 @@ class _QueueEditor(chrome.Dialog):
         depends_on = self.depends_combo.currentData()
         if depends_on is not None and _would_cycle(self._queues, self.queue.id, depends_on):
             QMessageBox.warning(
-                self, "GrabLine", "That would make the queues wait on each other forever."
+                self,
+                "GrabLine",
+                t("That would make the queues wait on each other forever."),
             )
             return
         self.accept()

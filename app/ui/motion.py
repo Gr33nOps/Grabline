@@ -18,6 +18,7 @@ from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath
 from PySide6.QtWidgets import QWidget
 
+from app.core.i18n import t
 from app.ui import theme
 from app.ui.format import human_bytes
 
@@ -291,7 +292,7 @@ class Sparkline(QWidget):
         self._animating = False
         self._scale = 0.0
         self.setMinimumSize(48, 24)
-        self.setToolTip("Recent total speed")
+        self.setToolTip(t("Recent total speed"))
 
     def push(self, bytes_per_second: float) -> None:
         import time

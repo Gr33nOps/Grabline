@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.credentials import CloudAccount, CredentialStore
+from app.core.i18n import t
 from app.engines.cloud import RemoteFile
 from app.ui import chrome
 from app.ui.format import human_bytes
@@ -39,27 +40,29 @@ class CloudAccountsDialog(chrome.Dialog):
     def __init__(self, store: CredentialStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.store = store
-        self.setWindowTitle("Cloud accounts")
+        self.setWindowTitle(t("Cloud accounts"))
         self.setMinimumSize(480, 340)
         layout = QVBoxLayout(self)
         layout.addWidget(
             QLabel(
-                "Saved logins for SFTP / FTP / WebDAV / S3. Passwords and key "
-                "passphrases are kept in your system keychain, never in GrabLine."
+                t(
+                    "Saved logins for SFTP / FTP / WebDAV / S3. Passwords and key "
+                    "passphrases are kept in your system keychain, never in GrabLine."
+                )
             )
         )
         self.list = QListWidget()
         layout.addWidget(self.list)
 
         buttons = QHBoxLayout()
-        add = QPushButton("Add…")
+        add = QPushButton(t("Add…"))
         add.clicked.connect(self._add)
-        remove = QPushButton("Remove")
+        remove = QPushButton(t("Remove"))
         remove.clicked.connect(self._remove)
         buttons.addWidget(add)
         buttons.addWidget(remove)
         buttons.addStretch(1)
-        close = QPushButton("Close")
+        close = QPushButton(t("Close"))
         close.clicked.connect(self.accept)
         buttons.addWidget(close)
         layout.addLayout(buttons)
@@ -79,7 +82,7 @@ class CloudAccountsDialog(chrome.Dialog):
             return
         account, secret = dialog.result_account()
         if not account.host:
-            QMessageBox.warning(self, "GrabLine", "A host is required.")
+            QMessageBox.warning(self, "GrabLine", t("A host is required."))
             return
         self.store.save_account(account, secret)
         self._reload()
@@ -97,31 +100,31 @@ class CloudAccountsDialog(chrome.Dialog):
 class _AccountEditor(chrome.Dialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Cloud account")
+        self.setWindowTitle(t("Cloud account"))
         self.setMinimumWidth(380)
         form = QFormLayout(self)
         self.service = QComboBox()
         self.service.addItems(_SERVICES)
-        form.addRow("Service:", self.service)
+        form.addRow(t("Service:"), self.service)
         self.host = QLineEdit()
-        self.host.setPlaceholderText("host, or the S3 endpoint (e.g. s3.us-west.amazonaws.com)")
-        form.addRow("Host:", self.host)
+        self.host.setPlaceholderText(t("host, or the S3 endpoint (e.g. s3.us-west.amazonaws.com)"))
+        form.addRow(t("Host:"), self.host)
         self.username = QLineEdit()
-        self.username.setPlaceholderText("username, or the S3 access key")
-        form.addRow("Username:", self.username)
+        self.username.setPlaceholderText(t("username, or the S3 access key"))
+        form.addRow(t("Username:"), self.username)
         self.port = QLineEdit()
-        self.port.setPlaceholderText("blank = default")
-        form.addRow("Port:", self.port)
+        self.port.setPlaceholderText(t("blank = default"))
+        form.addRow(t("Port:"), self.port)
         self.secret = QLineEdit()
         self.secret.setEchoMode(QLineEdit.EchoMode.Password)
-        self.secret.setPlaceholderText("password, key passphrase, or S3 secret key")
-        form.addRow("Secret:", self.secret)
+        self.secret.setPlaceholderText(t("password, key passphrase, or S3 secret key"))
+        form.addRow(t("Secret:"), self.secret)
         self.key_file = QLineEdit()
-        self.key_file.setPlaceholderText("SFTP/SCP private-key file (optional)")
-        form.addRow("Key file:", self.key_file)
+        self.key_file.setPlaceholderText(t("SFTP/SCP private-key file (optional)"))
+        form.addRow(t("Key file:"), self.key_file)
         self.label = QLineEdit()
-        self.label.setPlaceholderText("a name for this account (optional)")
-        form.addRow("Label:", self.label)
+        self.label.setPlaceholderText(t("a name for this account (optional)"))
+        form.addRow(t("Label:"), self.label)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -151,13 +154,22 @@ class CloudFolderDialog(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.files = files
-        self.setWindowTitle("Remote folder")
+        self.setWindowTitle(t("Remote folder"))
         self.setMinimumSize(520, 380)
         layout = QVBoxLayout(self)
         total = sum(f.size or 0 for f in files)
-        layout.addWidget(QLabel(f"{len(files)} file(s) in {folder_url}, {human_bytes(total)}"))
+        layout.addWidget(
+            QLabel(
+                t(
+                    "{count} file(s) in {folder}, {size}",
+                    count=len(files),
+                    folder=folder_url,
+                    size=human_bytes(total),
+                )
+            )
+        )
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["File", "Size"])
+        self.tree.setHeaderLabels([t("File"), t("Size")])
         self.tree.setRootIsDecorated(False)
         self.tree.setColumnWidth(0, 380)
         for entry in files:
@@ -170,7 +182,7 @@ class CloudFolderDialog(chrome.Dialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Download")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(t("Download"))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

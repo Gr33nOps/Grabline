@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from app.core import gif
 from app.core.errors import DownloadError
+from app.core.i18n import t
 from app.ui import chrome, motion
 from app.ui.quality_panel import parse_timestamp
 
@@ -56,7 +57,7 @@ class GifDialog(chrome.Dialog):
         super().__init__(parent)
         self._ffmpeg_path = ffmpeg_path
         self._source = source
-        self.setWindowTitle("Convert to GIF")
+        self.setWindowTitle(t("Convert to GIF"))
         self.setMinimumWidth(360)
 
         form = QFormLayout(self)
@@ -64,36 +65,36 @@ class GifDialog(chrome.Dialog):
         name.setStyleSheet("font-weight: 600;")
         form.addRow(name)
         self.start_edit = QLineEdit()
-        self.start_edit.setPlaceholderText("0:00 (whole video)")
+        self.start_edit.setPlaceholderText(t("0:00 (whole video)"))
         self.end_edit = QLineEdit()
-        self.end_edit.setPlaceholderText("e.g. 0:05")
-        form.addRow("Start:", self.start_edit)
-        form.addRow("End:", self.end_edit)
+        self.end_edit.setPlaceholderText(t("e.g. 0:05"))
+        form.addRow(t("Start:"), self.start_edit)
+        form.addRow(t("End:"), self.end_edit)
         self.fps_spin = QSpinBox()
         self.fps_spin.setRange(1, 120)
         self.fps_spin.setValue(gif.DEFAULT_FPS)
-        form.addRow("Frames/s:", self.fps_spin)
+        form.addRow(t("Frames/s:"), self.fps_spin)
         self.width_spin = QSpinBox()
         self.width_spin.setRange(120, 1920)
         self.width_spin.setSingleStep(40)
         self.width_spin.setValue(gif.DEFAULT_WIDTH)
-        self.width_spin.setSuffix(" px wide")
-        form.addRow("Size:", self.width_spin)
-        hint = QLabel("Tip: GIFs get huge fast, so keep clips short.")
+        self.width_spin.setSuffix(t(" px wide"))
+        form.addRow(t("Size:"), self.width_spin)
+        hint = QLabel(t("Tip: GIFs get huge fast, so keep clips short."))
         hint.setStyleSheet("color: gray; font-size: 11px;")
         form.addRow(hint)
 
         self._working_bar = motion.SmoothProgressBar()
         self._working_bar.hide()
         form.addRow(self._working_bar)
-        self._working_note = QLabel("Converting… this runs in the background.")
+        self._working_note = QLabel(t("Converting… this runs in the background."))
         self._working_note.hide()
         form.addRow(self._working_note)
         self._buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         ok = self._buttons.button(QDialogButtonBox.StandardButton.Ok)
-        ok.setText("Convert")
+        ok.setText(t("Convert"))
         self._buttons.accepted.connect(self._convert)
         self._buttons.rejected.connect(self.reject)
         form.addRow(self._buttons)
@@ -103,10 +104,10 @@ class GifDialog(chrome.Dialog):
             start = parse_timestamp(self.start_edit.text())
             end = parse_timestamp(self.end_edit.text())
         except ValueError:
-            QMessageBox.warning(self, "GrabLine", "Timestamps look like 90, 1:30, or 1:02:03.")
+            QMessageBox.warning(self, "GrabLine", t("Timestamps look like 90, 1:30, or 1:02:03."))
             return
         if end is not None and end <= (start or 0.0):
-            QMessageBox.warning(self, "GrabLine", "The end timestamp must be after the start.")
+            QMessageBox.warning(self, "GrabLine", t("The end timestamp must be after the start."))
             return
         self._buttons.setEnabled(False)
         self._working_bar.show()
@@ -138,5 +139,5 @@ class GifDialog(chrome.Dialog):
         if error is not None:
             QMessageBox.warning(self, "GrabLine", str(error))
             return
-        QMessageBox.information(self, "GrabLine", f"Saved {Path(str(target)).name}")
+        QMessageBox.information(self, "GrabLine", t("Saved {name}", name=Path(str(target)).name))
         self.accept()

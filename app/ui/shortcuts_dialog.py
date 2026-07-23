@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import t
 from app.ui import chrome, components, theme
 from app.ui.shortcuts import by_category
 
@@ -28,7 +29,7 @@ def _key_caps(sequence: str) -> QLabel:
         text = QKeySequence(sequence).toString(QKeySequence.SequenceFormat.NativeText)
         role = "value"
     else:
-        text = "Unbound"
+        text = t("Unbound")
         role = "muted"
     cap = components.role_label(text, role)
     cap.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -47,12 +48,12 @@ def _key_caps(sequence: str) -> QLabel:
 class ShortcutsDialog(chrome.Dialog):
     def __init__(self, effective: dict[str, str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Keyboard shortcuts")
+        self.setWindowTitle(t("Keyboard shortcuts"))
         self.setMinimumSize(520, 560)
         layout = QVBoxLayout(self)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("Search shortcuts…")
+        self._search.setPlaceholderText(t("Search shortcuts…"))
         self._search.setClearButtonEnabled(True)
         self._search.textChanged.connect(self._filter)
         layout.addWidget(self._search)
@@ -70,7 +71,7 @@ class ShortcutsDialog(chrome.Dialog):
         self._rows: list[tuple[QWidget, str]] = []
         self._sections: list[tuple[QLabel, list[QWidget]]] = []
         for category, shortcuts in by_category():
-            header = components.role_label(category, "strong", bold=True)
+            header = components.role_label(t(category), "strong", bold=True)
             column.addWidget(header)
             section_rows: list[QWidget] = []
             for shortcut in shortcuts:
@@ -78,7 +79,7 @@ class ShortcutsDialog(chrome.Dialog):
                 row = QWidget()
                 row_layout = QHBoxLayout(row)
                 row_layout.setContentsMargins(6, 0, 0, 0)
-                row_layout.addWidget(components.role_label(shortcut.label, "value"), 1)
+                row_layout.addWidget(components.role_label(t(shortcut.label), "value"), 1)
                 row_layout.addWidget(_key_caps(sequence))
                 column.addWidget(row)
                 haystack = f"{shortcut.label} {sequence} {category}".lower()
@@ -91,7 +92,7 @@ class ShortcutsDialog(chrome.Dialog):
         scroll.setWidget(body)
         layout.addWidget(scroll, 1)
 
-        note = components.role_label("Rebind any of these in Settings -> Shortcuts.", "muted")
+        note = components.role_label(t("Rebind any of these in Settings -> Shortcuts."), "muted")
         layout.addWidget(note)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)

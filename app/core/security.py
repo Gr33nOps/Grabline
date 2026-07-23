@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 
 from app.core import reputation, verify, virusscan
 from app.core.errors import DownloadError
+from app.core.i18n import t
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +33,11 @@ class Risk(IntEnum):
 
     @property
     def label(self) -> str:
-        return {Risk.OK: "Looks OK", Risk.CAUTION: "Caution", Risk.WARNING: "Warning"}[self]
+        return {
+            Risk.OK: t("Looks OK"),
+            Risk.CAUTION: t("Caution"),
+            Risk.WARNING: t("Warning"),
+        }[self]
 
 
 #: File types that run code - worth an extra note even when nothing flags them.
@@ -96,7 +101,7 @@ def check_file(
     blank."""
     report = SecurityReport(path=str(path))
     if not path.is_file():
-        report._raise(Risk.WARNING, "The file no longer exists.")
+        report._raise(Risk.WARNING, t("The file no longer exists."))
         return report
 
     if compute_checksums:
@@ -106,7 +111,7 @@ def check_file(
     if report.executable:
         report._raise(
             Risk.CAUTION,
-            "This is an executable or installer. Only run it if you trust the source.",
+            t("This is an executable or installer. Only run it if you trust the source."),
         )
 
     if url:
@@ -116,8 +121,10 @@ def check_file(
             if not report.https:
                 report._raise(
                     Risk.CAUTION,
-                    "Downloaded over unencrypted HTTP. It could have been "
-                    "tampered with in transit.",
+                    t(
+                        "Downloaded over unencrypted HTTP. It could have been "
+                        "tampered with in transit."
+                    ),
                 )
 
     if run_local_scan and virusscan.find_scanner(scanner_pref) is not None:
@@ -133,11 +140,15 @@ def check_file(
             report.scan_clean = result.clean
             report.scan_detail = result.detail
             if not result.clean:
+                detail = f" ({result.detail})" if result.detail else ""
                 report._raise(
                     Risk.WARNING,
-                    f"{result.scanner} flagged this file"
-                    + (f" ({result.detail})" if result.detail else "")
-                    + ". Antivirus false positives happen. Decide based on where it came from.",
+                    t(
+                        "{scanner} flagged this file{detail}. Antivirus false "
+                        "positives happen. Decide based on where it came from.",
+                        scanner=result.scanner,
+                        detail=detail,
+                    ),
                 )
 
     if virustotal_key:
@@ -147,13 +158,17 @@ def check_file(
         if vt is not None and vt.flagged:
             report._raise(
                 Risk.WARNING,
-                f"VirusTotal: {vt.malicious} of {vt.total} engines flagged this file.",
+                t(
+                    "VirusTotal: {malicious} of {total} engines flagged this file.",
+                    malicious=vt.malicious,
+                    total=vt.total,
+                ),
             )
         elif vt is not None and vt.known and not vt.flagged:
-            report.findings.append(f"VirusTotal: clean across {vt.total} engines.")
+            report.findings.append(t("VirusTotal: clean across {total} engines.", total=vt.total))
 
     if report.level is Risk.OK and not report.findings:
-        report.findings.append("Nothing suspicious found.")
+        report.findings.append(t("Nothing suspicious found."))
     return report
 
 

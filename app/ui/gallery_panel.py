@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import t
 from app.ui import chrome, threads
 
 _THUMB_SIZE = 128
@@ -68,18 +69,20 @@ class GalleryPanel(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.urls = urls
-        self.setWindowTitle("Images on this page")
+        self.setWindowTitle(t("Images on this page"))
         self.setMinimumSize(640, 480)
 
         layout = QVBoxLayout(self)
-        title = QLabel(f"{page_title or 'This page'}: {len(urls)} images")
+        title = QLabel(
+            t("{page}: {count} images", page=page_title or t("This page"), count=len(urls))
+        )
         title.setWordWrap(True)
         title.setStyleSheet("font-weight: 600; font-size: 14px;")
         layout.addWidget(title)
 
         select_row = QHBoxLayout()
-        select_all = QPushButton("Select all")
-        select_none = QPushButton("Select none")
+        select_all = QPushButton(t("Select all"))
+        select_none = QPushButton(t("Select none"))
         select_all.clicked.connect(lambda: self._set_all(Qt.CheckState.Checked))
         select_none.clicked.connect(lambda: self._set_all(Qt.CheckState.Unchecked))
         select_row.addWidget(select_all)
@@ -146,8 +149,8 @@ class GalleryPanel(chrome.Dialog):
 
     def _update_count(self) -> None:
         count = len(self.selected_urls())
-        self._selection_label.setText(f"{count} selected")
-        self._ok_button.setText(f"Download {count}" if count else "Download")
+        self._selection_label.setText(t("{count} selected", count=count))
+        self._ok_button.setText(t("Download {count}", count=count) if count else t("Download"))
         self._ok_button.setEnabled(count > 0)
 
     def done(self, result: int) -> None:

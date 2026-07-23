@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.archive import ArchiveEntry
+from app.core.i18n import t
 from app.ui import chrome
 from app.ui.format import human_bytes
 
@@ -24,19 +25,19 @@ class ArchiveDialog(chrome.Dialog):
         self, archive_name: str, entries: tuple[ArchiveEntry, ...], parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"GrabLine: {archive_name}")
+        self.setWindowTitle(t("GrabLine: {name}", name=archive_name))
         self.setMinimumSize(520, 380)
         layout = QVBoxLayout(self)
 
         files = [e for e in entries if not e.is_dir]
         known = [e.size for e in files if e.size is not None]
-        summary = f"{len(files)} file{'s' if len(files) != 1 else ''}"
+        summary = t("1 file") if len(files) == 1 else t("{count} files", count=len(files))
         if known:
             summary += f", {human_bytes(sum(known))}" + (" +" if len(known) < len(files) else "")
         layout.addWidget(QLabel(summary))
 
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Name", "Size"])
+        self.tree.setHeaderLabels([t("Name"), t("Size")])
         self.tree.setRootIsDecorated(False)
         self.tree.setColumnWidth(0, 360)
         for entry in entries:
@@ -54,7 +55,7 @@ class ArchiveDialog(chrome.Dialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Extract")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(t("Extract"))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

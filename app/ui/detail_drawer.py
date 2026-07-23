@@ -642,7 +642,7 @@ class DetailDrawer(QFrame):
         elif view.status is JobStatus.DOWNLOADING:
             self._progress.set_indeterminate(True)
             self._percent.setText("")
-            self._size.setText("Fetching metadata…")
+            self._size.setText(t("Fetching metadata…"))
         else:
             self._progress.set_value(1.0 if view.status is JobStatus.COMPLETED else 0.0)
             self._percent.setText("")

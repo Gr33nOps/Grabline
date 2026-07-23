@@ -26,6 +26,7 @@ from urllib.parse import urlsplit
 
 from app.core import naming, net
 from app.core.errors import DownloadError
+from app.core.i18n import N_, t
 from app.core.models import Job, JobStatus
 from app.db.database import Database
 
@@ -36,72 +37,103 @@ QUALITY_TIERS = (2160, 1440, 1080, 720, 480, 360)
 
 #: Substring -> user-facing message for the yt-dlp error zoo (F1.8 groundwork).
 _FRIENDLY_ERRORS: tuple[tuple[str, str], ...] = (
-    ("This video is private", "This video is private. Its owner restricted access."),
-    ("Private video", "This video is private. Its owner restricted access."),
+    (
+        "This video is private",
+        N_("This video is private. Its owner restricted access."),
+    ),
+    (
+        "Private video",
+        N_("This video is private. Its owner restricted access."),
+    ),
     (
         "Sign in to confirm your age",
-        "This video is age-restricted. GrabLine tried your browser login "
-        "automatically. To download it you need to be signed in to YouTube in "
-        "your browser (Firefox by default) on an age-verified account. Sign in "
-        "there, then try again.",
+        N_(
+            "This video is age-restricted. GrabLine tried your browser login "
+            "automatically. To download it you need to be signed in to YouTube in "
+            "your browser (Firefox by default) on an age-verified account. Sign in "
+            "there, then try again."
+        ),
     ),
     (
         "confirm you're not a bot",
-        "YouTube is temporarily blocking automated access from your connection "
-        "(a bot check). Wait a little and try again, or try a different network.",
+        N_(
+            "YouTube is temporarily blocking automated access from your connection "
+            "(a bot check). Wait a little and try again, or try a different "
+            "network."
+        ),
     ),
     (
         "Requested format is not available",
-        "YouTube didn't return a usable video format. This is usually temporary "
-        "- try again shortly. If it only fails with 'Let GrabLine use my browser "
-        "session' turned on, turn it off: on a PC without a JavaScript runtime, "
-        "browser cookies can make YouTube hide the downloadable formats.",
+        N_(
+            "YouTube didn't return a usable video format. This is usually "
+            "temporary - try again shortly. If it only fails with 'Let GrabLine "
+            "use my browser session' turned on, turn it off: on a PC without a "
+            "JavaScript runtime, browser cookies can make YouTube hide the "
+            "downloadable formats."
+        ),
     ),
     (
         "n challenge",
-        "YouTube needs a JavaScript runtime to unlock this video's formats. "
-        "GrabLine installs one (Deno) automatically; if this keeps happening, "
-        "install Node.js and restart GrabLine.",
+        N_(
+            "YouTube needs a JavaScript runtime to unlock this video's formats. "
+            "GrabLine installs one (Deno) automatically; if this keeps happening, "
+            "install Node.js and restart GrabLine."
+        ),
     ),
     (
         "Only images are available",
-        "YouTube needs a JavaScript runtime to unlock this video's formats. "
-        "GrabLine installs one (Deno) automatically; if this keeps happening, "
-        "install Node.js and restart GrabLine.",
+        N_(
+            "YouTube needs a JavaScript runtime to unlock this video's formats. "
+            "GrabLine installs one (Deno) automatically; if this keeps happening, "
+            "install Node.js and restart GrabLine."
+        ),
     ),
     (
         "available in your country",
-        "This video is region-blocked and not available from your location.",
+        N_("This video is region-blocked and not available from your location."),
     ),
-    ("geo restricted", "This video is region-blocked and not available from your location."),
+    (
+        "geo restricted",
+        N_("This video is region-blocked and not available from your location."),
+    ),
     (
         "This live event will begin",
-        "This is a live stream that has not started yet. Try again once it is over.",
+        N_("This is a live stream that has not started yet. Try again once it is over."),
     ),
-    ("is not a valid URL", "That does not look like a valid address."),
+    (
+        "is not a valid URL",
+        N_("That does not look like a valid address."),
+    ),
     (
         "Unable to download JSON metadata: HTTP Error 404",
-        "This does not look like a track or video page. It may be a browse "
-        "page, or the item was removed. Open the track/video itself and grab "
-        "it there, or right-click its title link.",
+        N_(
+            "This does not look like a track or video page. It may be a browse "
+            "page, or the item was removed. Open the track/video itself and grab "
+            "it there, or right-click its title link."
+        ),
     ),
     (
         "Unsupported URL",
-        "No downloadable media was found at this address.",
+        N_("No downloadable media was found at this address."),
     ),
     (
         "DRM",
-        "This content is DRM-protected. GrabLine cannot and will not bypass DRM.",
+        N_("This content is DRM-protected. GrabLine cannot and will not bypass DRM."),
     ),
     (
         "cookie database",
-        "Could not read the browser's cookie store. Close the browser completely "
-        "and try again (Chromium locks its cookie database while running).",
+        N_(
+            "Could not read the browser's cookie store. Close the browser "
+            "completely and try again (Chromium locks its cookie database while "
+            "running)."
+        ),
     ),
     (
-        "could not find",  # e.g. "could not find chrome cookies database"
-        "Could not find that browser's cookie store. Pick the browser you are "
-        "actually signed in with under Settings.",
+        "could not find",
+        N_(
+            "Could not find that browser's cookie store. Pick the browser you are "
+            "actually signed in with under Settings."
+        ),
     ),
 )
 
@@ -182,8 +214,8 @@ def friendly_error(message: str) -> str:
     """Map a raw yt-dlp error onto a sentence a person can act on."""
     for marker, friendly in _FRIENDLY_ERRORS:
         if marker.lower() in message.lower():
-            return friendly
-    first_line = message.strip().splitlines()[0] if message.strip() else "download failed"
+            return t(friendly)
+    first_line = message.strip().splitlines()[0] if message.strip() else t("download failed")
     return first_line.removeprefix("ERROR:").strip()
 
 

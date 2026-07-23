@@ -23,6 +23,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QWidget
 
+from app.core.i18n import N_
+
 #: The scope value for a shortcut that fires only when the download list has focus.
 LIST_SCOPE = "list"
 #: The scope value for an application-wide shortcut.
@@ -47,56 +49,65 @@ class Shortcut:
 
 
 #: Category display order for the cheat-sheet and the settings table.
-CATEGORIES = ("General", "Navigation", "Filters", "Downloads", "View")
+CATEGORIES = (N_("General"), N_("Navigation"), N_("Filters"), N_("Downloads"), N_("View"))
 
 DEFAULTS: tuple[Shortcut, ...] = (
     # -- General ---------------------------------------------------------------
-    Shortcut("download.add", "New download", "General", "Ctrl+N"),
-    Shortcut("download.batch", "New batch download", "General", "Ctrl+Shift+N"),
-    Shortcut("download.paste", "Paste URL and download", "General", "Ctrl+V"),
-    Shortcut("torrent.add", "Add torrent file", "General", "Ctrl+O"),
-    Shortcut("import.links", "Import links", "General", "Ctrl+L"),
-    Shortcut("list.export", "Export list", "General", "Ctrl+E"),
-    Shortcut("site.grab", "Grab site", "General", "Ctrl+G"),
-    Shortcut("url.inspect", "Inspect URL", "General", "Ctrl+Shift+I"),
-    Shortcut("folder.open", "Open downloads folder", "General", "Ctrl+Shift+O"),
-    Shortcut("search.focus", "Search downloads", "General", "Ctrl+F"),
-    Shortcut("settings.open", "Settings", "General", "Ctrl+,"),
-    Shortcut("app.quit", "Quit GrabLine", "General", "Ctrl+Q"),
-    Shortcut("view.refresh", "Refresh", "General", "F5"),
-    Shortcut("help.shortcuts", "Keyboard shortcuts", "General", "F1"),
+    Shortcut("download.add", N_("New download"), N_("General"), "Ctrl+N"),
+    Shortcut("download.batch", N_("New batch download"), N_("General"), "Ctrl+Shift+N"),
+    Shortcut("download.paste", N_("Paste URL and download"), N_("General"), "Ctrl+V"),
+    Shortcut("torrent.add", N_("Add torrent file"), N_("General"), "Ctrl+O"),
+    Shortcut("import.links", N_("Import links"), N_("General"), "Ctrl+L"),
+    Shortcut("list.export", N_("Export list"), N_("General"), "Ctrl+E"),
+    Shortcut("site.grab", N_("Grab site"), N_("General"), "Ctrl+G"),
+    Shortcut("url.inspect", N_("Inspect URL"), N_("General"), "Ctrl+Shift+I"),
+    Shortcut("folder.open", N_("Open downloads folder"), N_("General"), "Ctrl+Shift+O"),
+    Shortcut("search.focus", N_("Search downloads"), N_("General"), "Ctrl+F"),
+    Shortcut("settings.open", N_("Settings"), N_("General"), "Ctrl+,"),
+    Shortcut("app.quit", N_("Quit GrabLine"), N_("General"), "Ctrl+Q"),
+    Shortcut("view.refresh", N_("Refresh"), N_("General"), "F5"),
+    Shortcut("help.shortcuts", N_("Keyboard shortcuts"), N_("General"), "F1"),
     # -- Navigation (the four real sidebar pages) ------------------------------
-    Shortcut("nav.downloads", "Go to Downloads", "Navigation", "Ctrl+1"),
-    Shortcut("nav.dashboard", "Go to Dashboard", "Navigation", "Ctrl+2"),
-    Shortcut("nav.queue", "Go to Queue manager", "Navigation", "Ctrl+3"),
-    Shortcut("nav.settings", "Go to Settings", "Navigation", "Ctrl+4"),
-    Shortcut("nav.next", "Next page", "Navigation", "Ctrl+Tab"),
-    Shortcut("nav.prev", "Previous page", "Navigation", "Ctrl+Shift+Tab"),
+    Shortcut("nav.downloads", N_("Go to Downloads"), N_("Navigation"), "Ctrl+1"),
+    Shortcut("nav.dashboard", N_("Go to Dashboard"), N_("Navigation"), "Ctrl+2"),
+    Shortcut("nav.queue", N_("Go to Queue manager"), N_("Navigation"), "Ctrl+3"),
+    Shortcut("nav.settings", N_("Go to Settings"), N_("Navigation"), "Ctrl+4"),
+    Shortcut("nav.next", N_("Next page"), N_("Navigation"), "Ctrl+Tab"),
+    Shortcut("nav.prev", N_("Previous page"), N_("Navigation"), "Ctrl+Shift+Tab"),
     # -- Filters ---------------------------------------------------------------
-    Shortcut("filter.all", "Show all", "Filters", "Alt+1"),
-    Shortcut("filter.active", "Show active", "Filters", "Alt+2"),
-    Shortcut("filter.completed", "Show completed", "Filters", "Alt+3"),
-    Shortcut("filter.failed", "Show failed", "Filters", "Alt+4"),
+    Shortcut("filter.all", N_("Show all"), N_("Filters"), "Alt+1"),
+    Shortcut("filter.active", N_("Show active"), N_("Filters"), "Alt+2"),
+    Shortcut("filter.completed", N_("Show completed"), N_("Filters"), "Alt+3"),
+    Shortcut("filter.failed", N_("Show failed"), N_("Filters"), "Alt+4"),
     # -- Downloads: operate on the selection, so table-focus scope -------------
-    Shortcut("dl.toggle", "Pause / resume", "Downloads", "Space", scope=LIST_SCOPE),
-    Shortcut("dl.pause", "Pause selected", "Downloads", "Ctrl+P", scope=LIST_SCOPE),
-    Shortcut("dl.resume", "Resume selected", "Downloads", "Ctrl+R", scope=LIST_SCOPE),
-    Shortcut("dl.remove", "Remove from list", "Downloads", "Del", scope=LIST_SCOPE),
-    Shortcut("dl.openfile", "Open file", "Downloads", "Return", scope=LIST_SCOPE),
+    Shortcut("dl.toggle", N_("Pause / resume"), N_("Downloads"), "Space", scope=LIST_SCOPE),
+    Shortcut("dl.pause", N_("Pause selected"), N_("Downloads"), "Ctrl+P", scope=LIST_SCOPE),
+    Shortcut("dl.resume", N_("Resume selected"), N_("Downloads"), "Ctrl+R", scope=LIST_SCOPE),
+    Shortcut("dl.remove", N_("Remove from list"), N_("Downloads"), "Del", scope=LIST_SCOPE),
+    Shortcut("dl.openfile", N_("Open file"), N_("Downloads"), "Return", scope=LIST_SCOPE),
     Shortcut(
-        "dl.openfolder", "Open containing folder", "Downloads", "Ctrl+Return", scope=LIST_SCOPE
+        "dl.openfolder",
+        N_("Open containing folder"),
+        N_("Downloads"),
+        "Ctrl+Return",
+        scope=LIST_SCOPE,
     ),
-    Shortcut("dl.redownload", "Download again", "Downloads", "Ctrl+D", scope=LIST_SCOPE),
-    Shortcut("dl.copyurl", "Copy URL", "Downloads", "Ctrl+C", scope=LIST_SCOPE),
-    Shortcut("dl.copyhash", "Copy SHA-256 checksum", "Downloads", "Ctrl+Shift+C", scope=LIST_SCOPE),
+    Shortcut("dl.redownload", N_("Download again"), N_("Downloads"), "Ctrl+D", scope=LIST_SCOPE),
+    Shortcut("dl.copyurl", N_("Copy URL"), N_("Downloads"), "Ctrl+C", scope=LIST_SCOPE),
+    Shortcut(
+        "dl.copyhash",
+        N_("Copy SHA-256 checksum"),
+        N_("Downloads"),
+        "Ctrl+Shift+C",
+        scope=LIST_SCOPE,
+    ),
     # -- Downloads: all-jobs actions, so application-wide -----------------------
-    Shortcut("dl.pauseall", "Pause all", "Downloads", "Ctrl+Shift+P"),
-    Shortcut("dl.resumeall", "Resume all", "Downloads", "Ctrl+Shift+R"),
-    Shortcut("dl.clear", "Clear completed", "Downloads", "Ctrl+Backspace"),
+    Shortcut("dl.pauseall", N_("Pause all"), N_("Downloads"), "Ctrl+Shift+P"),
+    Shortcut("dl.resumeall", N_("Resume all"), N_("Downloads"), "Ctrl+Shift+R"),
+    Shortcut("dl.clear", N_("Clear completed"), N_("Downloads"), "Ctrl+Backspace"),
     # -- View ------------------------------------------------------------------
-    Shortcut("view.theme", "Toggle light / dark theme", "View", "Ctrl+Shift+L"),
+    Shortcut("view.theme", N_("Toggle light / dark theme"), N_("View"), "Ctrl+Shift+L"),
 )
-
 #: id -> Shortcut, for quick lookup.
 BY_ID: dict[str, Shortcut] = {s.id: s for s in DEFAULTS}
 

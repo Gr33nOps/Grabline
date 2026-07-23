@@ -20,15 +20,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import N_, t
 from app.ui import chrome
 
 #: Quick filters: label -> file extensions it selects.
 _TYPE_FILTERS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("Video", (".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v")),
-    ("Audio", (".mp3", ".m4a", ".flac", ".wav", ".ogg", ".opus", ".aac")),
-    ("Images", (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg")),
-    ("Archives", (".zip", ".rar", ".7z", ".tar", ".gz", ".xz", ".iso")),
-    ("Documents", (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".epub")),
+    (N_("Video"), (".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v")),
+    (N_("Audio"), (".mp3", ".m4a", ".flac", ".wav", ".ogg", ".opus", ".aac")),
+    (N_("Images"), (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg")),
+    (N_("Archives"), (".zip", ".rar", ".7z", ".tar", ".gz", ".xz", ".iso")),
+    (N_("Documents"), (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".epub")),
 )
 
 
@@ -43,33 +44,35 @@ class LinkPanel(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.urls = urls
-        self.setWindowTitle("Links on this page")
+        self.setWindowTitle(t("Links on this page"))
         self.setMinimumSize(560, 460)
 
         layout = QVBoxLayout(self)
-        title = QLabel(f"{page_title or 'This page'}: {len(urls)} links")
+        title = QLabel(
+            t("{page}: {count} links", page=page_title or t("This page"), count=len(urls))
+        )
         title.setWordWrap(True)
         title.setStyleSheet("font-weight: 600; font-size: 14px;")
         layout.addWidget(title)
 
         self.filter_box = QLineEdit()
-        self.filter_box.setPlaceholderText("Filter by text…")
+        self.filter_box.setPlaceholderText(t("Filter by text…"))
         self.filter_box.setClearButtonEnabled(True)
         self.filter_box.textChanged.connect(self._apply_filter)
         layout.addWidget(self.filter_box)
 
         types_row = QHBoxLayout()
-        types_row.addWidget(QLabel("Select:"))
+        types_row.addWidget(QLabel(t("Select:")))
         for label, exts in _TYPE_FILTERS:
-            button = QPushButton(label)
+            button = QPushButton(t(label))
             button.clicked.connect(lambda _c=False, e=exts: self._select_by_ext(e))
             types_row.addWidget(button)
         types_row.addStretch(1)
         layout.addLayout(types_row)
 
         select_row = QHBoxLayout()
-        all_button = QPushButton("All visible")
-        none_button = QPushButton("None")
+        all_button = QPushButton(t("All visible"))
+        none_button = QPushButton(t("None"))
         all_button.clicked.connect(lambda: self._set_visible(Qt.CheckState.Checked))
         none_button.clicked.connect(lambda: self._set_all(Qt.CheckState.Unchecked))
         select_row.addWidget(all_button)
@@ -133,6 +136,6 @@ class LinkPanel(chrome.Dialog):
 
     def _update_count(self) -> None:
         count = len(self.selected_urls())
-        self._count_label.setText(f"{count} selected")
-        self._ok_button.setText(f"Download {count}" if count else "Download")
+        self._count_label.setText(t("{count} selected", count=count))
+        self._ok_button.setText(t("Download {count}", count=count) if count else t("Download"))
         self._ok_button.setEnabled(count > 0)

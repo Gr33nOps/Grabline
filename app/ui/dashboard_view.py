@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import net
+from app.core.i18n import t
 from app.core.manager import DownloadManager
 from app.core.models import JobStatus
 from app.core.stats import SpeedTracker, SystemSampler
@@ -61,41 +62,41 @@ class DashboardView(QWidget):
 
         self._tiles: dict[str, components.StatTile] = {}
 
-        root.addWidget(components.SectionLabel("Speed"))
+        root.addWidget(components.SectionLabel(t("Speed")))
         root.addLayout(
             self._tile_row(
                 [
-                    ("current", "Current", False),  # data, not an action: no accent
-                    ("average", "Average", False),
-                    ("peak", "Peak", False),
-                    ("eta", "ETA (all)", False),
-                    ("active", "Active", False),
+                    ("current", t("Current"), False),  # data, not an action: no accent
+                    ("average", t("Average"), False),
+                    ("peak", t("Peak"), False),
+                    ("eta", t("ETA (all)"), False),
+                    ("active", t("Active"), False),
                 ]
             )
         )
-        root.addWidget(components.SectionLabel("Volume"))
+        root.addWidget(components.SectionLabel(t("Volume")))
         root.addLayout(
             self._tile_row(
                 [
-                    ("today", "Today", False),
-                    ("week", "This week", False),
-                    ("month", "This month", False),
-                    ("lifetime", "Lifetime", False),
-                    ("files", "Files", False),
+                    ("today", t("Today"), False),
+                    ("week", t("This week"), False),
+                    ("month", t("This month"), False),
+                    ("lifetime", t("Lifetime"), False),
+                    ("files", t("Files"), False),
                 ]
             )
         )
 
-        root.addWidget(components.SectionLabel("Graphs — last 60 seconds"))
+        root.addWidget(components.SectionLabel(t("Graphs — last 60 seconds")))
         grid = QGridLayout()
         grid.setSpacing(10)
-        self.g_download = components.GraphCard("Download", [p.g_dl], motion.fmt_speed)
-        self.g_upload = components.GraphCard("Upload", [p.g_ul], motion.fmt_speed)
+        self.g_download = components.GraphCard(t("Download"), [p.g_dl], motion.fmt_speed)
+        self.g_upload = components.GraphCard(t("Upload"), [p.g_ul], motion.fmt_speed)
         self.g_network = components.GraphCard(
-            "Network (system)", [p.g_ndown, p.g_nup], motion.fmt_speed
+            t("Network (system)"), [p.g_ndown, p.g_nup], motion.fmt_speed
         )
-        self.g_cpu = components.GraphCard("CPU", [p.g_cpu], _pct, fixed_max=100.0)
-        self.g_disk = components.GraphCard("Disk I/O", [p.g_disk], motion.fmt_speed)
+        self.g_cpu = components.GraphCard(t("CPU"), [p.g_cpu], _pct, fixed_max=100.0)
+        self.g_disk = components.GraphCard(t("Disk I/O"), [p.g_disk], motion.fmt_speed)
         grid.addWidget(self.g_download, 0, 0)
         grid.addWidget(self.g_upload, 0, 1)
         grid.addWidget(self.g_cpu, 1, 0)
@@ -109,8 +110,8 @@ class DashboardView(QWidget):
 
         tables = QHBoxLayout()
         tables.setSpacing(12)
-        self.server_tree = self._table("Per server", "Host")
-        self.category_tree = self._table("Per category", "Category")
+        self.server_tree = self._table(t("Per server"), t("Host"))
+        self.category_tree = self._table(t("Per category"), t("Category"))
         tables.addWidget(self._wrap(self.server_tree))
         tables.addWidget(self._wrap(self.category_tree))
         root.addLayout(tables)
@@ -139,7 +140,7 @@ class DashboardView(QWidget):
         tree = QTreeWidget()
         tree.setObjectName("DashTable")
         tree.setProperty("title", title)  # read by _wrap for the section heading
-        tree.setHeaderLabels([first, "Downloaded", "Files"])
+        tree.setHeaderLabels([first, t("Downloaded"), t("Files")])
         tree.setRootIsDecorated(False)
         tree.setColumnWidth(0, 190)
         # Tall enough to read ~8 rows without scrolling; these were collapsing
@@ -196,7 +197,7 @@ class DashboardView(QWidget):
         self._tiles["average"].set_value(motion.fmt_speed(reading.average))
         self._tiles["peak"].set_value(motion.fmt_speed(reading.peak))
         self._tiles["eta"].set_value(motion.fmt_eta(reading.eta_seconds))
-        self._tiles["active"].set_value(str(active), "downloads")
+        self._tiles["active"].set_value(str(active), t("downloads"))
 
         system = self._system.sample()
         self.g_download.push([reading.current])
@@ -218,13 +219,18 @@ class DashboardView(QWidget):
         self._tiles["week"].set_value(human_bytes(totals["week"]))
         self._tiles["month"].set_value(human_bytes(totals["month"]))
         self._tiles["lifetime"].set_value(human_bytes(totals["lifetime"]))
-        self._tiles["files"].set_value(f"{totals['files']:,}", "total")
+        self._tiles["files"].set_value(f"{totals['files']:,}", t("total"))
 
         vpn = net.active_vpn_interfaces()
         if vpn:
-            self._vpn.setText(f"VPN active: {', '.join(vpn)}    ·    No geo lookup")
+            self._vpn.setText(
+                t(
+                    "VPN active: {interfaces}    ·    No geo lookup",
+                    interfaces=", ".join(vpn),
+                )
+            )
         else:
-            self._vpn.setText("VPN not detected")
+            self._vpn.setText(t("VPN not detected"))
 
         self._fill(self.server_tree, self.manager.stats_by_host())
         self._fill(self.category_tree, self.manager.stats_by_category())

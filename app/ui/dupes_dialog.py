@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import t
 from app.ui import chrome
 from app.ui.format import human_bytes
 
@@ -23,28 +24,34 @@ from app.ui.format import human_bytes
 class DupesDialog(chrome.Dialog):
     def __init__(self, groups: list[list[Path]], parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Duplicate files")
+        self.setWindowTitle(t("Duplicate files"))
         self.setMinimumSize(560, 380)
         layout = QVBoxLayout(self)
 
         extra = sum(len(group) - 1 for group in groups)
         layout.addWidget(
             QLabel(
-                f"{len(groups)} set(s) of identical files, {extra} redundant "
-                "cop(ies). Checked files will be deleted; the first of each "
-                "set is kept."
+                t(
+                    "{sets} set(s) of identical files, {extra} redundant "
+                    "cop(ies). Checked files will be deleted; the first of each "
+                    "set is kept.",
+                    sets=len(groups),
+                    extra=extra,
+                )
             )
         )
 
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["File", "Size"])
+        self.tree.setHeaderLabels([t("File"), t("Size")])
         self.tree.setColumnWidth(0, 400)
         for index, group in enumerate(groups, start=1):
             try:
                 size = human_bytes(group[0].stat().st_size)
             except OSError:
                 size = ""
-            top = QTreeWidgetItem([f"Set {index} ({len(group)} copies)", size])
+            top = QTreeWidgetItem(
+                [t("Set {index} ({count} copies)", index=index, count=len(group)), size]
+            )
             top.setFlags(top.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
             self.tree.addTopLevelItem(top)
             for position, path in enumerate(group):
@@ -62,7 +69,7 @@ class DupesDialog(chrome.Dialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Delete checked")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(t("Delete checked"))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

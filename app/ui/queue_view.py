@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import t
 from app.core.manager import DownloadManager
 from app.core.models import Queue
 from app.ui import components, design
@@ -44,10 +45,12 @@ class QueueView(QWidget):
         header.setObjectName("Toolbar")
         hl = QHBoxLayout(header)
         hl.setContentsMargins(16, 10, 12, 10)
-        title = components.role_label("Queue manager", "strong", size=design.FONT["h1"], bold=True)
+        title = components.role_label(
+            t("Queue manager"), "strong", size=design.FONT["h1"], bold=True
+        )
         hl.addWidget(title)
         hl.addStretch(1)
-        new_btn = components.IconButton("add", "New queue")
+        new_btn = components.IconButton("add", t("New queue"))
         new_btn.clicked.connect(self._new_queue)
         hl.addWidget(new_btn)
         root.addWidget(header)
@@ -76,7 +79,9 @@ class QueueView(QWidget):
                 w.deleteLater()
         queues = {q.id: q for q in self.manager.list_queues()}
         if not queues:
-            empty = components.role_label("No queues yet. Press New queue to create one.", "muted")
+            empty = components.role_label(
+                t("No queues yet. Press New queue to create one."), "muted"
+            )
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._body.addSpacing(48)
             self._body.addWidget(empty)
@@ -128,19 +133,19 @@ class QueueView(QWidget):
     def _traits(queue: Queue, queues: dict[int, Queue]) -> str:
         parts = []
         if queue.max_concurrent == 1:
-            parts.append("Sequential")
+            parts.append(t("Sequential"))
         elif queue.max_concurrent > 1:
-            parts.append(f"{queue.max_concurrent} parallel")
+            parts.append(t("{count} parallel", count=queue.max_concurrent))
         else:
-            parts.append("Global limit")
+            parts.append(t("Global limit"))
         if queue.schedule_enabled:
             parts.append(f"{queue.start_time}-{queue.stop_time}")
         if queue.paused:
-            parts.append("Paused")
+            parts.append(t("Paused"))
         if queue.category:
-            parts.append(queue.category)
+            parts.append(t(queue.category))
         if queue.depends_on and queue.depends_on in queues:
-            parts.append(f"after '{queues[queue.depends_on].name}'")
+            parts.append(t("after '{name}'", name=queues[queue.depends_on].name))
         return "  ·  ".join(parts)
 
     def _editor(self, queue: Queue, all_queues: list[Queue]) -> QWidget:
@@ -154,51 +159,51 @@ class QueueView(QWidget):
         concurrent = QSpinBox()
         concurrent.setRange(0, 10)
         concurrent.setValue(queue.max_concurrent)
-        concurrent.setSpecialValueText("Global")
-        sched_check = QCheckBox("Only between")
+        concurrent.setSpecialValueText(t("Global"))
+        sched_check = QCheckBox(t("Only between"))
         sched_check.setChecked(queue.schedule_enabled)
         start = QTimeEdit(QTime.fromString(queue.start_time, "HH:mm"))
         start.setDisplayFormat("HH:mm")
         stop = QTimeEdit(QTime.fromString(queue.stop_time, "HH:mm"))
         stop.setDisplayFormat("HH:mm")
-        paused = QCheckBox("Paused")
+        paused = QCheckBox(t("Paused"))
         paused.setChecked(queue.paused)
         category = QComboBox()
         for cat in _CATEGORIES:
-            category.addItem(cat or "(none)", cat)
+            category.addItem(t(cat) if cat else t("(none)"), cat)
         category.setCurrentIndex(max(0, category.findData(queue.category)))
         depends = QComboBox()
-        depends.addItem("(nothing)", None)
+        depends.addItem(t("(nothing)"), None)
         for other in all_queues:
             if other.id != queue.id:
                 depends.addItem(other.name, other.id)
         if queue.depends_on is not None:
             depends.setCurrentIndex(max(0, depends.findData(queue.depends_on)))
 
-        form.addLayout(self._field("Name", name_edit))
-        form.addLayout(self._field("Downloads at once", concurrent))
+        form.addLayout(self._field(t("Name"), name_edit))
+        form.addLayout(self._field(t("Downloads at once"), concurrent))
         sched_row = QHBoxLayout()
         sched_row.addWidget(sched_check)
         sched_row.addWidget(start)
-        sched_row.addWidget(QLabel("and"))
+        sched_row.addWidget(QLabel(t("and")))
         sched_row.addWidget(stop)
         sched_row.addStretch(1)
-        form.addLayout(self._field("Schedule", sched_row))
-        form.addLayout(self._field("Category", category))
-        form.addLayout(self._field("Wait for queue", depends))
+        form.addLayout(self._field(t("Schedule"), sched_row))
+        form.addLayout(self._field(t("Category"), category))
+        form.addLayout(self._field(t("Wait for queue"), depends))
         form.addLayout(self._field("", paused))
 
         from PySide6.QtWidgets import QPushButton
 
         buttons = QHBoxLayout()
-        save = components.accent_button("Save")
-        cancel_btn = QPushButton("Cancel")
+        save = components.accent_button(t("Save"))
+        cancel_btn = QPushButton(t("Cancel"))
 
         def do_save() -> None:
             dep = depends.currentData()
             queues = {q.id: q for q in all_queues}
             if dep is not None and _would_cycle(queues, queue.id, dep):
-                QMessageBox.warning(self, "GrabLine", "That would make the queues wait forever.")
+                QMessageBox.warning(self, "GrabLine", t("That would make the queues wait forever."))
                 return
             self.manager.update_queue(
                 replace(
@@ -245,7 +250,7 @@ class QueueView(QWidget):
     # ------------------------------------------------------------- actions
 
     def _new_queue(self) -> None:
-        name, ok = QInputDialog.getText(self, "New queue", "Queue name:")
+        name, ok = QInputDialog.getText(self, t("New queue"), t("Queue name:"))
         if ok and name.strip():
             q = self.manager.create_queue(name.strip())
             self._editing = q.id
@@ -259,7 +264,10 @@ class QueueView(QWidget):
         answer = QMessageBox.question(
             self,
             "GrabLine",
-            f"Delete queue '{queue.name}'? Its downloads move back to the default queue.",
+            t(
+                "Delete queue '{name}'? Its downloads move back to the default queue.",
+                name=queue.name,
+            ),
         )
         if answer == QMessageBox.StandardButton.Yes:
             self.manager.delete_queue(queue.id)

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import t
 from app.ui import design, theme
 from app.ui.icons import svg_icon
 
@@ -117,12 +118,12 @@ class TitleBar(QFrame):
             self._window.showNormal()
             if self._max_btn:
                 self._max_btn.set_icon_name("maximize")
-                self._max_btn.setToolTip("Maximize")
+                self._max_btn.setToolTip(t("Maximize"))
         else:
             self._window.showMaximized()
             if self._max_btn:
                 self._max_btn.set_icon_name("restore")
-                self._max_btn.setToolTip("Restore")
+                self._max_btn.setToolTip(t("Restore"))
 
     def mousePressEvent(self, event: object) -> None:
         ev = event
