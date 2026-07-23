@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import t
 from app.engines.smart import (
     PlaylistEntry,
     PlaylistInfo,
@@ -38,11 +39,11 @@ class PlaylistPanel(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.playlist = playlist
-        self.setWindowTitle("Playlist")
+        self.setWindowTitle(t("Playlist"))
         self.setMinimumSize(480, 420)
 
         layout = QVBoxLayout(self)
-        title = QLabel(f"{playlist.title}  ({len(playlist.entries)} items)")
+        title = QLabel(f"{playlist.title}  " + t("({count} items)", count=len(playlist.entries)))
         title.setWordWrap(True)
         title.setStyleSheet("font-weight: 600; font-size: 14px;")
         layout.addWidget(title)
@@ -52,8 +53,8 @@ class PlaylistPanel(chrome.Dialog):
             layout.addWidget(uploader)
 
         select_row = QHBoxLayout()
-        select_all = QPushButton("Select all")
-        select_none = QPushButton("Select none")
+        select_all = QPushButton(t("Select all"))
+        select_none = QPushButton(t("Select none"))
         select_all.clicked.connect(lambda: self._set_all(Qt.CheckState.Checked))
         select_none.clicked.connect(lambda: self._set_all(Qt.CheckState.Unchecked))
         select_row.addWidget(select_all)
@@ -78,16 +79,19 @@ class PlaylistPanel(chrome.Dialog):
         layout.addWidget(self.entry_list)
         if len(playlist.entries) > preselect_cap:
             note = QLabel(
-                f"The first {preselect_cap} are preselected. Use Select all for the rest."
+                t(
+                    "The first {count} are preselected. Use Select all for the rest.",
+                    count=preselect_cap,
+                )
             )
             note.setStyleSheet("color: gray; font-size: 11px;")
             layout.addWidget(note)
 
         quality_row = QHBoxLayout()
-        quality_row.addWidget(QLabel("Quality for all:"))
+        quality_row.addWidget(QLabel(t("Quality for all:")))
         self.quality_combo = QComboBox()
         for option in generic_quality_options():
-            label = option.label + ("  (audio only)" if option.kind == "audio" else "")
+            label = option.label + ("  " + t("(audio only)") if option.kind == "audio" else "")
             self.quality_combo.addItem(label, option)
         quality_row.addWidget(self.quality_combo, 1)
         layout.addLayout(quality_row)
@@ -123,6 +127,6 @@ class PlaylistPanel(chrome.Dialog):
 
     def _update_count(self) -> None:
         count = len(self.selected_entries())
-        self._selection_label.setText(f"{count} selected")
-        self._ok_button.setText(f"Download {count}" if count else "Download")
+        self._selection_label.setText(t("{count} selected", count=count))
+        self._ok_button.setText(t("Download {count}", count=count) if count else t("Download"))
         self._ok_button.setEnabled(count > 0)

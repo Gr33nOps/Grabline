@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from app.core import naming
 from app.core.batch import expand_all, extract_urls
+from app.core.i18n import t
 from app.core.manager import DownloadManager
 from app.core.models import JobKind
 from app.core.resolver import Resolver
@@ -104,13 +105,15 @@ class BatchImportDialog(chrome.Dialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Import links")
+        self.setWindowTitle(t("Import links"))
         self.setMinimumSize(520, 380)
 
         layout = QVBoxLayout(self)
         intro = QLabel(
-            "Paste anything with links in it, one per line, a page's\n"
-            "text, an export file. GrabLine picks out the URLs."
+            t(
+                "Paste anything with links in it, one per line, a page's\n"
+                "text, an export file. GrabLine picks out the URLs."
+            )
         )
         layout.addWidget(intro)
         self.text_edit = QPlainTextEdit()
@@ -119,15 +122,15 @@ class BatchImportDialog(chrome.Dialog):
         layout.addWidget(self.text_edit)
 
         row = QHBoxLayout()
-        load = QPushButton("Load file…")
+        load = QPushButton(t("Load file…"))
         load.clicked.connect(self._load_file)
         row.addWidget(load)
         row.addStretch(1)
-        self._count_label = QLabel("0 links")
+        self._count_label = QLabel(t("{count} links", count=0))
         row.addWidget(self._count_label)
         layout.addLayout(row)
 
-        note = QLabel("Videos queue at Best quality; playlists are skipped.")
+        note = QLabel(t("Videos queue at Best quality; playlists are skipped."))
         note.setStyleSheet("color: gray; font-size: 11px;")
         layout.addWidget(note)
 
@@ -146,7 +149,7 @@ class BatchImportDialog(chrome.Dialog):
 
     def _load_file(self) -> None:
         path, _filter = QFileDialog.getOpenFileName(
-            self, "Import links from file", "", "Text files (*.txt *.md *.csv);;All files (*)"
+            self, t("Import links from file"), "", "Text files (*.txt *.md *.csv);;All files (*)"
         )
         if path:
             try:
@@ -158,6 +161,6 @@ class BatchImportDialog(chrome.Dialog):
 
     def _update_count(self) -> None:
         count = len(self.urls())
-        self._count_label.setText(f"{count} links")
-        self._ok_button.setText(f"Import {count}" if count else "Import")
+        self._count_label.setText(t("{count} links", count=count))
+        self._ok_button.setText(t("Import {count}", count=count) if count else t("Import"))
         self._ok_button.setEnabled(count > 0)

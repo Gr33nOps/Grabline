@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import t
 from app.engines.smart import MediaInfo, QualityOption
 from app.ui import chrome, threads
 from app.ui.format import duration_text, human_bytes
@@ -68,7 +69,7 @@ class QualityPanel(chrome.Dialog):
     ) -> None:
         super().__init__(parent)
         self.media = media
-        self.setWindowTitle("Choose quality")
+        self.setWindowTitle(t("Choose quality"))
         self.setMinimumWidth(460)
 
         layout = QVBoxLayout(self)
@@ -96,7 +97,7 @@ class QualityPanel(chrome.Dialog):
         for index, option in enumerate(media.options):
             label = option.label
             if option.kind == "audio":
-                label += "  (audio only)"
+                label += "  " + t("(audio only)")
             if option.estimated_size:
                 label += f"   ~{human_bytes(option.estimated_size)}"
             item = QListWidgetItem(label)
@@ -116,24 +117,26 @@ class QualityPanel(chrome.Dialog):
         layout.addWidget(self.options_list)
 
         subtitle_row = QHBoxLayout()
-        subtitle_row.addWidget(QLabel("Subtitles:"))
+        subtitle_row.addWidget(QLabel(t("Subtitles:")))
         self.subtitle_combo = QComboBox()
-        self.subtitle_combo.addItem("None", None)
+        self.subtitle_combo.addItem(t("None"), None)
         for lang in media.subtitle_languages:
             self.subtitle_combo.addItem(lang, {"lang": lang, "auto": False})
         for lang in media.auto_caption_languages:
             if lang not in media.subtitle_languages:
-                self.subtitle_combo.addItem(f"{lang} (auto)", {"lang": lang, "auto": True})
+                self.subtitle_combo.addItem(
+                    t("{lang} (auto)", lang=lang), {"lang": lang, "auto": True}
+                )
         subtitle_row.addWidget(self.subtitle_combo, 1)
-        self.embed_subtitles = QCheckBox("Embed")
+        self.embed_subtitles = QCheckBox(t("Embed"))
         subtitle_row.addWidget(self.embed_subtitles)
         layout.addLayout(subtitle_row)
 
         # Extras (all need FFmpeg, which the app fetches on demand).
         extras_row = QHBoxLayout()
-        self.save_thumbnail = QCheckBox("Save thumbnail")
-        self.save_metadata = QCheckBox("Save metadata")
-        self.keep_chapters = QCheckBox("Chapters")
+        self.save_thumbnail = QCheckBox(t("Save thumbnail"))
+        self.save_metadata = QCheckBox(t("Save metadata"))
+        self.keep_chapters = QCheckBox(t("Chapters"))
         self.keep_chapters.setChecked(True)
         extras_row.addWidget(self.save_thumbnail)
         extras_row.addWidget(self.save_metadata)
@@ -142,20 +145,20 @@ class QualityPanel(chrome.Dialog):
         layout.addLayout(extras_row)
 
         sponsor_row = QHBoxLayout()
-        sponsor_row.addWidget(QLabel("SponsorBlock:"))
+        sponsor_row.addWidget(QLabel(t("SponsorBlock:")))
         self.sponsorblock = QComboBox()
-        self.sponsorblock.addItem("Off", None)
-        self.sponsorblock.addItem("Mark segments", "mark")
-        self.sponsorblock.addItem("Remove sponsor segments", "remove")
+        self.sponsorblock.addItem(t("Off"), None)
+        self.sponsorblock.addItem(t("Mark segments"), "mark")
+        self.sponsorblock.addItem(t("Remove sponsor segments"), "remove")
         sponsor_row.addWidget(self.sponsorblock, 1)
         layout.addLayout(sponsor_row)
 
         trim_row = QHBoxLayout()
-        trim_row.addWidget(QLabel("Clip (optional):"))
+        trim_row.addWidget(QLabel(t("Clip (optional):")))
         self.trim_start = QLineEdit()
-        self.trim_start.setPlaceholderText("start  e.g. 1:20")
+        self.trim_start.setPlaceholderText(t("start  e.g. 1:20"))
         self.trim_end = QLineEdit()
-        self.trim_end.setPlaceholderText("end  e.g. 2:45")
+        self.trim_end.setPlaceholderText(t("end  e.g. 2:45"))
         trim_row.addWidget(self.trim_start)
         trim_row.addWidget(self.trim_end)
         layout.addLayout(trim_row)
@@ -167,7 +170,7 @@ class QualityPanel(chrome.Dialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Download")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(t("Download"))
         buttons.accepted.connect(self._validate_and_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -224,11 +227,11 @@ class QualityPanel(chrome.Dialog):
         try:
             trim = self.trim_range()
         except ValueError:
-            self._trim_error.setText("Clip times must look like 90, 1:30, or 1:02:03.")
+            self._trim_error.setText(t("Clip times must look like 90, 1:30, or 1:02:03."))
             self._trim_error.show()
             return
         if trim is not None and trim[1] <= trim[0]:
-            self._trim_error.setText("Clip end must be after the start.")
+            self._trim_error.setText(t("Clip end must be after the start."))
             self._trim_error.show()
             return
         self.accept()

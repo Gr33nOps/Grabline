@@ -21,13 +21,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import N_, t
 from app.ui import chrome, components, design
 
 #: Auto-sort categories (mirrors app/core/categories.py) offered in the picker.
-CATEGORIES = ["Video", "Music", "Images", "Documents", "Archives", "Programs", "Games", "Torrents"]
+#: These stay English - they are the value (the save-folder name and the sort
+#: key), shown translated but never returned translated.
+CATEGORIES = [
+    N_("Video"),
+    N_("Music"),
+    N_("Images"),
+    N_("Documents"),
+    N_("Archives"),
+    N_("Programs"),
+    N_("Games"),
+    N_("Torrents"),
+]
 #: Generic quality choices for a video URL - resolved at download time, so the
-#: dialog needs no analysis to show them (mirrors the app's quality tiers).
-VIDEO_QUALITIES = ["Best", "1080p", "720p", "480p", "MP3", "M4A", "FLAC"]
+#: dialog needs no analysis to show them (mirrors the app's quality tiers). Only
+#: "Best" is a word to translate; the format names are shown as-is.
+VIDEO_QUALITIES = [N_("Best"), "1080p", "720p", "480p", "MP3", "M4A", "FLAC"]
 
 
 class AddDownloadDialog(chrome.Dialog):
@@ -42,35 +55,41 @@ class AddDownloadDialog(chrome.Dialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Download")
+        self.setWindowTitle(t("Download"))
         self.setMinimumWidth(540)
         self._base_dir = download_dir
         self._outcome: str | None = None
 
         layout = QVBoxLayout(self)
         layout.addWidget(
-            components.role_label("Download File Info", "strong", size=design.FONT["h1"], bold=True)
+            components.role_label(
+                t("Download File Info"), "strong", size=design.FONT["h1"], bold=True
+            )
         )
 
         form = QFormLayout()
         self._name = QLineEdit(suggested_name)
-        form.addRow("Name", self._name)
+        form.addRow(t("Name"), self._name)
 
         url_label = components.role_label(url, "muted")
         url_label.setWordWrap(True)
-        form.addRow("URL", url_label)
+        form.addRow(t("URL"), url_label)
 
+        # Show the translated category name but carry the English value, so the
+        # save folder and auto-sort key stay stable across languages.
         self._category = QComboBox()
-        self._category.addItems(CATEGORIES)
-        if category in CATEGORIES:
-            self._category.setCurrentText(category)
-        self._category.currentTextChanged.connect(self._category_changed)
-        form.addRow("Category", self._category)
+        for cat in CATEGORIES:
+            self._category.addItem(t(cat), cat)
+        index = self._category.findData(category)
+        if index >= 0:
+            self._category.setCurrentIndex(index)
+        self._category.currentIndexChanged.connect(self._category_changed)
+        form.addRow(t("Category"), self._category)
 
-        self._directory = QLineEdit(str(Path(download_dir) / self._category.currentText()))
+        self._directory = QLineEdit(str(Path(download_dir) / str(self._category.currentData())))
         self._dir_edited = False
         self._directory.textEdited.connect(lambda _t: setattr(self, "_dir_edited", True))
-        browse = QPushButton("Browse")
+        browse = QPushButton(t("Browse"))
         browse.clicked.connect(self._browse)
         save_row = QHBoxLayout()
         save_row.setContentsMargins(0, 0, 0, 0)
@@ -78,25 +97,28 @@ class AddDownloadDialog(chrome.Dialog):
         save_row.addWidget(browse)
         save_widget = QWidget()
         save_widget.setLayout(save_row)
-        form.addRow("Save to", save_widget)
+        form.addRow(t("Save to"), save_widget)
 
         self._quality: QComboBox | None = None
         if with_quality:
             self._quality = QComboBox()
-            self._quality.addItems(VIDEO_QUALITIES)
-            form.addRow("Quality", self._quality)
+            for quality in VIDEO_QUALITIES:
+                self._quality.addItem(t(quality), quality)
+            form.addRow(t("Quality"), self._quality)
         layout.addLayout(form)
 
-        self._dont_ask = QCheckBox("Start downloads immediately from now on (change in Settings)")
+        self._dont_ask = QCheckBox(
+            t("Start downloads immediately from now on (change in Settings)")
+        )
         layout.addWidget(self._dont_ask)
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
-        cancel = QPushButton("Cancel")
+        cancel = QPushButton(t("Cancel"))
         cancel.clicked.connect(self.reject)
-        later = QPushButton("Download Later")
+        later = QPushButton(t("Download Later"))
         later.clicked.connect(self._later)
-        start = components.accent_button("Start Download")
+        start = components.accent_button(t("Start Download"))
         start.setDefault(True)
         start.clicked.connect(self._start)
         for button in (cancel, later, start):
@@ -106,13 +128,14 @@ class AddDownloadDialog(chrome.Dialog):
 
     # ------------------------------------------------------------ internals
 
-    def _category_changed(self, category: str) -> None:
-        # Follow the category with the save folder until the user edits it.
+    def _category_changed(self, _index: int) -> None:
+        # Follow the category (its English value) with the save folder until the
+        # user edits it.
         if not self._dir_edited:
-            self._directory.setText(str(Path(self._base_dir) / category))
+            self._directory.setText(str(Path(self._base_dir) / str(self._category.currentData())))
 
     def _browse(self) -> None:
-        chosen = QFileDialog.getExistingDirectory(self, "Save to", self._directory.text())
+        chosen = QFileDialog.getExistingDirectory(self, t("Save to"), self._directory.text())
         if chosen:
             self._directory.setText(chosen)
             self._dir_edited = True
@@ -135,13 +158,13 @@ class AddDownloadDialog(chrome.Dialog):
         return self._name.text().strip()
 
     def chosen_category(self) -> str:
-        return self._category.currentText()
+        return str(self._category.currentData())
 
     def chosen_directory(self) -> str:
         return self._directory.text().strip()
 
     def chosen_quality(self) -> str | None:
-        return self._quality.currentText() if self._quality is not None else None
+        return str(self._quality.currentData()) if self._quality is not None else None
 
     def dont_ask_again(self) -> bool:
         return self._dont_ask.isChecked()
