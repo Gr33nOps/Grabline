@@ -148,6 +148,12 @@ class IconButton(QPushButton):
         self.setIconSize(QSize(16, 16))
         self.retint()
 
+    def set_icon_name(self, icon_name: str) -> None:
+        """Swap the glyph (e.g. a pause button flipping to resume)."""
+        if icon_name != self._icon_name:
+            self._icon_name = icon_name
+            self.retint()
+
     def retint(self) -> None:
         # Danger buttons rest neutral and only turn red on hover: a toolbar
         # with a permanently red trash can reads as an alarm, not a tool.

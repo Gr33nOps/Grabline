@@ -95,8 +95,14 @@ class SettingsView(QWidget):
             holder = QWidget()
             hl = QVBoxLayout(holder)
             hl.setContentsMargins(24, 8, 24, 20)
-            hl.addWidget(page)
-            hl.addStretch(1)
+            # A page that manages its own scrolling (Shortcuts) fills the height
+            # so its list uses the whole pane instead of a short box over a gap;
+            # a form page keeps its natural height with a stretch below it.
+            if getattr(page, "fills_height", False):
+                hl.addWidget(page, 1)
+            else:
+                hl.addWidget(page)
+                hl.addStretch(1)
             # The QTabWidget explicitly hides its pages; lifting one out keeps it
             # hidden, so re-show it or the content pane renders blank.
             page.show()

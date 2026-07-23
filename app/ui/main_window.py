@@ -146,7 +146,9 @@ class MainWindow(QMainWindow):
         self.tray: QSystemTrayIcon | None = None
         self.setWindowTitle("GrabLine")
         self.resize(1040, 600)
-        self.setMinimumSize(760, 420)
+        # Big enough that the toolbar never overlaps itself and the panels stay
+        # aligned; below this the layout starts to crowd, so we don't allow it.
+        self.setMinimumSize(940, 560)
         self.setAcceptDrops(True)  # drop URLs (or text with URLs) onto the window
         # Custom chrome: no native title bar; ours draws the caption controls.
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
@@ -451,8 +453,13 @@ class MainWindow(QMainWindow):
         add_btn("duplicate", self._find_duplicates, "Find duplicate files")
 
         lay.addWidget(self._sep())
-        add_btn("pause", self._pause_selected, "Pause")
-        add_btn("resume", self._resume_selected, "Resume")
+        # One button that flips between pause and resume for the selection - it
+        # shows Pause while something is running, Resume once it's paused. Its
+        # icon/tooltip are refreshed by _update_toggle_button on every tick.
+        self._toggle_btn = components.IconButton("pause", tooltip="Pause")
+        self._toggle_btn.clicked.connect(self._toggle_selected)
+        self._retintable.append(self._toggle_btn)
+        lay.addWidget(self._toggle_btn)
         add_btn("cancel", self._cancel_selected, "Cancel")
         add_btn("trash", self._remove_selected, "Delete from list", danger=True)
 
@@ -464,7 +471,7 @@ class MainWindow(QMainWindow):
         self.search_box.setPlaceholderText("Search downloads…")
         self.search_box.setClearButtonEnabled(True)
         # Compresses first when the window narrows, so the toolbar never
-        # overlaps itself at the 760px minimum window width.
+        # overlaps itself at the minimum window width.
         self.search_box.setMinimumWidth(96)
         self.search_box.setMaximumWidth(210)
         self.search_box.textChanged.connect(lambda _t: self._apply_filter())
@@ -798,6 +805,17 @@ class MainWindow(QMainWindow):
             else:
                 self._resume_job(view.id)
         self.refresh()
+
+    def _update_toggle_button(self) -> None:
+        """The one toolbar pause/resume button: Pause while anything selected is
+        running, Resume once it's all paused/stopped, Pause when nothing is
+        selected."""
+        views = self._selected_views()
+        resume = bool(views) and not any(
+            v.status in (JobStatus.DOWNLOADING, JobStatus.QUEUED) for v in views
+        )
+        self._toggle_btn.set_icon_name("resume" if resume else "pause")
+        self._toggle_btn.setToolTip("Resume" if resume else "Pause")
 
     def _pause_all(self) -> None:
         for view in list(self._last_views.values()):
@@ -2553,6 +2571,7 @@ class MainWindow(QMainWindow):
         self._apply_filter()
         self._empty_label.setGeometry(self.table.viewport().rect())
         self._empty_label.setVisible(not views)
+        self._update_toggle_button()
         # Keep an open detail drawer live.
         drawer_id = self._drawer.current_id()
         if self._drawer.isVisible() and drawer_id is not None:

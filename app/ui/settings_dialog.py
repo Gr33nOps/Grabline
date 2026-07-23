@@ -103,6 +103,10 @@ class _ShortcutsPage(QWidget):
     default, so the stored map stays small and future default changes flow
     through to anyone who never customized that key."""
 
+    #: Read by SettingsView: this page scrolls its own list, so it should fill
+    #: the content pane's height rather than sit in a short box.
+    fills_height = True
+
     def __init__(self, settings: Settings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         from app.ui.shortcuts import DEFAULTS, by_category, normalize

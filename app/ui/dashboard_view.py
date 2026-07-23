@@ -5,6 +5,8 @@ per-category tables. Its timer only runs while the page is on screen.
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QFrame,
@@ -25,6 +27,11 @@ from app.core.stats import SpeedTracker, SystemSampler
 from app.ui import components, motion, theme
 from app.ui.format import human_bytes
 
+#: How often the heavier, slow-changing dashboard readouts (volume rollups, VPN
+#: status, per-host/category tables) refresh - seldom enough not to stutter the
+#: 60fps graph animation, often enough to feel live.
+_HEAVY_INTERVAL = 1.2
+
 
 def _pct(v: float) -> str:
     return f"{v:.0f}%"
@@ -36,6 +43,7 @@ class DashboardView(QWidget):
         self.manager = manager
         self._speed = SpeedTracker()
         self._system = SystemSampler()
+        self._heavy_at = 0.0  # monotonic time of the last heavy refresh
         p = theme.current()
 
         scroll = QScrollArea()
@@ -153,6 +161,7 @@ class DashboardView(QWidget):
 
     def showEvent(self, event: object) -> None:
         super().showEvent(event)  # type: ignore[arg-type]
+        self._heavy_at = 0.0  # force the volume tiles + tables to refresh now
         self._tick()  # an immediate refresh so the tiles aren't a beat stale
 
     def _tick(self) -> None:
@@ -179,18 +188,15 @@ class DashboardView(QWidget):
             self.g_disk.push([system.disk_bytes_per_sec])
             return
 
+        # Every tick, but cheap: the live speed tiles and the graph samples.
+        # The graphs animate at 60fps between these, so this path must stay light
+        # or it stalls that animation into a judder (the reason the heavy work
+        # below is throttled).
         self._tiles["current"].set_value(motion.fmt_speed(reading.current))
         self._tiles["average"].set_value(motion.fmt_speed(reading.average))
         self._tiles["peak"].set_value(motion.fmt_speed(reading.peak))
         self._tiles["eta"].set_value(motion.fmt_eta(reading.eta_seconds))
         self._tiles["active"].set_value(str(active), "downloads")
-
-        totals = self.manager.stat_totals()
-        self._tiles["today"].set_value(human_bytes(totals["today"]))
-        self._tiles["week"].set_value(human_bytes(totals["week"]))
-        self._tiles["month"].set_value(human_bytes(totals["month"]))
-        self._tiles["lifetime"].set_value(human_bytes(totals["lifetime"]))
-        self._tiles["files"].set_value(f"{totals['files']:,}", "total")
 
         system = self._system.sample()
         self.g_download.push([reading.current])
@@ -198,6 +204,21 @@ class DashboardView(QWidget):
         self.g_network.push([system.net_recv_per_sec, system.net_sent_per_sec])
         self.g_cpu.push([system.cpu_percent])
         self.g_disk.push([system.disk_bytes_per_sec])
+
+        # Heavier and slow-changing (SQLite rollups, interface enumeration, two
+        # table rebuilds): refresh a few times a second, not every frame, so the
+        # graph animation stays smooth. Still effectively live for these values.
+        now = time.monotonic()
+        if now - self._heavy_at < _HEAVY_INTERVAL:
+            return
+        self._heavy_at = now
+
+        totals = self.manager.stat_totals()
+        self._tiles["today"].set_value(human_bytes(totals["today"]))
+        self._tiles["week"].set_value(human_bytes(totals["week"]))
+        self._tiles["month"].set_value(human_bytes(totals["month"]))
+        self._tiles["lifetime"].set_value(human_bytes(totals["lifetime"]))
+        self._tiles["files"].set_value(f"{totals['files']:,}", "total")
 
         vpn = net.active_vpn_interfaces()
         if vpn:
