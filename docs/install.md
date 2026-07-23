@@ -1,11 +1,12 @@
 # Installing GrabLine
 
-Everything GrabLine needs is inside the download — no Python, no extra
-dependencies. Pick your system below.
+Packaged builds include everything — no Python, no extra dependencies.
+Pick your system below, or grab files from the
+[latest release](https://github.com/Gr33nOps/GrabLine/releases/latest).
 
 The builds are **not code-signed**. Signing certificates cost money per year,
-and GrabLine is free, so Windows and macOS show a warning the first time you
-run it. The exact clicks are under each section.
+and GrabLine is free, so Windows and macOS warn the first time you run it.
+Exact clicks are under each section.
 
 - [Windows](#windows)
 - [macOS](#macos)
@@ -13,9 +14,6 @@ run it. The exact clicks are under each section.
 - [The browser extension](#the-browser-extension)
 - [Where your data lives](#where-your-data-lives)
 - [Uninstalling](#uninstalling)
-
-Get the files from the
-[latest release](https://github.com/Gr33nOps/GrabLine/releases/latest).
 
 ---
 

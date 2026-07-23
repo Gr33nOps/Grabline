@@ -1,10 +1,12 @@
 # GrabLine security model
 
-GrabLine runs on hostile input by design: arbitrary URLs, whatever a server
-sends back, filenames chosen by strangers, archives built by strangers, and
-messages relayed from web pages through a browser extension. This document is
-the map of where untrusted data crosses into the app, what stops it doing
-harm, and — deliberately — what is *not* defended because it isn't a threat.
+GrabLine takes hostile input by design: arbitrary URLs, whatever a server
+sends back, stranger-chosen filenames, stranger-built archives, and messages
+from web pages through the browser extension.
+
+This document maps where untrusted data crosses into the app, what stops it
+doing harm, and what is *not* defended because it is outside the threat model.
+For how to report a finding, see [SECURITY.md](../SECURITY.md).
 
 ## The one principle
 

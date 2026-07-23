@@ -1,8 +1,9 @@
 # Performance
 
-Numbers from the pass in 1.22.0, measured on one Linux laptop with a real X
-display. Absolute values move between machines; the deltas are the point.
-Re-run any of it with:
+Measured on one Linux laptop with a real X display during the 1.22.0 pass.
+Absolute numbers move between machines; the deltas are the point.
+
+Re-run:
 
 ```sh
 python scripts/perf/bench.py all        # startup + idle
