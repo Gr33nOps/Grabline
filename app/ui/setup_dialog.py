@@ -1,5 +1,6 @@
-"""First-run Browser Setup wizard: pair the native host, put the extension at
-a stable path, and give each browser the shortest free install path."""
+"""First-run Browser Setup wizard: pick a language, pair the native host, put
+the extension at a stable path, and give each browser the shortest free install
+path."""
 
 from __future__ import annotations
 
@@ -8,6 +9,7 @@ from pathlib import Path
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
@@ -17,37 +19,59 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import browser_setup
+from app.core import browser_setup, i18n
+from app.core.i18n import t
+from app.core.settings import Settings
 from app.native_host import install as host_install
 from app.ui import chrome
 
 
 class SetupDialog(chrome.Dialog):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, settings: Settings | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Browser setup")
+        self._settings = settings
+        self.setWindowTitle(t("Browser setup"))
         self.setMinimumWidth(560)
         layout = QVBoxLayout(self)
 
+        # Language (first, so a user in another language can switch before
+        # reading the rest). Applies on restart, like Settings.
+        lang_row = QHBoxLayout()
+        lang_row.addWidget(QLabel(t("Language")))
+        self._lang_combo = QComboBox()
+        for code, name, native in i18n.available_languages():
+            self._lang_combo.addItem(native if native == name else f"{native} ({name})", code)
+        index = self._lang_combo.findData(i18n.current_language())
+        if index >= 0:
+            self._lang_combo.setCurrentIndex(index)
+        self._lang_combo.currentIndexChanged.connect(self._on_language_changed)
+        lang_row.addWidget(self._lang_combo, 1)
+        layout.addLayout(lang_row)
+        self._lang_note = QLabel("")
+        self._lang_note.setProperty("role", "muted")
+        layout.addWidget(self._lang_note)
+
         intro = QLabel(
-            "Two steps connect GrabLine to your browser, so a download button "
-            "appears on videos and links."
+            t(
+                "Two steps connect GrabLine to your browser, so a download "
+                "button appears on videos and links."
+            )
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
         # Step 1 - pair the native host.
-        layout.addWidget(self._heading("1. Pair GrabLine with your browsers"))
+        layout.addWidget(self._heading(t("1. Pair GrabLine with your browsers")))
         pair_row = QHBoxLayout()
-        self._pair_status = QLabel("Not paired yet.")
-        pair_button = QPushButton("Pair now")
+        self._pair_status = QLabel(t("Not paired yet."))
+        pair_button = QPushButton(t("Pair now"))
         pair_button.clicked.connect(self._pair)
         pair_row.addWidget(self._pair_status, 1)
         pair_row.addWidget(pair_button)
         layout.addLayout(pair_row)
 
         # Step 2 - the extension.
-        layout.addWidget(self._heading("2. Add the extension"))
+        layout.addWidget(self._heading(t("2. Add the extension")))
 
         # A prominent action for the detected default browser. No app can
         # install an extension itself - the browser only accepts one from its
@@ -58,16 +82,19 @@ class SetupDialog(chrome.Dialog):
         self._store_url = browser_setup.extension_install_url()
         self._add_hint: QLabel | None = None
         if browser is not None:
-            add_button = QPushButton(f"Add GrabLine to {browser[1]}")
+            add_button = QPushButton(t("Add GrabLine to {browser}", browser=browser[1]))
             add_button.setProperty("accent", "true")
             add_button.clicked.connect(self._add_to_browser)
             layout.addWidget(add_button)
             self._add_hint = QLabel(
-                f"Opens the store page in {browser[1]}. Click <b>Add</b> there."
+                t("Opens the store page in {browser}. Click <b>Add</b> there.", browser=browser[1])
                 if self._store_url
-                else f"{browser[1]} has no store install yet, so this opens the "
-                "extension folder and the extensions page, then turn on "
-                "<b>Developer mode</b> and <b>Load unpacked</b> it (one time)."
+                else t(
+                    "{browser} has no store install yet, so this opens the "
+                    "extension folder and the extensions page, then turn on "
+                    "<b>Developer mode</b> and <b>Load unpacked</b> it (one time).",
+                    browser=browser[1],
+                )
             )
             self._add_hint.setWordWrap(True)
             self._add_hint.setProperty("role", "muted")
@@ -76,9 +103,9 @@ class SetupDialog(chrome.Dialog):
         folder_row = QHBoxLayout()
         self._folder_edit = QLineEdit()
         self._folder_edit.setReadOnly(True)
-        open_folder = QPushButton("Open folder")
+        open_folder = QPushButton(t("Open folder"))
         open_folder.clicked.connect(self._open_folder)
-        copy_path = QPushButton("Copy path")
+        copy_path = QPushButton(t("Copy path"))
         copy_path.clicked.connect(self._copy_path)
         folder_row.addWidget(self._folder_edit, 1)
         folder_row.addWidget(open_folder)
@@ -87,19 +114,23 @@ class SetupDialog(chrome.Dialog):
 
         chrome_row = QHBoxLayout()
         chrome_hint = QLabel(
-            "Chrome / Edge / Brave: open the extensions page, enable Developer "
-            "mode, click Load unpacked, and choose the folder above."
+            t(
+                "Chrome / Edge / Brave: open the extensions page, enable "
+                "Developer mode, click Load unpacked, and choose the folder above."
+            )
         )
         chrome_hint.setWordWrap(True)
-        copy_url = QPushButton("Copy chrome://extensions")
+        copy_url = QPushButton(t("Copy chrome://extensions"))
         copy_url.clicked.connect(lambda: QGuiApplication.clipboard().setText("chrome://extensions"))
         chrome_row.addWidget(chrome_hint, 1)
         chrome_row.addWidget(copy_url)
         layout.addLayout(chrome_row)
 
         firefox_hint = QLabel(
-            "Firefox: install GrabLine Connect from addons.mozilla.org. It is "
-            "reviewed and signed by Mozilla, so it survives restarts."
+            t(
+                "Firefox: install GrabLine Connect from addons.mozilla.org. It "
+                "is reviewed and signed by Mozilla, so it survives restarts."
+            )
         )
         firefox_hint.setWordWrap(True)
         firefox_hint.setProperty("role", "muted")
@@ -108,14 +139,14 @@ class SetupDialog(chrome.Dialog):
         # Detected browsers, for reassurance.
         detected = [b.name for b in browser_setup.detect_browsers() if b.installed]
         if detected:
-            found = QLabel("Detected: " + ", ".join(detected))
+            found = QLabel(t("Detected: {names}", names=", ".join(detected)))
             found.setProperty("role", "muted")
             layout.addWidget(found)
 
         # Verify.
         verify_row = QHBoxLayout()
         self._verify_status = QLabel("")
-        verify_button = QPushButton("Check connection")
+        verify_button = QPushButton(t("Check connection"))
         verify_button.clicked.connect(self._verify)
         verify_row.addWidget(self._verify_status, 1)
         verify_row.addWidget(verify_button)
@@ -138,12 +169,22 @@ class SetupDialog(chrome.Dialog):
         label.setContentsMargins(0, 8, 0, 0)
         return label
 
+    def _on_language_changed(self) -> None:
+        code = str(self._lang_combo.currentData())
+        if self._settings is not None:
+            self._settings.language = code
+        # The already-built UI stays in the current language; the new one takes
+        # effect on the next launch.
+        self._lang_note.setText(
+            "" if code == i18n.current_language() else t("Restart GrabLine to apply the language.")
+        )
+
     def _prepare_extension(self) -> None:
         try:
             path = browser_setup.install_extension_files()
             self._folder_edit.setText(str(path))
         except (OSError, FileNotFoundError) as exc:
-            self._folder_edit.setText(f"(could not prepare extension: {exc})")
+            self._folder_edit.setText(t("(could not prepare extension: {error})", error=exc))
 
     def _add_to_browser(self) -> None:
         if self._store_url:
@@ -155,18 +196,20 @@ class SetupDialog(chrome.Dialog):
         QGuiApplication.clipboard().setText("chrome://extensions")
         if self._add_hint is not None:
             self._add_hint.setText(
-                "Opened the extension folder and copied <b>chrome://extensions</b>. "
-                "Paste it in a new tab, turn on <b>Developer mode</b>, click "
-                "<b>Load unpacked</b>, and pick that folder."
+                t(
+                    "Opened the extension folder and copied <b>chrome://extensions</b>. "
+                    "Paste it in a new tab, turn on <b>Developer mode</b>, click "
+                    "<b>Load unpacked</b>, and pick that folder."
+                )
             )
 
     def _pair(self) -> None:
         try:
             written = host_install.install()
         except OSError as exc:
-            self._pair_status.setText(f"Pairing failed: {exc}")
+            self._pair_status.setText(t("Pairing failed: {error}", error=exc))
             return
-        self._pair_status.setText(f"Paired with {len(written)} browser location(s).")
+        self._pair_status.setText(t("Paired with {count} browser location(s).", count=len(written)))
 
     def _open_folder(self) -> None:
         path = self._folder_edit.text()
@@ -179,7 +222,7 @@ class SetupDialog(chrome.Dialog):
     def _verify(self) -> None:
         healthy, lines = host_install.check()
         if healthy:
-            self._verify_status.setText("Connected. The app and browser can talk.")
+            self._verify_status.setText(t("Connected. The app and browser can talk."))
         else:
             fail = next((line for line in lines if line.startswith("FAIL")), "not paired yet")
-            self._verify_status.setText(fail.removeprefix("FAIL ").strip() or "not paired yet")
+            self._verify_status.setText(fail.removeprefix("FAIL ").strip() or t("not paired yet"))

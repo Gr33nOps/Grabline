@@ -41,9 +41,10 @@ from PySide6.QtWidgets import (
 )
 
 from app import __version__
-from app.core import launcher, paths
+from app.core import i18n, launcher, paths
 from app.core.errors import DownloadError
 from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
+from app.core.i18n import t
 from app.core.settings import SESSION_BROWSERS, Settings
 from app.ui import chrome, components, design, guard, theme, threads
 from app.ui.format import human_bytes
@@ -253,6 +254,11 @@ class SettingsDialog(chrome.Dialog):
 
         # ---- General ---------------------------------------------------------
         general_form = self._add_form_tab(tabs, "General")
+        self.language_combo = QComboBox()
+        for code, name, native in i18n.available_languages():
+            self.language_combo.addItem(native if native == name else f"{native} ({name})", code)
+        general_form.addRow(t("Language:"), self.language_combo)
+        general_form.addRow(_note(t("A new language takes effect after you restart GrabLine.")))
         self.autostart_check = QCheckBox("Start GrabLine when I log in (minimized to the tray)")
         general_form.addRow(self.autostart_check)
         self.updates_check = QCheckBox("Check for GrabLine updates on startup")
@@ -273,7 +279,7 @@ class SettingsDialog(chrome.Dialog):
         self.new_dl_combo.addItem("Start automatically", True)
         self.new_dl_combo.addItem("Add paused (start by hand)", False)
         general_form.addRow("New downloads:", self.new_dl_combo)
-        general_form.addRow(_note("GrabLine runs as a single instance. English only for now."))
+        general_form.addRow(_note(t("GrabLine runs as a single instance.")))
 
         # ---- Downloads -------------------------------------------------------
         downloads_form = self._add_form_tab(tabs, "Downloads")
@@ -1201,7 +1207,7 @@ class SettingsDialog(chrome.Dialog):
             if go:
                 sender = self.sender()
                 parent = sender.window() if isinstance(sender, QWidget) else self
-                SetupDialog(parent).exec()
+                SetupDialog(parent, settings=self.settings).exec()
 
     def _check_updates_now(self) -> None:
         """Manual update check. The main window owns the checker; reach it via
@@ -1408,6 +1414,11 @@ class SettingsDialog(chrome.Dialog):
         self.retention_spin.setValue(s.stats_retention_days)
         self.refresh_spin.setValue(s.dashboard_refresh_ms)
 
+        # Language: the saved choice, or the active one when none is stored yet.
+        self.language_combo.setCurrentIndex(
+            max(0, self.language_combo.findData(s.language or i18n.current_language()))
+        )
+
         # Appearance.
         self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(s.theme)))
         self.accent_combo.setCurrentIndex(max(0, self.accent_combo.findData(s.accent_color)))
@@ -1435,6 +1446,12 @@ class SettingsDialog(chrome.Dialog):
         if proxy_error is not None:
             QMessageBox.warning(self, "GrabLine", proxy_error)
             return False
+        language = str(self.language_combo.currentData())
+        self.settings.language = language
+        if language != i18n.current_language():
+            QMessageBox.information(
+                self, "GrabLine", t("Restart GrabLine to apply the new language.")
+            )
         self.settings.download_dir = self.folder_edit.text().strip() or str(
             self.settings.download_dir
         )

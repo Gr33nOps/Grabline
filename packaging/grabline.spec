@@ -55,6 +55,8 @@ datas = (
     + [(str(ROOT / "extension"), "extension")]
     # The brand logo, read back from sys._MEIPASS/app/ui/assets (app.ui.icon).
     + [(str(ROOT / "app" / "ui" / "assets"), "app/ui/assets")]
+    # Translation catalogs, read back from sys._MEIPASS/app/i18n (app.core.i18n).
+    + [(str(ROOT / "app" / "i18n"), "app/i18n")]
 )
 binaries = ytdlp_bins + curl_bins + boto_bins
 

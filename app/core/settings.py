@@ -356,6 +356,16 @@ class Settings:
     # --- appearance ---
 
     @property
+    def language(self) -> str:
+        """The chosen UI language code (see app.core.i18n), or "" when the user
+        hasn't picked one yet - in which case startup follows the OS locale."""
+        return self._db.get_setting("language") or ""
+
+    @language.setter
+    def language(self, value: str) -> None:
+        self._db.set_setting("language", value)
+
+    @property
     def theme(self) -> str:
         """UI theme: "system", "light", or "dark"."""
         raw = self._db.get_setting("theme")

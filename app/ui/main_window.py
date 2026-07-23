@@ -79,6 +79,7 @@ from app.core import (
 from app.core.batch import expand_all, expand_pattern, extract_urls
 from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
+from app.core.i18n import N_, t
 from app.core.manager import DownloadManager, JobView
 from app.core.models import JobKind, JobStatus
 from app.core.resolver import Resolution, Resolver
@@ -107,7 +108,7 @@ from app.ui.setup_dialog import SetupDialog
 from app.ui.torrent_dialog import AddTorrentDialog, CreateTorrentDialog
 
 #: Table columns: an icon, name, size, progress, speed, ETA, status.
-_COLUMNS = ("", "Name", "Size", "Progress", "Speed", "ETA", "Status")
+_COLUMNS = (N_(""), N_("Name"), N_("Size"), N_("Progress"), N_("Speed"), N_("ETA"), N_("Status"))
 _COL_ICON, _COL_NAME, _COL_SIZE, _COL_PROGRESS, _COL_SPEED, _COL_ETA, _COL_STATUS = range(7)
 _VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
 
@@ -221,7 +222,7 @@ class MainWindow(QMainWindow):
         # title bar is passed so the overlay carves out the caption buttons and
         # never swallows a Maximize/Close click.
         self._resizer = chrome.EdgeResizer(self, self._title_bar)
-        self.statusBar().showMessage("Ready")
+        self.statusBar().showMessage(t("Ready"))
         # A global activity indicator: whenever anything is working in the
         # background (analyzing, hashing, extracting, converting, listing,
         # crawling…) this shimmer runs next to the status text, so a wait is
@@ -288,10 +289,10 @@ class MainWindow(QMainWindow):
         # The rail is pure navigation now that every tool lives on the
         # downloads toolbar. Settings takes the slot the Tools page held.
         nav = (
-            ("downloads", "download", "Downloads", lambda: self._switch_view("downloads")),
-            ("dashboard", "dashboard", "Dashboard", lambda: self._switch_view("dashboard")),
-            ("queue", "queue", "Queue manager", lambda: self._switch_view("queue")),
-            ("settings", "settings", "Settings", lambda: self._switch_view("settings")),
+            ("downloads", "download", t("Downloads"), lambda: self._switch_view("downloads")),
+            ("dashboard", "dashboard", t("Dashboard"), lambda: self._switch_view("dashboard")),
+            ("queue", "queue", t("Queue manager"), lambda: self._switch_view("queue")),
+            ("settings", "settings", t("Settings"), lambda: self._switch_view("settings")),
         )
         for key, icon_name, tip, handler in nav:
             btn = components.SidebarButton(icon_name, tip)
@@ -418,57 +419,57 @@ class MainWindow(QMainWindow):
 
         # The one labeled, primary action. Everything else is an icon with a
         # tooltip, grouped by separators, so the whole toolbar fits one row.
-        add_url = QPushButton("  Add URL")
+        add_url = QPushButton("  " + t("Add URL"))
         add_url.setProperty("accent", "true")
         add_url.setCursor(Qt.CursorShape.PointingHandCursor)
         add_url.setIcon(icons.svg_icon("add", theme.current().accent_on))
         add_url.setIconSize(QSize(16, 16))
-        add_url.setToolTip("Add a download from a URL")
+        add_url.setToolTip(t("Add a download from a URL"))
         add_url.setMinimumWidth(96)  # never clip its label when the window narrows
         add_url.clicked.connect(self._add_url)
         lay.addWidget(add_url)
         # All torrent actions live under one dropdown, next to the cloud button.
         add_menu_btn(
             "torrent",
-            "Torrent",
+            t("Torrent"),
             (
-                ("Add torrent…", self._add_torrent_file),
-                ("Search torrents…", self._search_torrents),
-                ("Create torrent…", self._create_torrent),
+                (t("Add torrent…"), self._add_torrent_file),
+                (t("Search torrents…"), self._search_torrents),
+                (t("Create torrent…"), self._create_torrent),
             ),
         )
-        add_btn("cloud", self._add_cloud, "Add a cloud download")
+        add_btn("cloud", self._add_cloud, t("Add a cloud download"))
 
         lay.addWidget(self._sep())
         add_menu_btn(
             "import",
-            "Import",
-            (("Import links…", self._import_links), ("Import list…", self._import_list)),
+            t("Import"),
+            ((t("Import links…"), self._import_links), (t("Import list…"), self._import_list)),
         )
-        add_btn("export", self._export_list, "Export list")
+        add_btn("export", self._export_list, t("Export list"))
 
         lay.addWidget(self._sep())
-        add_btn("globe", self._grab_site, "Grab site")
-        add_btn("inspect", self._inspect_url_prompt, "Inspect URL")
-        add_btn("duplicate", self._find_duplicates, "Find duplicate files")
+        add_btn("globe", self._grab_site, t("Grab site"))
+        add_btn("inspect", self._inspect_url_prompt, t("Inspect URL"))
+        add_btn("duplicate", self._find_duplicates, t("Find duplicate files"))
 
         lay.addWidget(self._sep())
         # One button that flips between pause and resume for the selection - it
         # shows Pause while something is running, Resume once it's paused. Its
         # icon/tooltip are refreshed by _update_toggle_button on every tick.
-        self._toggle_btn = components.IconButton("pause", tooltip="Pause")
+        self._toggle_btn = components.IconButton("pause", tooltip=t("Pause"))
         self._toggle_btn.clicked.connect(self._toggle_selected)
         self._retintable.append(self._toggle_btn)
         lay.addWidget(self._toggle_btn)
-        add_btn("cancel", self._cancel_selected, "Cancel")
-        add_btn("trash", self._remove_selected, "Delete from list", danger=True)
+        add_btn("cancel", self._cancel_selected, t("Cancel"))
+        add_btn("trash", self._remove_selected, t("Delete from list"), danger=True)
 
         lay.addWidget(self._sep())
-        add_btn("folder", self._open_folder, "Open downloads folder")
+        add_btn("folder", self._open_folder, t("Open downloads folder"))
         lay.addStretch(1)
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Search downloads…")
+        self.search_box.setPlaceholderText(t("Search downloads…"))
         self.search_box.setClearButtonEnabled(True)
         # Compresses first when the window narrows, so the toolbar never
         # overlaps itself at the minimum window width.
@@ -511,10 +512,10 @@ class MainWindow(QMainWindow):
         self._filter = "all"
         self._filter_buttons: dict[str, QPushButton] = {}
         for key, label in (
-            ("all", "All"),
-            ("active", "Active"),
-            ("completed", "Completed"),
-            ("failed", "Failed"),
+            ("all", t("All")),
+            ("active", t("Active")),
+            ("completed", t("Completed")),
+            ("failed", t("Failed")),
         ):
             btn = QPushButton(label)
             btn.setCheckable(True)
@@ -525,9 +526,9 @@ class MainWindow(QMainWindow):
         lay.addStretch(1)
         # Housekeeping lives with the list it acts on: visible only while
         # there is something completed to clear.
-        clear = QPushButton("Clear completed")
+        clear = QPushButton(t("Clear completed"))
         clear.setCursor(Qt.CursorShape.PointingHandCursor)
-        clear.setToolTip("Remove the completed downloads from the list (files stay on disk)")
+        clear.setToolTip(t("Remove the completed downloads from the list (files stay on disk)"))
         clear.clicked.connect(self._clear_completed)
         clear.hide()
         self._clear_completed_btn = clear
@@ -562,7 +563,7 @@ class MainWindow(QMainWindow):
     def _build_table(self) -> QWidget:
         self.table = QTableWidget(0, len(_COLUMNS), self)
         self.table.setObjectName("JobsTable")  # full-bleed styling in the QSS
-        self.table.setHorizontalHeaderLabels(_COLUMNS)
+        self.table.setHorizontalHeaderLabels([t(column) for column in _COLUMNS])
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -603,7 +604,7 @@ class MainWindow(QMainWindow):
         # The empty state: one quiet line naming the action that exists,
         # instead of a bare surface. Purely visual; hidden once rows appear.
         self._empty_label = components.role_label(
-            "Nothing here yet. Paste a link or press Add URL.", "muted"
+            t("Nothing here yet. Paste a link or press Add URL."), "muted"
         )
         self._empty_label.setParent(self.table.viewport())
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -815,7 +816,7 @@ class MainWindow(QMainWindow):
             v.status in (JobStatus.DOWNLOADING, JobStatus.QUEUED) for v in views
         )
         self._toggle_btn.set_icon_name("resume" if resume else "pause")
-        self._toggle_btn.setToolTip("Resume" if resume else "Pause")
+        self._toggle_btn.setToolTip(t("Resume") if resume else t("Pause"))
 
     def _pause_all(self) -> None:
         for view in list(self._last_views.values()):
@@ -888,7 +889,7 @@ class MainWindow(QMainWindow):
         with guard.single_flight(self._in_flight, "setup") as go:
             if not go:
                 return
-            SetupDialog(self).exec()
+            SetupDialog(self, settings=self.settings).exec()
 
     def shutdown(self) -> None:
         """Quiesce the window before the app closes the database. Stop the
@@ -1058,7 +1059,7 @@ class MainWindow(QMainWindow):
 
         def done(result: object) -> None:
             guard.end(self._in_flight, "update")
-            self.statusBar().showMessage("Ready")  # never leave "Checking…" stuck
+            self.statusBar().showMessage(t("Ready"))  # never leave "Checking…" stuck
             if result is not None:
                 tag, name, url = cast("tuple[str, str, str]", result)
                 box = QMessageBox(self)
@@ -1080,7 +1081,7 @@ class MainWindow(QMainWindow):
 
         def failed(_error: object) -> None:
             guard.end(self._in_flight, "update")
-            self.statusBar().showMessage("Ready")
+            self.statusBar().showMessage(t("Ready"))
             if not quiet:
                 QMessageBox.information(self, "GrabLine", "Could not check for updates right now.")
 
@@ -1206,7 +1207,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.No,
                 )
                 if answer != QMessageBox.StandardButton.Yes:
-                    self.statusBar().showMessage("Ready")
+                    self.statusBar().showMessage(t("Ready"))
                     return
 
         # Low-disk warning (advisory, Settings → Downloads): free space on the
@@ -1229,14 +1230,14 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.No,
                 )
                 if answer != QMessageBox.StandardButton.Yes:
-                    self.statusBar().showMessage("Ready")
+                    self.statusBar().showMessage(t("Ready"))
                     return
         # Advisory URL security: warn on plain HTTP (instant) and, if a Safe
         # Browsing key is set, check the URL off-thread. Both only warn - the
         # user can always proceed.
         scheme = urlsplit(url).scheme.lower()
         if self.settings.enforce_https and scheme == "http" and not self._confirm_insecure(url):
-            self.statusBar().showMessage("Ready")
+            self.statusBar().showMessage(t("Ready"))
             return
         args = (page_title, quality, fallbacks, headers, from_browser)
         if self.settings.safebrowsing_key and scheme in ("http", "https"):
@@ -1291,7 +1292,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.No,
                 )
                 if answer != QMessageBox.StandardButton.Yes:
-                    self.statusBar().showMessage("Ready")
+                    self.statusBar().showMessage(t("Ready"))
                     return
             self._finish_add(url, *args)
 
@@ -1375,7 +1376,7 @@ class MainWindow(QMainWindow):
         )
         self._raise_to_front()
         if dialog.exec() != AddDownloadDialog.DialogCode.Accepted:
-            self.statusBar().showMessage("Ready")
+            self.statusBar().showMessage(t("Ready"))
             return
         if dialog.dont_ask_again():
             self.settings.confirm_downloads = False
@@ -1505,7 +1506,7 @@ class MainWindow(QMainWindow):
         fallbacks: tuple[str, ...] = (),
         headers: dict[str, str] | None = None,
     ) -> None:
-        self.statusBar().showMessage("Ready")
+        self.statusBar().showMessage(t("Ready"))
         if resolution.kind is None:
             if fallbacks:
                 # The page itself had nothing - try the stream it played.
@@ -2156,7 +2157,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Comparing files …")
 
         def done(result: object) -> None:
-            self.statusBar().showMessage("Ready")
+            self.statusBar().showMessage(t("Ready"))
             groups = cast("list[list[Path]]", result)
             if not groups:
                 QMessageBox.information(self, "GrabLine", "No duplicate files found.")
@@ -2592,7 +2593,12 @@ class MainWindow(QMainWindow):
             "completed": sum(1 for v in views if v.status is JobStatus.COMPLETED),
             "failed": sum(1 for v in views if v.status in (JobStatus.FAILED, JobStatus.CANCELLED)),
         }
-        labels = {"all": "All", "active": "Active", "completed": "Completed", "failed": "Failed"}
+        labels = {
+            "all": t("All"),
+            "active": t("Active"),
+            "completed": t("Completed"),
+            "failed": t("Failed"),
+        }
         for key, btn in self._filter_buttons.items():
             btn.setText(f"{labels[key]}  {counts[key]}")
         self._clear_completed_btn.setVisible(counts["completed"] > 0)
@@ -2600,10 +2606,13 @@ class MainWindow(QMainWindow):
     def _update_status_info(self, views: list[JobView]) -> None:
         active = sum(1 for v in views if v.status is JobStatus.DOWNLOADING)
         done = sum(1 for v in views if v.status is JobStatus.COMPLETED)
-        self._status_info.setText(
-            f"{len(views)} items · {active} active · {done} completed"
-            f"     GrabLine v{__version__} · No telemetry"
+        counts = t(
+            "{total} items · {active} active · {done} completed",
+            total=len(views),
+            active=active,
+            done=done,
         )
+        self._status_info.setText(f"{counts}     GrabLine v{__version__} · " + t("No telemetry"))
 
     def _restore_selection(self) -> None:
         """Re-select the remembered jobs after a rebuild so the toolbar keeps

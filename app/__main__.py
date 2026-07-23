@@ -10,7 +10,7 @@ import traceback
 from types import TracebackType
 from typing import TextIO
 
-from PySide6.QtCore import QBuffer, QEvent, QIODevice, QObject, QTimer
+from PySide6.QtCore import QBuffer, QEvent, QIODevice, QObject, Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
 )
 
-from app.core import alerts, instance, launcher, paths, power, scripts
+from app.core import alerts, i18n, instance, launcher, paths, power, scripts
 from app.core.ffmpeg import find_ffmpeg
 from app.core.manager import DownloadManager
 from app.core.settings import Settings
@@ -252,6 +252,12 @@ def main() -> int:
     _register_native_host_once(settings)
     theme.remember_default(app)
     _configure_logging(settings)
+    # Language before any UI is built: the chosen one, or the OS locale on first
+    # run. Right-to-left languages flip the whole app's layout direction.
+    i18n.set_language(settings.language or i18n.system_language())
+    app.setLayoutDirection(
+        Qt.LayoutDirection.RightToLeft if i18n.is_rtl() else Qt.LayoutDirection.LeftToRight
+    )
     theme.apply_theme(app, settings.theme, accent=settings.accent_color or None)
     manager = DownloadManager(db, settings=settings)
 
