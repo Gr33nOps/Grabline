@@ -37,7 +37,7 @@
         "description": "Free open source download manager that splits each download across many connections, with a browser companion and video quality picker.",
         "url": "https://gr33nops.github.io/Grabline/",
         "downloadUrl": "https://github.com/Gr33nOps/GrabLine/releases/latest",
-        "softwareVersion": "1.27.9",
+        "softwareVersion": "1.27.10",
         "license": "https://www.gnu.org/licenses/agpl-3.0.html",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "screenshot": [
@@ -883,13 +883,10 @@
           <div class="wrap">
             <div class="sec-head">
               <span class="eyebrow">FAQ</span>
-              <h2>Questions about GrabLine</h2>
+              <h2>A few more answers</h2>
+              <p class="lead">Only what the sections above do not already cover.</p>
             </div>
 
-            <details class="qa">
-              <summary>Is GrabLine free?</summary>
-              <p>Yes. AGPL 3.0, no paid tier, no trial. Source is on GitHub and you can build it yourself.</p>
-            </details>
             <details class="qa">
               <summary>How is it different from IDM?</summary>
               <p>
@@ -899,69 +896,11 @@
               </p>
             </details>
             <details class="qa">
-              <summary>How do parallel connections make downloads faster?</summary>
+              <summary>Which browsers work with the extension?</summary>
               <p>
-                Many servers throttle a single connection. GrabLine splits the file into segments and
-                fetches them together (up to 128). Slow segments get work stolen by idle lines so the
-                whole transfer stays busy.
-              </p>
-            </details>
-            <details class="qa">
-              <summary>Does YouTube and other video sites work?</summary>
-              <p>
-                Yes. Hover, click the GrabLine button, pick quality (up to 4K) or audio
-                (MP3, M4A, FLAC), with subtitles and trim. A thousand plus other sites via yt dlp.
-              </p>
-            </details>
-            <details class="qa">
-              <summary>Which browsers are supported?</summary>
-              <p>
-                GrabLine Connect is on Firefox Add ons. The desktop app also accepts pasted links and
-                files without the extension. Native Messaging talks to the browser over a local pipe,
-                not an open network port.
-              </p>
-            </details>
-            <details class="qa">
-              <summary>Will downloads resume after a crash or reboot?</summary>
-              <p>
-                Yes for HTTP(S) downloads that support range requests. Progress is written to disk as
-                segments complete, so restarting GrabLine continues from the last saved state.
-              </p>
-            </details>
-            <details class="qa">
-              <summary>Does it support torrents?</summary>
-              <p>
-                Yes. Magnets and torrent files via libtorrent, with DHT, sequential streaming for media,
-                seed ratios and RSS feeds inside the same queue.
-              </p>
-            </details>
-            <details class="qa">
-              <summary>Can I download from cloud storage?</summary>
-              <p>
-                SFTP, FTP, S3 and WebDAV with logins stored in the system keychain. Google Drive and
-                Dropbox share links can be pulled as direct downloads when the host allows it.
-              </p>
-            </details>
-            <details class="qa">
-              <summary>Does GrabLine collect telemetry or show ads?</summary>
-              <p>
-                No ads and no accounts. Your downloads go to the sites you choose. The only built in
-                maintenance call is an optional quiet check for newer releases on GitHub. See Privacy
-                for the full list.
-              </p>
-            </details>
-            <details class="qa">
-              <summary>Why does my OS warn me when I install?</summary>
-              <p>
-                Installers are unsigned. The code is public and built in CI. Use the click through in
-                the install guide; it is once per version.
-              </p>
-            </details>
-            <details class="qa">
-              <summary>Can it download Netflix, Spotify or other DRM media?</summary>
-              <p>
-                No. DRM protected services are refused with a clear message. GrabLine will not bypass
-                license locks.
+                GrabLine Connect is on Firefox Add ons. Chrome, Edge and Brave pair from Browser Setup
+                in the app. You can always paste a link without the extension. Hand off uses Native
+                Messaging over a local pipe, not an open network port.
               </p>
             </details>
             <details class="qa">
@@ -970,6 +909,10 @@
                 Downloads go to the folder you choose. Settings and the SQLite job database live in the
                 normal app data directory on your machine. Cookies used for a browser session stay local.
               </p>
+            </details>
+            <details class="qa">
+              <summary>Is it free?</summary>
+              <p>Yes. AGPL 3.0, no paid tier, no trial. Source is on GitHub.</p>
             </details>
           </div>
         </section>
