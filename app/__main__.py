@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from app.core import alerts, i18n, instance, launcher, paths, power, scripts
 from app.core.ffmpeg import find_ffmpeg
+from app.core.i18n import t
 from app.core.manager import DownloadManager
 from app.core.settings import Settings
 from app.db.database import Database
@@ -230,8 +231,12 @@ def main() -> int:
         QMessageBox.critical(
             None,
             "GrabLine",
-            f"GrabLine cannot use its data folder:\n\n{data_dir}\n\n{exc}\n\n"
-            "Check the folder's permissions, or that the drive is available.",
+            t(
+                "GrabLine cannot use its data folder:\n\n{data_dir}\n\n{exc}\n\n"
+                "Check the folder's permissions, or that the drive is available.",
+                data_dir=data_dir,
+                exc=exc,
+            ),
         )
         return 1
 
@@ -278,7 +283,7 @@ def main() -> int:
 
     if find_ffmpeg(settings) is None:
         window.statusBar().showMessage(
-            "FFmpeg not found - install it in Settings to enable MP3, merging, and streams"
+            t("FFmpeg not found - install it in Settings to enable MP3, merging, and streams")
         )
 
     tray: GrabLineTray | None = None
@@ -298,8 +303,8 @@ def main() -> int:
             pending_clipboard_url.clear()
             pending_clipboard_url.append(url)
             tray.showMessage(
-                "Download with GrabLine?",
-                f"{url}\nClick to choose quality and download.",
+                t("Download with GrabLine?"),
+                t("{url}\nClick to choose quality and download.", url=url),
                 QSystemTrayIcon.MessageIcon.Information,
                 6000,
             )
@@ -323,7 +328,7 @@ def main() -> int:
 
     def on_job_completed(name: str, file_path: str) -> None:
         if settings.notify_on_complete:
-            toast("Download complete", name, QSystemTrayIcon.MessageIcon.Information)
+            toast(t("Download complete"), name, QSystemTrayIcon.MessageIcon.Information)
         if settings.sound_on_complete and not settings.in_quiet_hours():
             alerts.play_complete_sound(settings.sound_file)
         if settings.script_on_complete:
@@ -331,13 +336,15 @@ def main() -> int:
 
     def on_job_failed(name: str, error: str) -> None:
         if settings.notify_on_failed:
-            toast(f"Download failed: {name}", error, QSystemTrayIcon.MessageIcon.Warning)
+            toast(
+                t("Download failed: {name}", name=name), error, QSystemTrayIcon.MessageIcon.Warning
+            )
 
     def on_queue_drained() -> None:
         if settings.notify_queue_done:
             toast(
-                "Queue finished",
-                "Every download has completed.",
+                t("Queue finished"),
+                t("Every download has completed."),
                 QSystemTrayIcon.MessageIcon.Information,
             )
         action = settings.after_queue_action

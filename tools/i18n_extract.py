@@ -25,7 +25,7 @@ CATALOGS = ROOT / "app" / "i18n"
 
 def _is_t_call(func: ast.expr) -> bool:
     # t("...") translates now; N_("...") only marks a constant for extraction.
-    return isinstance(func, ast.Name) and func.id in ("t", "N_")
+    return isinstance(func, ast.Name) and func.id in ("t", "N_", "_note")
 
 
 def source_strings() -> set[str]:

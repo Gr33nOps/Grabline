@@ -340,24 +340,24 @@ class MainWindow(QMainWindow):
         if self.clipboard_suppressor is not None:
             self.clipboard_suppressor(view.url)
         QGuiApplication.clipboard().setText(view.url)
-        self.statusBar().showMessage("URL copied", 3000)
+        self.statusBar().showMessage(t("URL copied"), 3000)
 
     def _copy_view_path(self, view: JobView) -> None:
         QGuiApplication.clipboard().setText(str(Path(view.dest_dir) / view.filename))
-        self.statusBar().showMessage("File path copied", 3000)
+        self.statusBar().showMessage(t("File path copied"), 3000)
 
     def _open_view_file(self, view: JobView) -> None:
         path = Path(view.dest_dir) / view.filename
         if path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         else:
-            self.statusBar().showMessage("The file is not on disk", 3000)
+            self.statusBar().showMessage(t("The file is not on disk"), 3000)
 
     def _open_view_folder(self, view: JobView) -> None:
         # The file path, so the manager highlights the download when it exists;
         # open_folder falls back to the folder when it doesn't (a failed job).
         if not reveal.open_folder(Path(view.dest_dir) / view.filename):
-            self.statusBar().showMessage("Could not open the folder", 3000)
+            self.statusBar().showMessage(t("Could not open the folder"), 3000)
 
     def _security_view(self, view: JobView) -> None:
         SecurityDialog(Path(view.dest_dir) / view.filename, view.url, self.settings, self).exec()
@@ -368,23 +368,25 @@ class MainWindow(QMainWindow):
         existing file."""
         old = Path(view.dest_dir) / view.filename
         new_name, accepted = QInputDialog.getText(
-            self, "Rename", "New file name:", text=view.filename
+            self, t("Rename"), t("New file name:"), text=view.filename
         )
         new_name = new_name.strip()
         if not (accepted and new_name) or new_name == view.filename:
             return
         if "/" in new_name or "\\" in new_name:
-            QMessageBox.warning(self, "GrabLine", "The name can't include a folder.")
+            QMessageBox.warning(self, "GrabLine", t("The name can't include a folder."))
             return
         target = old.with_name(new_name)
         if target.exists():
-            QMessageBox.warning(self, "GrabLine", f"{new_name} already exists in this folder.")
+            QMessageBox.warning(
+                self, "GrabLine", t("{name} already exists in this folder.", name=new_name)
+            )
             return
         try:
             if old.exists():
                 old.rename(target)
         except OSError as exc:
-            QMessageBox.warning(self, "GrabLine", f"Could not rename: {exc}")
+            QMessageBox.warning(self, "GrabLine", t("Could not rename: {exc}", exc=exc))
             return
         self.manager.db.update_job_filename(view.id, new_name)
         self.refresh()
@@ -674,7 +676,7 @@ class MainWindow(QMainWindow):
         # A rebind in Settings -> Shortcuts takes effect now, no restart.
         if getattr(self, "_shortcuts", None) is not None:
             self._shortcuts.reload()
-        self.statusBar().showMessage("Settings saved", 4000)
+        self.statusBar().showMessage(t("Settings saved"), 4000)
 
     def _retint_all(self) -> None:
         self._title_bar.retint()
@@ -759,7 +761,7 @@ class MainWindow(QMainWindow):
         if not urls and text.lower().startswith(("http://", "https://", "magnet:", "ftp://")):
             urls = [text]
         if not urls:
-            self.statusBar().showMessage("No downloadable link on the clipboard", 4000)
+            self.statusBar().showMessage(t("No downloadable link on the clipboard"), 4000)
             return
         if len(urls) == 1:
             self.begin_add_url(urls[0])
@@ -839,7 +841,7 @@ class MainWindow(QMainWindow):
         if view.status is JobStatus.COMPLETED and path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         else:
-            self.statusBar().showMessage("That download isn't finished yet", 3000)
+            self.statusBar().showMessage(t("That download isn't finished yet"), 3000)
 
     def _open_selected_folder(self) -> None:
         views = self._selected_views()
@@ -847,7 +849,7 @@ class MainWindow(QMainWindow):
             return
         view = views[0]
         if not reveal.open_folder(Path(view.dest_dir) / view.filename):
-            self.statusBar().showMessage("Could not open the folder", 3000)
+            self.statusBar().showMessage(t("Could not open the folder"), 3000)
 
     def _redownload_selected(self) -> None:
         for view in self._selected_views():
@@ -861,7 +863,7 @@ class MainWindow(QMainWindow):
         if self.clipboard_suppressor is not None:
             self.clipboard_suppressor(url)  # don't offer our own copy back
         QGuiApplication.clipboard().setText(url)
-        self.statusBar().showMessage("URL copied", 3000)
+        self.statusBar().showMessage(t("URL copied"), 3000)
 
     def _copy_selected_hash(self) -> None:
         views = self._selected_views()
@@ -872,7 +874,7 @@ class MainWindow(QMainWindow):
         if view.status is JobStatus.COMPLETED and path.exists():
             self._copy_hash(path)
         else:
-            self.statusBar().showMessage("Finish the download first to hash it", 3000)
+            self.statusBar().showMessage(t("Finish the download first to hash it"), 3000)
 
     def _toggle_theme(self) -> None:
         """Flip between light and dark and repaint live (Ctrl+Shift+L). Writes
@@ -974,7 +976,7 @@ class MainWindow(QMainWindow):
 
     def _add_url(self) -> None:
         url, accepted = QInputDialog.getText(
-            self, "Add download", "URL (ranges like file[1-20].jpg expand):"
+            self, t("Add download"), t("URL (ranges like file[1-20].jpg expand):")
         )
         if not (accepted and url.strip()):
             return
@@ -993,60 +995,60 @@ class MainWindow(QMainWindow):
 
     def _grab_site(self) -> None:
         """Crawl a page (optionally deeper) and pick from the files it finds."""
-        url, accepted = QInputDialog.getText(self, "Grab site", "Page URL:")
+        url, accepted = QInputDialog.getText(self, t("Grab site"), t("Page URL:"))
         url = url.strip()
         if not (accepted and url):
             return
         depth, accepted = QInputDialog.getInt(
             self,
-            "Grab site",
-            "How many levels deep to follow links?",
+            t("Grab site"),
+            t("How many levels deep to follow links?"),
             value=0,
             minValue=0,
             maxValue=3,
         )
         if not accepted:
             return
-        self.statusBar().showMessage(f"Scanning {url} …")
+        self.statusBar().showMessage(t("Scanning {url} …", url=url))
         proxy = self.settings.proxy
 
         def done(result: object) -> None:
             found = cast(list[str], result)
-            self.statusBar().showMessage(f"Found {len(found)} file link(s)", 6000)
+            self.statusBar().showMessage(t("Found {count} file link(s)", count=len(found)), 6000)
             if found:
                 self._open_links(found, url)
             else:
                 QMessageBox.information(
-                    self, "GrabLine", "No downloadable files found on that page."
+                    self, "GrabLine", t("No downloadable files found on that page.")
                 )
 
         self._run_file_op(partial(crawler.crawl, url, depth=depth, proxy=proxy), done)
 
     def _export_list(self) -> None:
         path, _f = QFileDialog.getSaveFileName(
-            self, "Export download list", "grabline-downloads.json", "JSON (*.json)"
+            self, t("Export download list"), "grabline-downloads.json", "JSON (*.json)"
         )
         if not path:
             return
         try:
             count = listio.write_file(self.manager.db, Path(path))
         except OSError as exc:
-            QMessageBox.warning(self, "GrabLine", f"Could not export: {exc}")
+            QMessageBox.warning(self, "GrabLine", t("Could not export: {exc}", exc=exc))
             return
-        self.statusBar().showMessage(f"Exported {count} download(s)", 6000)
+        self.statusBar().showMessage(t("Exported {count} download(s)", count=count), 6000)
 
     def _import_list(self) -> None:
         path, _f = QFileDialog.getOpenFileName(
-            self, "Import download list", "", "JSON (*.json);;All files (*)"
+            self, t("Import download list"), "", "JSON (*.json);;All files (*)"
         )
         if not path:
             return
         try:
             count = listio.read_file(self.manager.db, Path(path))
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "GrabLine", f"Could not import: {exc}")
+            QMessageBox.warning(self, "GrabLine", t("Could not import: {exc}", exc=exc))
             return
-        self.statusBar().showMessage(f"Imported {count} download(s)", 6000)
+        self.statusBar().showMessage(t("Imported {count} download(s)", count=count), 6000)
         self.refresh()
 
     def check_for_updates(self, *, quiet: bool) -> None:
@@ -1054,7 +1056,7 @@ class MainWindow(QMainWindow):
         if not guard.begin(self._in_flight, "update"):
             return  # a check is already running - don't stack a second dialog
         if not quiet:
-            self.statusBar().showMessage("Checking for updates…")
+            self.statusBar().showMessage(t("Checking for updates…"))
         proxy = self.settings.proxy
 
         def done(result: object) -> None:
@@ -1065,11 +1067,15 @@ class MainWindow(QMainWindow):
                 box = QMessageBox(self)
                 box.setWindowTitle("GrabLine")
                 box.setText(
-                    f"GrabLine {tag} is available (you have {__version__}).\n\n"
-                    "Update now downloads the installer and opens it."
+                    t(
+                        "GrabLine {tag} is available (you have {version}).\n\n"
+                        "Update now downloads the installer and opens it.",
+                        tag=tag,
+                        version=__version__,
+                    )
                 )
-                update_btn = box.addButton("Update now", QMessageBox.ButtonRole.AcceptRole)
-                site_btn = box.addButton("Download page", QMessageBox.ButtonRole.ActionRole)
+                update_btn = box.addButton(t("Update now"), QMessageBox.ButtonRole.AcceptRole)
+                site_btn = box.addButton(t("Download page"), QMessageBox.ButtonRole.ActionRole)
                 box.addButton(QMessageBox.StandardButton.Cancel)
                 box.exec()
                 if box.clickedButton() is update_btn:
@@ -1077,13 +1083,15 @@ class MainWindow(QMainWindow):
                 elif box.clickedButton() is site_btn:
                     QDesktopServices.openUrl(QUrl(update.WEBSITE_DOWNLOAD_URL))
             elif not quiet:
-                QMessageBox.information(self, "GrabLine", "You have the latest version.")
+                QMessageBox.information(self, "GrabLine", t("You have the latest version."))
 
         def failed(_error: object) -> None:
             guard.end(self._in_flight, "update")
             self.statusBar().showMessage(t("Ready"))
             if not quiet:
-                QMessageBox.information(self, "GrabLine", "Could not check for updates right now.")
+                QMessageBox.information(
+                    self, "GrabLine", t("Could not check for updates right now.")
+                )
 
         self._run_file_op(partial(update.installer_update, proxy), done, failed)
 
@@ -1092,8 +1100,8 @@ class MainWindow(QMainWindow):
         closest we get to auto-update without a signed self-updater."""
         from PySide6.QtWidgets import QProgressBar, QProgressDialog
 
-        progress = QProgressDialog(f"Downloading {name}…", "Cancel", 0, 100, self)
-        progress.setWindowTitle("GrabLine update")
+        progress = QProgressDialog(t("Downloading {name}…", name=name), t("Cancel"), 0, 100, self)
+        progress.setWindowTitle(t("GrabLine update"))
         progress.setMinimumDuration(0)
         bar = QProgressBar(progress)
         bar.setRange(0, 100)
@@ -1124,7 +1132,7 @@ class MainWindow(QMainWindow):
             self._op_cancels.discard(cancel_event)
             progress.close()
             path = str(result)
-            self.statusBar().showMessage(f"Update downloaded: {path}", 8000)
+            self.statusBar().showMessage(t("Update downloaded: {path}", path=path), 8000)
             # Open the installer; the user finishes the (unsigned) wizard.
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
@@ -1132,12 +1140,15 @@ class MainWindow(QMainWindow):
             self._op_cancels.discard(cancel_event)
             progress.close()
             if isinstance(error, update.UpdateCancelled):
-                self.statusBar().showMessage("Update cancelled", 5000)
+                self.statusBar().showMessage(t("Update cancelled"), 5000)
                 return
             answer = QMessageBox.question(
                 self,
                 "GrabLine",
-                f"Could not download the update ({error}).\nOpen the download page instead?",
+                t(
+                    "Could not download the update ({error}).\nOpen the download page instead?",
+                    error=error,
+                ),
             )
             if answer == QMessageBox.StandardButton.Yes:
                 QDesktopServices.openUrl(QUrl(update.WEBSITE_DOWNLOAD_URL))
@@ -1157,7 +1168,9 @@ class MainWindow(QMainWindow):
         thread = BatchImportThread(self.manager, self.settings, urls)
         self._busy_begin()
         thread.progress.connect(
-            lambda done, total: self.statusBar().showMessage(f"Importing {done}/{total} …")
+            lambda done, total: self.statusBar().showMessage(
+                t("Importing {done}/{total} …", done=done, total=total)
+            )
         )
         thread.summary.connect(self._on_batch_summary)
         thread.finished.connect(self._busy_end)
@@ -1165,15 +1178,15 @@ class MainWindow(QMainWindow):
 
     def _on_batch_summary(self, queued: int, skipped: object) -> None:
         items = cast(list[tuple[str, str]], skipped)
-        message = f"Imported {queued} download(s)"
+        message = t("Imported {count} download(s)", count=queued)
         if items:
-            message += f", skipped {len(items)}"
+            message += t(", skipped {count}", count=len(items))
         self.statusBar().showMessage(message, 10000)
         if items:
             detail = "\n".join(f"• {url}: {reason}" for url, reason in items[:10])
             if len(items) > 10:
-                detail += f"\n… and {len(items) - 10} more"
-            QMessageBox.information(self, "Import finished", f"{message}.\n\n{detail}")
+                detail += t("\n… and {count} more", count=len(items) - 10)
+            QMessageBox.information(self, t("Import finished"), f"{message}.\n\n{detail}")
         self.refresh()
 
     def begin_add_url(
@@ -1195,14 +1208,18 @@ class MainWindow(QMainWindow):
             existing = self.manager.find_existing(url)
             if existing is not None:
                 what = (
-                    "was already downloaded"
+                    t("was already downloaded")
                     if existing.status is JobStatus.COMPLETED
-                    else "is already in the list"
+                    else t("is already in the list")
                 )
                 answer = QMessageBox.question(
                     self,
                     "GrabLine",
-                    f"{existing.filename} {what}.\nDownload it again?",
+                    t(
+                        "{name} {what}.\nDownload it again?",
+                        name=existing.filename,
+                        what=what,
+                    ),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
@@ -1224,8 +1241,12 @@ class MainWindow(QMainWindow):
                 answer = QMessageBox.warning(
                     self,
                     "GrabLine",
-                    f"Only {free_mb} MB free on the download drive "
-                    f"(warning floor: {floor_mb} MB). Download anyway?",
+                    t(
+                        "Only {free_mb} MB free on the download drive "
+                        "(warning floor: {floor_mb} MB). Download anyway?",
+                        free_mb=free_mb,
+                        floor_mb=floor_mb,
+                    ),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
@@ -1265,8 +1286,11 @@ class MainWindow(QMainWindow):
         answer = QMessageBox.warning(
             self,
             "GrabLine",
-            f"{url}\n\nThis download is over unencrypted HTTP. It could be "
-            "tampered with in transit. Download anyway?",
+            t(
+                "{url}\n\nThis download is over unencrypted HTTP. It could be "
+                "tampered with in transit. Download anyway?",
+                url=url,
+            ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -1279,7 +1303,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         key = self.settings.safebrowsing_key
         proxy = self.settings.proxy
-        self.statusBar().showMessage("Checking Safe Browsing …")
+        self.statusBar().showMessage(t("Checking Safe Browsing …"))
 
         def done(result: object) -> None:
             threat = str(result) if result else ""
@@ -1287,7 +1311,11 @@ class MainWindow(QMainWindow):
                 answer = QMessageBox.warning(
                     self,
                     "GrabLine",
-                    f"{url}\n\nGoogle Safe Browsing flags this as {threat}. Download anyway?",
+                    t(
+                        "{url}\n\nGoogle Safe Browsing flags this as {threat}. Download anyway?",
+                        url=url,
+                        threat=threat,
+                    ),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
@@ -1419,7 +1447,8 @@ class MainWindow(QMainWindow):
             job = self.manager.add_url(url, dest_dir=dest, filename=name or None, headers=headers)
         if paused:
             self.manager.pause(job.id)
-        self.statusBar().showMessage(f"Queued {name}" if name else "Queued", 5000)
+        message = t("Queued {name}", name=name) if name else t("Queued")
+        self.statusBar().showMessage(message, 5000)
         self.refresh()
 
     def _resolve_and_queue(
@@ -1441,7 +1470,7 @@ class MainWindow(QMainWindow):
                 # The page title is often just the site name ("YouTube") -
                 # queue with a placeholder and fetch the real title via the
                 # site's oEmbed endpoint, which answers in well under a second.
-                placeholder = naming.clean_page_title(page_title) or "Fetching title…"
+                placeholder = naming.clean_page_title(page_title) or t("Fetching title…")
                 job = self.manager.add_smart_entry(
                     url,
                     placeholder,
@@ -1451,11 +1480,11 @@ class MainWindow(QMainWindow):
                     extras={"name_from_metadata": True},
                     headers=headers,
                 )
-                self.statusBar().showMessage(f"Queued ({option.label})", 5000)
+                self.statusBar().showMessage(t("Queued ({label})", label=option.label), 5000)
                 self.refresh()
                 self._fetch_quick_title(job.id, url)
                 return
-        self.statusBar().showMessage(f"Analyzing {url} …")
+        self.statusBar().showMessage(t("Analyzing {url} …", url=url))
         self._busy_begin()
         thread = work_threads.ResolveThread(
             self.resolver, url, self.settings, page_title, quality, fallbacks, headers, self
@@ -1477,7 +1506,7 @@ class MainWindow(QMainWindow):
         if not self.settings.ask_save_dir:
             return ""
         chosen = QFileDialog.getExistingDirectory(
-            self, "Save this download to", str(self.settings.download_dir)
+            self, t("Save this download to"), str(self.settings.download_dir)
         )
         return chosen or None
 
@@ -1510,7 +1539,7 @@ class MainWindow(QMainWindow):
         if resolution.kind is None:
             if fallbacks:
                 # The page itself had nothing - try the stream it played.
-                self.statusBar().showMessage("Page had no direct media, trying its stream …")
+                self.statusBar().showMessage(t("Page had no direct media, trying its stream …"))
                 self.begin_add_url(
                     fallbacks[0],
                     page_title=page_title,
@@ -1519,7 +1548,7 @@ class MainWindow(QMainWindow):
                     headers=headers,
                 )
                 return
-            QMessageBox.information(self, "GrabLine", resolution.message or "No media found.")
+            QMessageBox.information(self, "GrabLine", resolution.message or t("No media found."))
             return
         if resolution.kind is JobKind.TORRENT:
             self.add_torrent_source(resolution.url)
@@ -1546,7 +1575,10 @@ class MainWindow(QMainWindow):
                 session_browser=self.settings.session_browser,
                 headers=headers,
             )
-            self.statusBar().showMessage(f"Queued {resolution.media.title} ({option.label})", 5000)
+            self.statusBar().showMessage(
+                t("Queued {name} ({label})", name=resolution.media.title, label=option.label),
+                5000,
+            )
             self.refresh()
             return
         dest = self._ask_dest()
@@ -1604,7 +1636,12 @@ class MainWindow(QMainWindow):
             elif len(resolution.variants) > 1:
                 labels = [v.description for v in resolution.variants]
                 choice, accepted = QInputDialog.getItem(
-                    self, "Stream quality", "Pick a quality for this stream:", labels, 0, False
+                    self,
+                    t("Stream quality"),
+                    t("Pick a quality for this stream:"),
+                    labels,
+                    0,
+                    False,
                 )
                 if not accepted:
                     return
@@ -1738,7 +1775,7 @@ class MainWindow(QMainWindow):
 
     def _open_folder(self) -> None:
         if not reveal.open_folder(str(self.settings.download_dir)):
-            self.statusBar().showMessage("Could not open the folder", 3000)
+            self.statusBar().showMessage(t("Could not open the folder"), 3000)
 
     def _open_settings(self) -> None:
         from app.ui.settings_dialog import SettingsDialog
@@ -1884,7 +1921,7 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path)))
         elif chosen is open_folder:
             if not reveal.open_folder(file_path):
-                self.statusBar().showMessage("Could not open the folder", 3000)
+                self.statusBar().showMessage(t("Could not open the folder"), 3000)
         elif chosen is copy_url:
             if self.clipboard_suppressor is not None:
                 self.clipboard_suppressor(view.url)  # don't offer our own copy back
@@ -1942,7 +1979,9 @@ class MainWindow(QMainWindow):
         self._busy_ops += 1
         self._busy_bar.show()
         self._busy_bar.set_indeterminate(True)
-        self._busy_count.setText(f"{self._busy_ops} tasks" if self._busy_ops > 1 else "")
+        self._busy_count.setText(
+            t("{count} tasks", count=self._busy_ops) if self._busy_ops > 1 else ""
+        )
         self._busy_count.setVisible(self._busy_ops > 1)
 
     def _busy_end(self) -> None:
@@ -1952,7 +1991,9 @@ class MainWindow(QMainWindow):
             self._busy_bar.hide()
             self._busy_count.hide()
         else:
-            self._busy_count.setText(f"{self._busy_ops} tasks" if self._busy_ops > 1 else "")
+            self._busy_count.setText(
+                t("{count} tasks", count=self._busy_ops) if self._busy_ops > 1 else ""
+            )
             self._busy_count.setVisible(self._busy_ops > 1)
 
     def _run_file_op(
@@ -1986,37 +2027,46 @@ class MainWindow(QMainWindow):
 
     def _convert_file(self, path: Path, target_format: str, ffmpeg_path: str) -> None:
         """Convert a finished file with FFmpeg, silently in the background."""
-        self.statusBar().showMessage(f"Converting {path.name} to {target_format.upper()} …")
+        self.statusBar().showMessage(
+            t("Converting {name} to {format} …", name=path.name, format=target_format.upper())
+        )
 
         def done(result: object) -> None:
-            self.statusBar().showMessage(f"Converted: {Path(str(result)).name}", 8000)
+            self.statusBar().showMessage(t("Converted: {name}", name=Path(str(result)).name), 8000)
 
         self._run_file_op(lambda: convert.convert(ffmpeg_path, path, target_format), done)
 
     def _copy_hash(self, path: Path) -> None:
-        self.statusBar().showMessage(f"Hashing {path.name} …")
+        self.statusBar().showMessage(t("Hashing {name} …", name=path.name))
 
         def done(result: object) -> None:
             QGuiApplication.clipboard().setText(str(result))
-            self.statusBar().showMessage(f"SHA-256 copied for {path.name}", 6000)
+            self.statusBar().showMessage(t("SHA-256 copied for {name}", name=path.name), 6000)
 
         self._run_file_op(lambda: verify.hash_file(path), done)
 
     def _verify_hash(self, path: Path) -> None:
         expected, accepted = QInputDialog.getText(
             self,
-            "Verify checksum",
-            f"Paste the expected MD5 / SHA-1 / SHA-256 / SHA-512 / CRC32 for {path.name}:",
+            t("Verify checksum"),
+            t(
+                "Paste the expected MD5 / SHA-1 / SHA-256 / SHA-512 / CRC32 for {name}:",
+                name=path.name,
+            ),
         )
         if not (accepted and expected.strip()):
             return
-        self.statusBar().showMessage(f"Verifying {path.name} …")
+        self.statusBar().showMessage(t("Verifying {name} …", name=path.name))
 
         def done(result: object) -> None:
             if result:
-                QMessageBox.information(self, "GrabLine", f"{path.name} matches the checksum.")
+                QMessageBox.information(
+                    self, "GrabLine", t("{name} matches the checksum.", name=path.name)
+                )
             else:
-                QMessageBox.warning(self, "GrabLine", f"{path.name} does NOT match the checksum.")
+                QMessageBox.warning(
+                    self, "GrabLine", t("{name} does NOT match the checksum.", name=path.name)
+                )
 
         self._run_file_op(lambda: verify.verify_file(path, expected.strip()), done)
 
@@ -2062,7 +2112,7 @@ class MainWindow(QMainWindow):
         passwords = self.settings.archive_passwords
         if new_password:
             passwords = (new_password, *passwords)
-        self.statusBar().showMessage(f"Extracting {path.name} …")
+        self.statusBar().showMessage(t("Extracting {name} …", name=path.name))
 
         def done(result: object) -> None:
             if new_password:
@@ -2071,7 +2121,9 @@ class MainWindow(QMainWindow):
                     new_password,
                     *self.settings.archive_passwords,
                 )
-            self.statusBar().showMessage(f"Extracted to {Path(str(result)).name}", 6000)
+            self.statusBar().showMessage(
+                t("Extracted to {name}", name=Path(str(result)).name), 6000
+            )
 
         def failed(error: object) -> None:
             if isinstance(error, _ScanFlagged):
@@ -2079,8 +2131,13 @@ class MainWindow(QMainWindow):
                 answer = QMessageBox.warning(
                     self,
                     "GrabLine",
-                    f"{error.scanner} flagged {path.name}.{detail}\n\n"
-                    "Antivirus false positives are common. Extract it anyway?",
+                    t(
+                        "{scanner} flagged {name}.{detail}\n\n"
+                        "Antivirus false positives are common. Extract it anyway?",
+                        scanner=error.scanner,
+                        name=path.name,
+                        detail=detail,
+                    ),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
@@ -2090,8 +2147,8 @@ class MainWindow(QMainWindow):
             if isinstance(error, archive.PasswordRequired):
                 password, accepted = QInputDialog.getText(
                     self,
-                    "Archive password",
-                    f"{path.name} is password-protected. Password:",
+                    t("Archive password"),
+                    t("{name} is password-protected. Password:", name=path.name),
                     QLineEdit.EchoMode.Password,
                 )
                 if accepted and password:
@@ -2102,7 +2159,7 @@ class MainWindow(QMainWindow):
         self._run_file_op(self._archive_work(path, members, passwords, scan=scan), done, failed)
 
     def _preview_archive(self, path: Path) -> None:
-        self.statusBar().showMessage(f"Reading {path.name} …")
+        self.statusBar().showMessage(t("Reading {name} …", name=path.name))
 
         def opened(result: object) -> None:
             self.statusBar().clearMessage()
@@ -2114,25 +2171,25 @@ class MainWindow(QMainWindow):
         self._run_file_op(lambda: archive.list_entries(path), opened)
 
     def _move_to(self, view: JobView, folder: str) -> None:
-        self.statusBar().showMessage(f"Moving {view.filename} …")
+        self.statusBar().showMessage(t("Moving {name} …", name=view.filename))
 
         def done(result: object) -> None:
-            self.statusBar().showMessage(f"Moved to {result}", 6000)
+            self.statusBar().showMessage(t("Moved to {result}", result=result), 6000)
             self.refresh()
 
         self._run_file_op(lambda: self.manager.move_job_file(view.id, folder), done)
 
     def _edit_tags(self, view: JobView) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Tags & notes: {view.display_name}")
+        dialog.setWindowTitle(t("Tags & notes: {name}", name=view.display_name))
         dialog.setMinimumWidth(420)
         form = QFormLayout(dialog)
         tags_edit = QLineEdit(view.tags)
-        tags_edit.setPlaceholderText("comma, separated, labels")
-        form.addRow("Tags:", tags_edit)
+        tags_edit.setPlaceholderText(t("comma, separated, labels"))
+        form.addRow(t("Tags:"), tags_edit)
         notes_edit = QPlainTextEdit(view.notes)
-        notes_edit.setPlaceholderText("Anything worth remembering about this download.")
-        form.addRow("Notes:", notes_edit)
+        notes_edit.setPlaceholderText(t("Anything worth remembering about this download."))
+        form.addRow(t("Notes:"), notes_edit)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -2152,15 +2209,15 @@ class MainWindow(QMainWindow):
             if view.status is JobStatus.COMPLETED:
                 owners[Path(view.dest_dir) / view.filename] = view.id
         if not owners:
-            QMessageBox.information(self, "GrabLine", "No completed downloads to compare.")
+            QMessageBox.information(self, "GrabLine", t("No completed downloads to compare."))
             return
-        self.statusBar().showMessage("Comparing files …")
+        self.statusBar().showMessage(t("Comparing files …"))
 
         def done(result: object) -> None:
             self.statusBar().showMessage(t("Ready"))
             groups = cast("list[list[Path]]", result)
             if not groups:
-                QMessageBox.information(self, "GrabLine", "No duplicate files found.")
+                QMessageBox.information(self, "GrabLine", t("No duplicate files found."))
                 return
             dialog = DupesDialog(groups, self)
             if dialog.exec() != DupesDialog.DialogCode.Accepted:
@@ -2171,7 +2228,10 @@ class MainWindow(QMainWindow):
             answer = QMessageBox.warning(
                 self,
                 "GrabLine",
-                f"Permanently delete {len(doomed)} duplicate file(s)? One copy of each is kept.",
+                t(
+                    "Permanently delete {count} duplicate file(s)? One copy of each is kept.",
+                    count=len(doomed),
+                ),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -2181,12 +2241,18 @@ class MainWindow(QMainWindow):
                 try:
                     path.unlink(missing_ok=True)
                 except OSError as exc:
-                    QMessageBox.warning(self, "GrabLine", f"Could not delete {path.name}: {exc}")
+                    QMessageBox.warning(
+                        self,
+                        "GrabLine",
+                        t("Could not delete {name}: {exc}", name=path.name, exc=exc),
+                    )
                     continue
                 job_id = owners.get(path)
                 if job_id is not None:
                     self.manager.remove(job_id)
-            self.statusBar().showMessage(f"Removed {len(doomed)} duplicate file(s)", 6000)
+            self.statusBar().showMessage(
+                t("Removed {count} duplicate file(s)", count=len(doomed)), 6000
+            )
             self.refresh()
 
         self._run_file_op(lambda: dupes.find_duplicates(list(owners)), done)
@@ -2221,27 +2287,33 @@ class MainWindow(QMainWindow):
             report = cast("security.SecurityReport", result)
             if report.level is security.Risk.WARNING:
                 # Only a real warning interrupts; the file is already saved.
+                findings = "\n".join(f"• {f}" for f in report.findings)
                 answer = QMessageBox.warning(
                     self,
-                    "Security",
-                    f"{view.display_name}\n\n"
-                    + "\n".join(f"• {f}" for f in report.findings)
-                    + "\n\nThe file is saved and usable. This is advice only. "
-                    "Open the full report?",
+                    t("Security"),
+                    t(
+                        "{name}\n\n{findings}\n\nThe file is saved and usable. "
+                        "This is advice only. Open the full report?",
+                        name=view.display_name,
+                        findings=findings,
+                    ),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
                 if answer == QMessageBox.StandardButton.Yes:
                     SecurityDialog(file_path, view.url, self.settings, self).exec()
             elif report.level is security.Risk.CAUTION:
-                self.statusBar().showMessage(f"{view.display_name}: {report.findings[0]}", 8000)
+                self.statusBar().showMessage(
+                    t("{name}: {finding}", name=view.display_name, finding=report.findings[0]),
+                    8000,
+                )
 
         self._run_file_op(work, done, lambda _e: None)  # a scan error is silent
 
     # ------------------------------------------------------------ inspector
 
     def _inspect_url_prompt(self) -> None:
-        url, accepted = QInputDialog.getText(self, "Inspect URL", "URL to inspect:")
+        url, accepted = QInputDialog.getText(self, t("Inspect URL"), t("URL to inspect:"))
         if accepted and url.strip():
             InspectorDialog(url.strip(), proxy=self.settings.proxy, parent=self).exec()
 
@@ -2275,13 +2347,15 @@ class MainWindow(QMainWindow):
             if v.id != view.id and v.status is not JobStatus.COMPLETED
         ]
         if not others:
-            QMessageBox.information(self, "GrabLine", "No other unfinished downloads to wait for.")
+            QMessageBox.information(
+                self, "GrabLine", t("No other unfinished downloads to wait for.")
+            )
             return
-        labels = ["(nothing, start normally)"] + [v.display_name for v in others]
+        labels = [t("(nothing, start normally)")] + [v.display_name for v in others]
         choice, accepted = QInputDialog.getItem(
             self,
-            "Start after",
-            f"Start {view.display_name} only after:",
+            t("Start after"),
+            t("Start {name} only after:", name=view.display_name),
             labels,
             editable=False,
         )
@@ -2296,18 +2370,18 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QDateTimeEdit
 
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Start at: {view.display_name}")
+        dialog.setWindowTitle(t("Start at: {name}", name=view.display_name))
         form = QFormLayout(dialog)
         when_edit = QDateTimeEdit(QDateTime.currentDateTime().addSecs(3600))
         when_edit.setDisplayFormat("yyyy-MM-dd HH:mm")
         when_edit.setCalendarPopup(True)
-        form.addRow("Start no earlier than:", when_edit)
+        form.addRow(t("Start no earlier than:"), when_edit)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Reset
             | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.button(QDialogButtonBox.StandardButton.Reset).setText("Start normally")
+        buttons.button(QDialogButtonBox.StandardButton.Reset).setText(t("Start normally"))
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         buttons.button(QDialogButtonBox.StandardButton.Reset).clicked.connect(
@@ -2321,7 +2395,11 @@ class MainWindow(QMainWindow):
             when = cast("_datetime", when_edit.dateTime().toPython())
             self.manager.set_job_start_at(view.id, when)
             self.statusBar().showMessage(
-                f"{view.display_name} starts {when_edit.dateTime().toString('yyyy-MM-dd HH:mm')}",
+                t(
+                    "{name} starts {when}",
+                    name=view.display_name,
+                    when=when_edit.dateTime().toString("yyyy-MM-dd HH:mm"),
+                ),
                 6000,
             )
         elif result == 2:
@@ -2338,26 +2416,28 @@ class MainWindow(QMainWindow):
         """Queue a cloud protocol download. A URL ending in '/' is treated as a
         folder: its files are listed and offered in a picker."""
         if url.rstrip().endswith("/"):
-            self.statusBar().showMessage("Listing remote folder …")
+            self.statusBar().showMessage(t("Listing remote folder …"))
 
             def listed(result: object) -> None:
                 self.statusBar().clearMessage()
                 files = cast("list[cloud_engine.RemoteFile]", result)
                 if not files:
-                    QMessageBox.information(self, "GrabLine", "That folder is empty.")
+                    QMessageBox.information(self, "GrabLine", t("That folder is empty."))
                     return
                 dialog = CloudFolderDialog(url, files, self)
                 if dialog.exec() != CloudFolderDialog.DialogCode.Accepted:
                     return
                 for file_url in dialog.selected_urls():
                     self.manager.add_cloud(file_url)
-                self.statusBar().showMessage(f"Queued {len(dialog.selected_urls())} file(s)", 5000)
+                self.statusBar().showMessage(
+                    t("Queued {count} file(s)", count=len(dialog.selected_urls())), 5000
+                )
                 self.refresh()
 
             self._run_file_op(lambda: self.manager.list_cloud_folder(url), listed)
             return
         self.manager.add_cloud(url)
-        self.statusBar().showMessage("Queued cloud download", 5000)
+        self.statusBar().showMessage(t("Queued cloud download"), 5000)
         self.refresh()
 
     # ------------------------------------------------------------- torrents
@@ -2368,7 +2448,7 @@ class MainWindow(QMainWindow):
             if self.clipboard_suppressor is not None:
                 self.clipboard_suppressor(magnet)
             QGuiApplication.clipboard().setText(magnet)
-            self.statusBar().showMessage("Magnet link copied", 4000)
+            self.statusBar().showMessage(t("Magnet link copied"), 4000)
             return
 
         def done(result: object) -> None:
@@ -2376,7 +2456,7 @@ class MainWindow(QMainWindow):
             if self.clipboard_suppressor is not None:
                 self.clipboard_suppressor(magnet)
             QGuiApplication.clipboard().setText(magnet)
-            self.statusBar().showMessage("Magnet link copied", 4000)
+            self.statusBar().showMessage(t("Magnet link copied"), 4000)
 
         self._run_file_op(
             lambda: torrent_engine.magnet_from_torrent(
@@ -2387,7 +2467,7 @@ class MainWindow(QMainWindow):
 
     def _add_torrent_file(self) -> None:
         chosen, _ = QFileDialog.getOpenFileName(
-            self, "Add torrent", "", "Torrents (*.torrent);;All files (*)"
+            self, t("Add torrent"), "", "Torrents (*.torrent);;All files (*)"
         )
         if chosen:
             self.add_torrent_source(chosen)
@@ -2398,10 +2478,10 @@ class MainWindow(QMainWindow):
         menu, the resolver, drag-and-drop, and 'open with GrabLine'."""
         default_dir = self.settings.torrent_dir or self.settings.download_dir
         if source.lower().startswith("magnet:"):
-            name = torrent_engine.magnet_display_name(source) or "Magnet link"
+            name = torrent_engine.magnet_display_name(source) or t("Magnet link")
             self._open_add_torrent(source, name, None, default_dir)
             return
-        self.statusBar().showMessage("Reading torrent …")
+        self.statusBar().showMessage(t("Reading torrent …"))
 
         def loaded(result: object) -> None:
             self.statusBar().clearMessage()
@@ -2428,7 +2508,7 @@ class MainWindow(QMainWindow):
         self.manager.add_torrent(
             source, dest_dir=dialog.dest_dir() or default_dir, name=name, options=dialog.options()
         )
-        self.statusBar().showMessage(f"Queued torrent {name}", 5000)
+        self.statusBar().showMessage(t("Queued torrent {name}", name=name), 5000)
         self.refresh()
 
     def _create_torrent(self) -> None:
@@ -2439,11 +2519,11 @@ class MainWindow(QMainWindow):
             return
         source = dialog.source()
         target, _ = QFileDialog.getSaveFileName(
-            self, "Save torrent as", f"{source.name}.torrent", "Torrents (*.torrent)"
+            self, t("Save torrent as"), f"{source.name}.torrent", "Torrents (*.torrent)"
         )
         if not target:
             return
-        self.statusBar().showMessage("Hashing pieces …")
+        self.statusBar().showMessage(t("Hashing pieces …"))
 
         def work() -> object:
             data = torrent_engine.create_torrent_file(
@@ -2457,7 +2537,7 @@ class MainWindow(QMainWindow):
             return target
 
         def done(result: object) -> None:
-            self.statusBar().showMessage(f"Torrent created: {result}", 8000)
+            self.statusBar().showMessage(t("Torrent created: {result}", result=result), 8000)
 
         self._run_file_op(work, done)
 
@@ -2467,11 +2547,13 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "GrabLine",
-                "Set a search URL first, in Settings under Torrent. For example:\n"
-                "https://example.com/search?q=%s",
+                t(
+                    "Set a search URL first, in Settings under Torrent. For example:\n"
+                    "https://example.com/search?q=%s"
+                ),
             )
             return
-        query, accepted = QInputDialog.getText(self, "Search torrents", "Search for:")
+        query, accepted = QInputDialog.getText(self, t("Search torrents"), t("Search for:"))
         if accepted and query.strip():
             from urllib.parse import quote
 
@@ -2508,7 +2590,9 @@ class MainWindow(QMainWindow):
                 self.manager.add_torrent(link)
                 seen.add(guid)
             self.settings.rss_seen = list(seen)
-            self.statusBar().showMessage(f"RSS: queued {len(found)} torrent(s)", 6000)
+            self.statusBar().showMessage(
+                t("RSS: queued {count} torrent(s)", count=len(found)), 6000
+            )
             self.refresh()
 
         self._run_file_op(work, done, lambda _e: None)  # quiet - it's a background poll
@@ -2516,9 +2600,12 @@ class MainWindow(QMainWindow):
     def _set_connections(self, view: JobView) -> None:
         connections, accepted = QInputDialog.getInt(
             self,
-            "Connections",
-            f"Parallel connections for this download\n"
-            f"(0 = automatic; beyond ~32 servers often throttle)\n{view.display_name}",
+            t("Connections"),
+            t(
+                "Parallel connections for this download\n"
+                "(0 = automatic; beyond ~32 servers often throttle)\n{name}",
+                name=view.display_name,
+            ),
             value=0,
             minValue=0,
             maxValue=128,
@@ -2529,8 +2616,11 @@ class MainWindow(QMainWindow):
     def _limit_speed(self, view: JobView) -> None:
         kbps, accepted = QInputDialog.getInt(
             self,
-            "Limit speed",
-            f"Max speed for this download in KB/s\n(0 = no limit)\n{view.display_name}",
+            t("Limit speed"),
+            t(
+                "Max speed for this download in KB/s\n(0 = no limit)\n{name}",
+                name=view.display_name,
+            ),
             value=view.speed_limit_kbps,
             minValue=0,
             maxValue=1_000_000,
@@ -2651,7 +2741,7 @@ class MainWindow(QMainWindow):
                 and previous is not JobStatus.FAILED
                 and view.status is JobStatus.FAILED
             ):
-                self.job_failed.emit(view.display_name, view.error or "download failed")
+                self.job_failed.emit(view.display_name, view.error or t("download failed"))
             just_completed = (
                 previous is not None
                 and previous is not JobStatus.COMPLETED
@@ -2672,17 +2762,19 @@ class MainWindow(QMainWindow):
                     and file_path.exists()
                 ):
                     self._auto_extracted.add(view.id)
-                    self.statusBar().showMessage(f"Extracting {file_path.name} …")
+                    self.statusBar().showMessage(t("Extracting {name} …", name=file_path.name))
 
                     # Failures stay in the status bar - a modal mid-queue would
                     # interrupt; the row menu's Preview archive… can prompt.
                     def extract_failed(error: object, name: str = file_path.name) -> None:
-                        self.statusBar().showMessage(f"Did not extract {name}: {error}", 10000)
+                        self.statusBar().showMessage(
+                            t("Did not extract {name}: {error}", name=name, error=error), 10000
+                        )
 
                     self._run_file_op(
                         self._archive_work(file_path, passwords=self.settings.archive_passwords),
                         lambda r: self.statusBar().showMessage(
-                            f"Extracted {Path(str(r)).name}", 6000
+                            t("Extracted {name}", name=Path(str(r)).name), 6000
                         ),
                         extract_failed,
                     )
@@ -2767,7 +2859,8 @@ class MainWindow(QMainWindow):
         if view.tags or view.notes:
             name_item.setIcon(icons.svg_icon("note", p.text3))
             name_item.setToolTip(
-                (f"Tags: {view.tags}\n" if view.tags else "") + ("Has notes" if view.notes else "")
+                (t("Tags: {tags}\n", tags=view.tags) if view.tags else "")
+                + (t("Has notes") if view.notes else "")
             )
         else:
             name_item.setIcon(QIcon())
@@ -2912,8 +3005,8 @@ class MainWindow(QMainWindow):
             return
         self.settings.tray_hint_shown = True
         self.tray.showMessage(
-            "GrabLine is still running",
-            "Downloads keep going. Click the tray icon to bring the window back.",
+            t("GrabLine is still running"),
+            t("Downloads keep going. Click the tray icon to bring the window back."),
             QSystemTrayIcon.MessageIcon.Information,
             6000,
         )
@@ -2929,12 +3022,16 @@ class MainWindow(QMainWindow):
             return
         active = self._active_download_count()
         if active and self.settings.confirm_exit_active:
-            noun = "download is" if active == 1 else "downloads are"
+            noun = t("download is") if active == 1 else t("downloads are")
             answer = QMessageBox.question(
                 self,
                 "GrabLine",
-                f"{active} {noun} still running. Quit anyway?\n"
-                "(Progress is saved; they resume next launch.)",
+                t(
+                    "{active} {noun} still running. Quit anyway?\n"
+                    "(Progress is saved; they resume next launch.)",
+                    active=active,
+                    noun=noun,
+                ),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
