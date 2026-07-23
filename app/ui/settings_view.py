@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.i18n import t
 from app.core.settings import Settings
 from app.ui import components, design, theme
 from app.ui.icons import svg_icon
@@ -57,7 +58,7 @@ class SettingsView(QWidget):
         nlay.setSpacing(8)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("Search settings…")
+        self._search.setPlaceholderText(t("Search settings…"))
         self._search.addAction(
             svg_icon("search", p.text3), QLineEdit.ActionPosition.LeadingPosition
         )
@@ -120,7 +121,7 @@ class SettingsView(QWidget):
         flay.addStretch(1)
         self._saved = components.role_label("", "ok", size=design.FONT["small"])
         flay.addWidget(self._saved)
-        save = components.accent_button("Save changes")
+        save = components.accent_button(t("Save changes"))
         save.clicked.connect(self._save)
         flay.addWidget(save)
         clay.addWidget(footer)
@@ -142,5 +143,5 @@ class SettingsView(QWidget):
 
     def _save(self) -> None:
         if self._dialog.apply():
-            self._saved.setText("Saved")
+            self._saved.setText(t("Saved"))
             self._on_applied()

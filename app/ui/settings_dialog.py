@@ -44,7 +44,7 @@ from app import __version__
 from app.core import i18n, launcher, paths
 from app.core.errors import DownloadError
 from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
-from app.core.i18n import t
+from app.core.i18n import N_, t
 from app.core.settings import SESSION_BROWSERS, Settings
 from app.ui import chrome, components, design, guard, theme, threads
 from app.ui.format import human_bytes
@@ -253,105 +253,114 @@ class SettingsDialog(chrome.Dialog):
         layout.addWidget(tabs)
 
         # ---- General ---------------------------------------------------------
-        general_form = self._add_form_tab(tabs, "General")
+        general_form = self._add_form_tab(tabs, t("General"))
         self.language_combo = QComboBox()
         for code, name, native in i18n.available_languages():
             self.language_combo.addItem(native if native == name else f"{native} ({name})", code)
         general_form.addRow(t("Language:"), self.language_combo)
         general_form.addRow(_note(t("A new language takes effect after you restart GrabLine.")))
-        self.autostart_check = QCheckBox("Start GrabLine when I log in (minimized to the tray)")
+        self.autostart_check = QCheckBox(t("Start GrabLine when I log in (minimized to the tray)"))
         general_form.addRow(self.autostart_check)
-        self.updates_check = QCheckBox("Check for GrabLine updates on startup")
+        self.updates_check = QCheckBox(t("Check for GrabLine updates on startup"))
         general_form.addRow(self.updates_check)
-        self.start_min_check = QCheckBox("Start minimized to the tray")
+        self.start_min_check = QCheckBox(t("Start minimized to the tray"))
         general_form.addRow(self.start_min_check)
-        self.tray_min_check = QCheckBox("Minimize to the tray instead of the taskbar")
+        self.tray_min_check = QCheckBox(t("Minimize to the tray instead of the taskbar"))
         general_form.addRow(self.tray_min_check)
-        self.tray_close_check = QCheckBox("Closing the window keeps GrabLine in the tray")
+        self.tray_close_check = QCheckBox(t("Closing the window keeps GrabLine in the tray"))
         general_form.addRow(self.tray_close_check)
-        self.confirm_exit_check = QCheckBox("Confirm exit while downloads are running")
+        self.confirm_exit_check = QCheckBox(t("Confirm exit while downloads are running"))
         general_form.addRow(self.confirm_exit_check)
         self.confirm_downloads_check = QCheckBox(
-            "Ask for name, folder and quality before each browser download"
+            t("Ask for name, folder and quality before each browser download")
         )
         general_form.addRow(self.confirm_downloads_check)
         self.new_dl_combo = QComboBox()
-        self.new_dl_combo.addItem("Start automatically", True)
-        self.new_dl_combo.addItem("Add paused (start by hand)", False)
-        general_form.addRow("New downloads:", self.new_dl_combo)
+        self.new_dl_combo.addItem(t("Start automatically"), True)
+        self.new_dl_combo.addItem(t("Add paused (start by hand)"), False)
+        general_form.addRow(t("New downloads:"), self.new_dl_combo)
         general_form.addRow(_note(t("GrabLine runs as a single instance.")))
 
         # ---- Downloads -------------------------------------------------------
-        downloads_form = self._add_form_tab(tabs, "Downloads")
+        downloads_form = self._add_form_tab(tabs, t("Downloads"))
         folder_row = QHBoxLayout()
         self.folder_edit = QLineEdit()
-        browse = QPushButton("Browse…")
+        browse = QPushButton(t("Browse…"))
         browse.clicked.connect(self._browse_folder)
         folder_row.addWidget(self.folder_edit, 1)
         folder_row.addWidget(browse)
-        downloads_form.addRow("Download folder:", folder_row)
+        downloads_form.addRow(t("Download folder:"), folder_row)
         self.categories_check = QCheckBox(
-            "Sort into Video / Music / Images / Documents / Archives / Programs / Games / Torrents"
+            t(
+                "Sort into Video / Music / Images / Documents / "
+                "Archives / Programs / Games / Torrents"
+            )
         )
         downloads_form.addRow(self.categories_check)
-        self.ask_save_check = QCheckBox("Ask where to save each download")
+        self.ask_save_check = QCheckBox(t("Ask where to save each download"))
         downloads_form.addRow(self.ask_save_check)
         self.concurrent_spin = QSpinBox()
         self.concurrent_spin.setRange(1, 10)
-        downloads_form.addRow("Simultaneous downloads:", self.concurrent_spin)
+        downloads_form.addRow(t("Simultaneous downloads:"), self.concurrent_spin)
         self.free_mb_spin = QSpinBox()
         self.free_mb_spin.setRange(0, 1_000_000)
         self.free_mb_spin.setSingleStep(100)
         self.free_mb_spin.setSuffix(" MB")
-        self.free_mb_spin.setSpecialValueText("Off")
-        downloads_form.addRow("Low disk space warning:", self.free_mb_spin)
+        self.free_mb_spin.setSpecialValueText(t("Off"))
+        downloads_form.addRow(t("Low disk space warning:"), self.free_mb_spin)
         downloads_form.addRow(
             _note(
-                "Existing files are renamed name (1).ext, never overwritten; "
-                "a duplicate URL asks first."
+                t(
+                    "Existing files are renamed name (1).ext, never overwritten; "
+                    "a duplicate URL asks first."
+                )
             )
         )
 
         # ---- Download Engine -------------------------------------------------
-        engine_form = self._add_form_tab(tabs, "Download Engine")
+        engine_form = self._add_form_tab(tabs, t("Download Engine"))
         self.connections_spin = QSpinBox()
         self.connections_spin.setRange(1, 128)
-        engine_form.addRow("Connections per download:", self.connections_spin)
+        engine_form.addRow(t("Connections per download:"), self.connections_spin)
         self.speed_spin = QSpinBox()
         self.speed_spin.setRange(0, 1_000_000)
         self.speed_spin.setSingleStep(256)
         self.speed_spin.setSuffix(" KB/s")
-        self.speed_spin.setSpecialValueText("Unlimited")
-        engine_form.addRow("Speed limit:", self.speed_spin)
+        self.speed_spin.setSpecialValueText(t("Unlimited"))
+        engine_form.addRow(t("Speed limit:"), self.speed_spin)
         schedule_row = _inline_row()
-        self.schedule_check = QCheckBox("Full speed between")
+        self.schedule_check = QCheckBox(t("Full speed between"))
         self.full_from = QTimeEdit()
         self.full_from.setDisplayFormat("HH:mm")
         self.full_to = QTimeEdit()
         self.full_to.setDisplayFormat("HH:mm")
         schedule_row.addWidget(self.schedule_check)
         schedule_row.addWidget(self.full_from)
-        schedule_row.addWidget(QLabel("and"))
+        schedule_row.addWidget(QLabel(t("and")))
         schedule_row.addWidget(self.full_to)
         schedule_row.addStretch(1)
-        engine_form.addRow("Speed schedule:", schedule_row)
+        engine_form.addRow(t("Speed schedule:"), schedule_row)
         retry_row = _inline_row()
-        self.retry_check = QCheckBox("Auto-retry failed downloads, up to")
+        self.retry_check = QCheckBox(t("Auto-retry failed downloads, up to"))
         self.retry_spin = QSpinBox()
         self.retry_spin.setRange(0, 99)
         self.retry_spin.setSuffix(" times")
-        self.retry_spin.setSpecialValueText("Forever")
+        self.retry_spin.setSpecialValueText(t("Forever"))
         retry_row.addWidget(self.retry_check)
         retry_row.addWidget(self.retry_spin)
         retry_row.addStretch(1)
-        engine_form.addRow("Reconnect:", retry_row)
+        engine_form.addRow(t("Reconnect:"), retry_row)
         engine_form.addRow(
-            _note("Right-click a download to override its speed limit, connections, and mirrors.")
+            _note(
+                t("Right-click a download to override its speed limit, connections, and mirrors.")
+            )
         )
         engine_form.addRow(
             _note(
-                "Segmentation, HTTP/2, IPv6, mirror failover, and crash or reconnect resume are "
-                "automatic. HTTP/3 and QUIC aren't supported yet."
+                t(
+                    "Segmentation, HTTP/2, IPv6, mirror failover, and crash or reconnect "
+                    "resume are automatic. HTTP/3 and QUIC aren't supported yet."
+                )
             )
         )
 
@@ -402,7 +411,7 @@ class SettingsDialog(chrome.Dialog):
             )
         )
         browser_layout.addStretch(1)
-        tabs.addTab(browser_tab, "Browser Integration")
+        tabs.addTab(browser_tab, t("Browser Integration"))
 
         # ---- Video Downloader ------------------------------------------------
         video_tab = QWidget()
@@ -438,7 +447,7 @@ class SettingsDialog(chrome.Dialog):
         cookies_row = QHBoxLayout()
         self.cookies_edit = QLineEdit()
         self.cookies_edit.setPlaceholderText("cookies.txt (Netscape format), blank = off")
-        cookies_browse = QPushButton("Browse…")
+        cookies_browse = QPushButton(t("Browse…"))
         cookies_browse.clicked.connect(self._browse_cookies)
         cookies_row.addWidget(self.cookies_edit, 1)
         cookies_row.addWidget(cookies_browse)
@@ -459,10 +468,10 @@ class SettingsDialog(chrome.Dialog):
             )
         )
         video_layout.addStretch(1)
-        tabs.addTab(video_tab, "Video Downloader")
+        tabs.addTab(video_tab, t("Video Downloader"))
 
         # ---- Torrent ----------------------------------------------------------
-        torrent_form = self._add_form_tab(tabs, "Torrent")
+        torrent_form = self._add_form_tab(tabs, t("Torrent"))
         self.torrent_port_spin = QSpinBox()
         self.torrent_port_spin.setRange(1024, 65535)
         torrent_form.addRow("Listen port:", self.torrent_port_spin)
@@ -493,7 +502,7 @@ class SettingsDialog(chrome.Dialog):
         torrent_dir_row = QHBoxLayout()
         self.torrent_dir_edit = QLineEdit()
         self.torrent_dir_edit.setPlaceholderText("blank = the download folder")
-        torrent_browse = QPushButton("Browse…")
+        torrent_browse = QPushButton(t("Browse…"))
         torrent_browse.clicked.connect(self._browse_torrent_folder)
         torrent_dir_row.addWidget(self.torrent_dir_edit, 1)
         torrent_dir_row.addWidget(torrent_browse)
@@ -558,10 +567,10 @@ class SettingsDialog(chrome.Dialog):
         )
         cloud_layout.addWidget(_note("Not supported: Mega, Proton Drive, and iCloud."))
         cloud_layout.addStretch(1)
-        tabs.addTab(cloud_tab, "Cloud Downloads")
+        tabs.addTab(cloud_tab, t("Cloud Downloads"))
 
         # ---- Archive Manager ---------------------------------------------------
-        archive_form = self._add_form_tab(tabs, "Archive Manager")
+        archive_form = self._add_form_tab(tabs, t("Archive Manager"))
         self.extract_check = QCheckBox(
             "Extract archives automatically (zip/tar/gz/bz2/xz; rar/7z with 7z installed)"
         )
@@ -584,7 +593,7 @@ class SettingsDialog(chrome.Dialog):
         )
 
         # ---- File Management ---------------------------------------------------
-        files_form = self._add_form_tab(tabs, "File Management")
+        files_form = self._add_form_tab(tabs, t("File Management"))
         self.favorites_edit = QPlainTextEdit()
         self.favorites_edit.setPlaceholderText("one folder per line, e.g. /home/me/Movies")
         self.favorites_edit.setFixedHeight(72)
@@ -605,7 +614,7 @@ class SettingsDialog(chrome.Dialog):
         )
 
         # ---- Queue Manager -----------------------------------------------------
-        queue_form = self._add_form_tab(tabs, "Queue Manager")
+        queue_form = self._add_form_tab(tabs, t("Queue Manager"))
         self.default_queue_combo = QComboBox()
         self.default_queue_combo.addItem("(the global default)", 0)
         for queue_row in settings.db.list_queues():
@@ -619,7 +628,7 @@ class SettingsDialog(chrome.Dialog):
         )
 
         # ---- Scheduler ---------------------------------------------------------
-        scheduler_form = self._add_form_tab(tabs, "Scheduler")
+        scheduler_form = self._add_form_tab(tabs, t("Scheduler"))
         window_row = _inline_row()
         self.download_schedule_check = QCheckBox("Only download between")
         self.download_start = QTimeEdit()
@@ -635,7 +644,7 @@ class SettingsDialog(chrome.Dialog):
         days_row = _inline_row()
         self.day_checks: list[QCheckBox] = []
         for label in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"):
-            check = QCheckBox(label)
+            check = QCheckBox(t(label))
             self.day_checks.append(check)
             days_row.addWidget(check)
         days_row.addStretch(1)
@@ -720,10 +729,10 @@ class SettingsDialog(chrome.Dialog):
             )
         )
         net_layout.addStretch(1)
-        tabs.addTab(net_tab, "Network")
+        tabs.addTab(net_tab, t("Network"))
 
         # ---- Security ----------------------------------------------------------
-        security_form = self._add_form_tab(tabs, "Security")
+        security_form = self._add_form_tab(tabs, t("Security"))
         security_form.addRow(
             _note("These checks only warn. A flagged file stays usable and it's your call.")
         )
@@ -762,14 +771,14 @@ class SettingsDialog(chrome.Dialog):
         )
 
         # ---- Notifications -----------------------------------------------------
-        notify_form = self._add_form_tab(tabs, "Notifications")
+        notify_form = self._add_form_tab(tabs, t("Notifications"))
         self.notify_check = QCheckBox("Show a notification when a download completes")
         notify_form.addRow(self.notify_check)
         sound_row = _inline_row()
         self.sound_check = QCheckBox("Play a sound")
         self.sound_file_edit = QLineEdit()
         self.sound_file_edit.setPlaceholderText("blank = system sound")
-        sound_browse = QPushButton("Browse…")
+        sound_browse = QPushButton(t("Browse…"))
         sound_browse.clicked.connect(self._browse_sound)
         sound_row.addWidget(self.sound_check)
         sound_row.addWidget(self.sound_file_edit, 1)
@@ -837,22 +846,26 @@ class SettingsDialog(chrome.Dialog):
         clear_row.addStretch(1)
         stats_layout.addLayout(clear_row)
         stats_layout.addStretch(1)
-        tabs.addTab(stats_tab, "Statistics")
+        tabs.addTab(stats_tab, t("Statistics"))
 
         # ---- Appearance --------------------------------------------------------
-        appearance_form = self._add_form_tab(tabs, "Appearance")
+        appearance_form = self._add_form_tab(tabs, t("Appearance"))
         self.theme_combo = QComboBox()
-        for label, value in (("Match system", "system"), ("Light", "light"), ("Dark", "dark")):
-            self.theme_combo.addItem(label, value)
-        appearance_form.addRow("Theme:", self.theme_combo)
+        for label, value in (
+            (N_("Match system"), "system"),
+            (N_("Light"), "light"),
+            (N_("Dark"), "dark"),
+        ):
+            self.theme_combo.addItem(t(label), value)
+        appearance_form.addRow(t("Theme:"), self.theme_combo)
         self.accent_combo = QComboBox()
         for label, value in design.ACCENT_PRESETS:
-            self.accent_combo.addItem(label, value)
-        appearance_form.addRow("Accent color:", self.accent_combo)
+            self.accent_combo.addItem(t(label), value)
+        appearance_form.addRow(t("Accent color:"), self.accent_combo)
         self.density_combo = QComboBox()
-        self.density_combo.addItem("Comfortable", "comfortable")
-        self.density_combo.addItem("Compact", "compact")
-        appearance_form.addRow("List density:", self.density_combo)
+        self.density_combo.addItem(t("Comfortable"), "comfortable")
+        self.density_combo.addItem(t("Compact"), "compact")
+        appearance_form.addRow(t("List density:"), self.density_combo)
         columns_row = _inline_row()
         self.column_checks: dict[str, QCheckBox] = {}
         for key, label in (
@@ -862,15 +875,15 @@ class SettingsDialog(chrome.Dialog):
             ("eta", "ETA"),
             ("status", "Status"),
         ):
-            check = QCheckBox(label)
+            check = QCheckBox(t(label))
             self.column_checks[key] = check
             columns_row.addWidget(check)
         columns_row.addStretch(1)
-        appearance_form.addRow("Visible columns:", columns_row)
-        appearance_form.addRow(_note("Theme and accent apply instantly."))
+        appearance_form.addRow(t("Visible columns:"), columns_row)
+        appearance_form.addRow(_note(t("Theme and accent apply instantly.")))
 
         # ---- Advanced ----------------------------------------------------------
-        advanced_form = self._add_form_tab(tabs, "Advanced")
+        advanced_form = self._add_form_tab(tabs, t("Advanced"))
         self.script_edit = QLineEdit()
         self.script_edit.setPlaceholderText("e.g. /usr/bin/my-script --scan")
         advanced_form.addRow("Run command:", self.script_edit)
@@ -968,9 +981,9 @@ class SettingsDialog(chrome.Dialog):
 
         # ---- Shortcuts -------------------------------------------------------
         self._shortcuts_page = _ShortcutsPage(settings)
-        tabs.addTab(self._shortcuts_page, "Shortcuts")
+        tabs.addTab(self._shortcuts_page, t("Shortcuts"))
 
-        tabs.addTab(about_tab, "About")
+        tabs.addTab(about_tab, t("About"))
 
         self._load_values()
 
