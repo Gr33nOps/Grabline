@@ -3,28 +3,28 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GrabLine: grab the line, finish the file</title>
+    <title>GrabLine: free download manager</title>
     <meta
       name="description"
-      content="GrabLine is a free download manager for Windows, macOS and Linux. It opens many connections per file, picks up after a crash, and puts a quality picker next to your browser. No ads. No accounts. Open source."
+      content="GrabLine is a free, open source download manager for Windows, macOS and Linux. Parallel connections, resume after interruption, video quality picker, torrents and cloud. No ads. No accounts."
     />
     <link rel="canonical" href="https://gr33nops.github.io/Grabline/" />
     <meta name="theme-color" content="#07090e" />
     <link rel="icon" href="assets/favicon.png?v=6" />
     <link rel="apple-touch-icon" href="assets/logo.png?v=6" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="GrabLine: grab the line, finish the file" />
+    <meta property="og:title" content="GrabLine: free download manager" />
     <meta
       property="og:description"
-      content="The download manager that opens many lines at once. Video quality picker, torrents, cloud, and a real browser button. Free and open source."
+      content="Free open source download manager with parallel connections, a browser companion, video quality picker, torrents and cloud support."
     />
     <meta property="og:image" content="https://gr33nops.github.io/Grabline/assets/og.png" />
     <meta property="og:url" content="https://gr33nops.github.io/Grabline/" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="GrabLine: grab the line, finish the file" />
+    <meta name="twitter:title" content="GrabLine: free download manager" />
     <meta
       name="twitter:description"
-      content="Many connections. One finished file. Free download manager for Windows, macOS and Linux."
+      content="Free download manager for Windows, macOS and Linux. Parallel connections, resume, video quality picker."
     />
     <meta name="twitter:image" content="https://gr33nops.github.io/Grabline/assets/og.png" />
     <script type="application/ld+json">
@@ -34,7 +34,7 @@
         "name": "GrabLine",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "Windows, macOS, Linux",
-        "description": "Free open source download manager that splits each download across many connections, with a browser companion and video quality picker.",
+        "description": "Free open source download manager with parallel connections, browser companion and video quality picker.",
         "url": "https://gr33nops.github.io/Grabline/",
         "downloadUrl": "https://github.com/Gr33nOps/GrabLine/releases/latest",
         "softwareVersion": "1.27.12",
@@ -678,9 +678,9 @@
             Menu
           </button>
           <div class="nav-links" id="navLinks">
-            <a href="#how">The trick</a>
+            <a href="#how">How it works</a>
             <a href="#quality">Video</a>
-            <a href="#features">Toolbox</a>
+            <a href="#features">Features</a>
             <a href="#faq">FAQ</a>
             <a href="https://github.com/Gr33nOps/GrabLine">GitHub</a>
           </div>
@@ -696,15 +696,15 @@
                 <img src="assets/logo.png?v=6" width="48" height="48" alt="" />
                 <strong>Grab<span class="line">Line</span></strong>
               </div>
-              <h1>One file. Many lines. Done sooner.</h1>
+              <h1>Free download manager for Windows, macOS and Linux</h1>
               <p class="lede">
-                Your browser sips through a straw. GrabLine opens the floodgates: many connections
-                on every file, a quality picker for video and audio, and a queue that survives the
-                night. Free, open source, and built for people who just want the file.
+                Split each file across parallel connections, resume after an interruption, and pick
+                video or audio quality from your browser. Torrents, cloud links and queues in one
+                app. Free and open source. No ads. No accounts.
               </p>
               <div class="cta-row">
                 <a class="btn btn-primary" id="heroDownload" href="#download">Download for your system</a>
-                <a class="btn btn-ghost" href="https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/">Add the browser button</a>
+                <a class="btn btn-ghost" href="https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/">Firefox add on</a>
               </div>
               <p class="meta"><span id="heroVersion">Latest release</span> · Windows · macOS · Linux · AGPL 3.0</p>
             </div>
@@ -723,18 +723,17 @@
         <section id="how" class="sec">
           <div class="wrap split">
             <div class="split-copy">
-              <span class="eyebrow">The trick</span>
-              <h2>Grab the line. Keep it busy.</h2>
+              <span class="eyebrow">How it works</span>
+              <h2>Parallel connections for every file</h2>
               <p class="lead">
-                One connection is easy for a server to throttle. GrabLine cuts the file into
-                segments and pulls them together (up to 128 lines). When one segment crawls, an
-                idle line steals its work. You see the speed live. If the power drops, progress
-                is already on disk.
+                GrabLine splits a download into segments and fetches them together (up to 128
+                connections). Idle connections take work from slow ones. Progress is saved to disk
+                so jobs can resume after a crash or restart.
               </p>
               <ul class="points">
-                <li><span><strong>Many sockets, one file.</strong> Beginners just hit Download. Power users dial connections, proxies and caps.</span></li>
-                <li><span><strong>Crash friendly.</strong> Restart GrabLine and unfinished jobs pick up where they stopped.</span></li>
-                <li><span><strong>A dashboard that tells the truth.</strong> Current, average, peak, ETA, and which lines are earning their keep.</span></li>
+                <li><span><strong>Parallel downloads.</strong> Use the defaults, or set connection count, proxies and speed limits.</span></li>
+                <li><span><strong>Resume.</strong> Unfinished jobs continue from the last saved progress.</span></li>
+                <li><span><strong>Live dashboard.</strong> Current, average and peak speed, ETA, and per connection activity.</span></li>
               </ul>
             </div>
             <figure class="frame">
@@ -753,15 +752,15 @@
           <div class="wrap split quality">
             <div class="split-copy">
               <span class="eyebrow">Video and audio</span>
-              <h2>Choose the cut before it lands.</h2>
+              <h2>Choose quality before you download</h2>
               <p class="lead">
-                Hover a video in the browser, or paste a link. GrabLine shows resolutions, audio
-                only (MP3, M4A, FLAC), subtitles, chapters, SponsorBlock, and a trim slider.
-                One decision. Then it runs. A thousand plus sites via yt dlp.
+                Hover media in the browser, or paste a URL. GrabLine lists resolutions, audio only
+                (MP3, M4A, FLAC), subtitles, chapters, SponsorBlock and trim. Powered by yt dlp on
+                1000+ sites.
               </p>
               <ul class="points">
-                <li><span><strong>New here?</strong> Pick Best or 1080p and go. The defaults are sane.</span></li>
-                <li><span><strong>Know what you want?</strong> Exact height, codec, subs, clip in and out, then Download.</span></li>
+                <li><span><strong>Simple.</strong> Pick Best or 1080p and download.</span></li>
+                <li><span><strong>Detailed.</strong> Set resolution, codec, subtitles and clip start/end.</span></li>
               </ul>
             </div>
             <figure class="frame portrait">
@@ -779,37 +778,36 @@
         <section class="sec" id="features">
           <div class="wrap">
             <div class="sec-head">
-              <span class="eyebrow">The rest of the toolbox</span>
-              <h2>Not just a pretty queue.</h2>
+              <span class="eyebrow">Features</span>
+              <h2>More than HTTP downloads</h2>
               <p class="lead">
-                Same window for magnets, cloud shares, servers, quiet hours and speed caps.
-                Grow into it when you need to.
+                Magnets, cloud shares, remote servers, schedules and speed limits in the same app.
               </p>
             </div>
             <div class="feat-list">
               <div class="feat">
                 <h3>Browser button</h3>
-                <p>Hover media or right click a link. Hand off is local Native Messaging. No weird open ports on your machine.</p>
+                <p>Hover media or right click a link. Hand off uses local Native Messaging. No open network ports.</p>
               </div>
               <div class="feat">
                 <h3>Torrents</h3>
-                <p>Magnets and torrent files on libtorrent. DHT, sequential play while it fills, seed ratios, RSS watchers.</p>
+                <p>Magnets and torrent files via libtorrent. DHT, sequential playback, seed ratios and RSS.</p>
               </div>
               <div class="feat">
                 <h3>Cloud and servers</h3>
-                <p>SFTP, FTP, S3, WebDAV with keychain secrets. Public Drive and Dropbox links as straight pulls.</p>
+                <p>SFTP, FTP, S3 and WebDAV with OS keychain secrets. Public Drive and Dropbox share links.</p>
               </div>
               <div class="feat">
                 <h3>Queues and schedules</h3>
-                <p>Name your queues, set priorities, chain jobs, keep quiet hours, shut the PC down when the list is empty.</p>
+                <p>Named queues, priorities, job dependencies, quiet hours and shut down when done.</p>
               </div>
               <div class="feat">
-                <h3>Proxies and caps</h3>
-                <p>HTTP and SOCKS for HTTP downloads and torrents. Cap the whole app, one job, or one greedy host.</p>
+                <h3>Proxies and limits</h3>
+                <p>HTTP and SOCKS proxies for downloads and torrents. Global, per job and per host speed caps.</p>
               </div>
               <div class="feat">
                 <h3>Advisory security</h3>
-                <p>Checksums and optional AV or VirusTotal can warn you. They never lock the file away from you.</p>
+                <p>Checksums and optional antivirus or VirusTotal checks can warn you. Files are never quarantined.</p>
               </div>
             </div>
           </div>
@@ -818,17 +816,17 @@
         <section class="sec" id="download">
           <div class="wrap">
             <div class="sec-head">
-              <span class="eyebrow">Get it</span>
+              <span class="eyebrow">Download</span>
               <h2>Install GrabLine <span id="dlVersion"></span></h2>
               <p class="lead">
-                One installer. Everything inside. No Python hunt, no missing library scavenger hunt.
+                Packaged builds include everything you need. No separate Python install required.
               </p>
             </div>
             <div class="dl-grid" id="dlGrid">
               <div class="plat" data-os="windows">
                 <span class="you-badge">Your OS</span>
                 <span class="os">Windows</span>
-                <span class="hint">Friendly setup wizard, or a portable zip you can run without admin.</span>
+                <span class="hint">Setup installer, or a portable zip that runs without admin rights.</span>
                 <div class="actions">
                   <a class="btn btn-primary btn-block" data-dl href="https://github.com/Gr33nOps/GrabLine/releases/latest">Installer</a>
                   <a class="btn btn-ghost btn-block" data-dl-alt href="https://github.com/Gr33nOps/GrabLine/releases/latest">Portable zip</a>
@@ -837,7 +835,7 @@
               <div class="plat" data-os="mac">
                 <span class="you-badge">Your OS</span>
                 <span class="os">macOS</span>
-                <span class="hint">Built for Apple Silicon (M1 and later). Drag, drop, done.</span>
+                <span class="hint">Apple Silicon (M1 and later). Open the DMG and drag GrabLine to Applications.</span>
                 <div class="actions">
                   <a class="btn btn-primary btn-block" data-dl href="https://github.com/Gr33nOps/GrabLine/releases/latest">Apple Silicon DMG</a>
                   <a class="btn btn-ghost btn-block" data-dl-alt href="https://github.com/Gr33nOps/GrabLine/releases/latest">All releases</a>
@@ -846,7 +844,7 @@
               <div class="plat" data-os="linux">
                 <span class="you-badge">Your OS</span>
                 <span class="os">Linux</span>
-                <span class="hint">AppImage runs almost anywhere. DEB for Debian, Ubuntu and Mint.</span>
+                <span class="hint">AppImage for most distributions. DEB for Debian, Ubuntu and Mint.</span>
                 <div class="actions">
                   <a class="btn btn-primary btn-block" data-dl href="https://github.com/Gr33nOps/GrabLine/releases/latest">AppImage</a>
                   <a class="btn btn-ghost btn-block" data-dl-alt href="https://github.com/Gr33nOps/GrabLine/releases/latest">DEB package</a>
@@ -854,10 +852,10 @@
               </div>
             </div>
             <p class="note">
-              Builds are unsigned, so the OS asks once. On Windows choose <b>More info</b> then <b>Run anyway</b>.
-              On macOS <b>right click</b> then <b>Open</b>. On Linux without FUSE, grab the
+              Builds are unsigned, so the OS may ask for confirmation once. On Windows choose <b>More info</b> then <b>Run anyway</b>.
+              On macOS <b>right click</b> then <b>Open</b>. On Linux without FUSE, use the
               <a id="tarballLink" href="https://github.com/Gr33nOps/GrabLine/releases/latest"><b>tar.gz</b></a>.
-              Full steps in the
+              See the
               <a href="https://github.com/Gr33nOps/GrabLine/blob/main/docs/install.md">install guide</a>
               ·
               <a href="https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/">Firefox add on</a>
@@ -868,21 +866,21 @@
         <section class="sec" id="limits">
           <div class="wrap">
             <div class="sec-head">
-              <span class="eyebrow">Straight talk</span>
-              <h2>What we will not pretend to do.</h2>
+              <span class="eyebrow">Limits</span>
+              <h2>What GrabLine does not do</h2>
             </div>
             <div class="limits">
               <div class="limit">
-                <h3>No DRM circus</h3>
-                <p>Netflix, Prime, Disney+, Spotify tracks and the rest get a clear no. We do not crack locks.</p>
+                <h3>No DRM bypass</h3>
+                <p>Protected services such as Netflix, Prime, Disney+ and Spotify are not supported. GrabLine does not remove DRM.</p>
               </div>
               <div class="limit">
-                <h3>No cookie theft</h3>
-                <p>Optional “use my browser session” reads your login for your downloads. Those cookies stay on your machine.</p>
+                <h3>Local sessions only</h3>
+                <p>Optional “use my browser session” reads cookies on your machine for your downloads. They are not uploaded.</p>
               </div>
               <div class="limit">
-                <h3>No spying on you</h3>
-                <p>No ads. No accounts. Your downloads hit the sites you choose. A quiet GitHub update check is the only maintenance call.</p>
+                <h3>No tracking</h3>
+                <p>No ads. No accounts. Downloads go to the sites you choose. The only outbound maintenance call is an optional GitHub update check.</p>
               </div>
             </div>
           </div>
@@ -891,36 +889,37 @@
         <section class="sec" id="faq">
           <div class="wrap">
             <div class="sec-head">
-              <span class="eyebrow">Still curious</span>
-              <h2>Quick answers</h2>
-              <p class="lead">Short takes on what the page above left open.</p>
+              <span class="eyebrow">FAQ</span>
+              <h2>Frequently asked questions</h2>
             </div>
 
             <details class="qa">
               <summary>How is it different from IDM?</summary>
               <p>
-                Same big idea: many connections and a browser button. GrabLine is open source, runs on
-                macOS and Linux too, and folds video, audio, torrents, cloud and archives into one app.
-                We do not phone home with your habits.
+                Both use parallel connections and a browser button. GrabLine is open source, runs on
+                Windows, macOS and Linux, and includes video, audio, torrents, cloud and archives in
+                one app. It does not send usage data to us.
               </p>
             </details>
             <details class="qa">
-              <summary>Which browsers get the GrabLine button?</summary>
+              <summary>Which browsers are supported?</summary>
               <p>
-                Firefox has a signed add on. Chrome, Edge and Brave pair from Browser Setup inside the
-                app. No extension? Paste the URL. Either way, hand off is a local pipe, not a network port.
+                Firefox has a signed add on. Chrome, Edge and Brave pair from Browser Setup in the
+                app. Without an extension, paste the URL into GrabLine. Hand off uses a local pipe,
+                not a network port.
               </p>
             </details>
             <details class="qa">
-              <summary>Where does my stuff live?</summary>
+              <summary>Where are my files and settings stored?</summary>
               <p>
-                Files land in the folder you pick. Settings and the job database sit in the normal app
-                data directory on your computer. Session cookies for “use my browser” never leave your disk.
+                Downloads go to the folder you choose. Settings and the job database stay in the
+                normal app data directory on your computer. Browser session cookies, if used, never
+                leave your disk.
               </p>
             </details>
             <details class="qa">
-              <summary>Do I pay anything?</summary>
-              <p>No. AGPL 3.0, no paid tier, no trial clock. Source is on GitHub if you want to build it yourself.</p>
+              <summary>Is GrabLine free?</summary>
+              <p>Yes. AGPL 3.0, no paid tier and no trial. Source is on GitHub if you want to build it yourself.</p>
             </details>
           </div>
         </section>
@@ -929,7 +928,7 @@
       <footer>
         <div class="wrap foot-inner">
           <a class="brand" href="#top" aria-label="GrabLine"><img src="assets/logo.png?v=6" alt="" /><span aria-hidden="true">Grab<span class="line">Line</span></span></a>
-          <span>Grab the line · finish the file · AGPL 3.0</span>
+          <span>Free · open source · AGPL 3.0</span>
           <div class="foot-links">
             <a href="https://github.com/Gr33nOps/GrabLine">GitHub</a>
             <a href="https://github.com/Gr33nOps/GrabLine/releases">Releases</a>

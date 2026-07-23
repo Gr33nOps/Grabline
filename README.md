@@ -4,10 +4,8 @@
 
 # GrabLine
 
-**One file. Many lines. Done sooner.**
-
 Free, open source download manager for Windows, macOS and Linux.
-Splits each transfer across parallel connections, resumes after a crash, and pairs with your browser when you want a quality pick.
+Splits each transfer across parallel connections, resumes after an interruption, and pairs with your browser for video and audio quality picks.
 
 [![Download][download-badge]][releases]
 [![Firefox Add on][amo-badge]][amo]
