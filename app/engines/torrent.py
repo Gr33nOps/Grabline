@@ -213,7 +213,7 @@ class TorrentStats:
     swarm_peers: int
     down_rate: float
     up_rate: float
-    downloaded: int  # all-time, this run
+    downloaded: int  # bytes we have (libtorrent total_done / all-time)
     uploaded: int
     ratio: float
     seeding: bool
@@ -317,7 +317,15 @@ class TorrentSession:
                 if str(status.info_hash).lower() != target:
                     continue
                 uploaded = int(status.all_time_upload)
-                done = max(int(status.total_done), 1)
+                done = int(status.total_done)
+                # After pause-on-complete, libtorrent 2.x sometimes reports
+                # all_time_download as 0 even though total_done / payload are
+                # correct. Prefer the larger of the reliable counters.
+                downloaded = max(
+                    int(status.all_time_download),
+                    int(status.total_payload_download),
+                    done,
+                )
                 return TorrentStats(
                     seeds=int(status.num_seeds),
                     peers=int(status.num_peers),
@@ -325,9 +333,9 @@ class TorrentSession:
                     swarm_peers=int(status.num_incomplete),
                     down_rate=float(status.download_rate),
                     up_rate=float(status.upload_rate),
-                    downloaded=int(status.all_time_download),
+                    downloaded=downloaded,
                     uploaded=uploaded,
-                    ratio=uploaded / done,  # same definition the ratio limit uses
+                    ratio=uploaded / max(done, 1),  # same definition the ratio limit uses
                     seeding=bool(status.is_seeding),
                 )
         except Exception:  # libtorrent's exceptions are opaque; a bad read must
