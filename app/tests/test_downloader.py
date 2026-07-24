@@ -460,7 +460,6 @@ def test_fresh_job_reuses_resolve_probe_without_second_round_trip(
 ):
     """add/resolve already probed the URL - starting must not Range-probe again."""
     from app.core import downloader as downloader_mod
-    from app.core.probe import ProbeResult
 
     data = payload(2 * MB, 19)
     url = server.add("/reuse.bin", data)
@@ -475,7 +474,7 @@ def test_fresh_job_reuses_resolve_probe_without_second_round_trip(
 
     calls: list[str] = []
 
-    def boom(client, url, extra_headers=None):  # noqa: ARG001
+    def boom(client, url, extra_headers=None):
         calls.append(url)
         raise AssertionError("probe must not run when the job already has probe fields")
 
