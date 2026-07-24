@@ -39,6 +39,14 @@ git push origin v1.3.5      # -> Actions builds all three and publishes a Releas
 Or trigger the workflow manually (Actions tab) to get installers as artifacts
 without publishing.
 
+## GitHub Packages
+
+Each release also publishes the Linux AppImage, `.deb`, and tarball to
+[GitHub Packages](https://github.com/Gr33nOps/Grabline/pkgs/container/grabline)
+(`ghcr.io/gr33nops/grabline`) via [`.github/workflows/packages.yml`](../.github/workflows/packages.yml).
+That fills the Packages block on the repository page. Installers for end users
+still come from the [Releases](https://github.com/Gr33nOps/Grabline/releases) page.
+
 ## Build one locally
 
 ```bash
