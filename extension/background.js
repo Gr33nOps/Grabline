@@ -414,7 +414,6 @@ api.storage.onChanged.addListener((changes, area) => {
 
 async function handoffDownloadItem(item) {
   const url = item.finalUrl || item.url;
-  if (!claimHandoff(url)) return;
   const [active] = await api.tabs.query({ active: true, lastFocusedWindow: true });
   const chosenName = (item.filename || "").split(/[\\/]/).pop() || null;
   await sendToGrabLine(
@@ -424,54 +423,39 @@ async function handoffDownloadItem(item) {
   );
 }
 
-// Deduplicate onCreated + onDeterminingFilename both firing for one save.
-const recentHandoffs = new Map();
-function claimHandoff(url) {
-  const now = Date.now();
-  for (const [u, at] of recentHandoffs) {
-    if (now - at > 4000) recentHandoffs.delete(u);
-  }
-  if (!url || recentHandoffs.has(url)) return false;
-  recentHandoffs.set(url, now);
-  return true;
-}
-
 api.downloads.onCreated.addListener((item) => {
-  // Sync gate only: awaiting storage/ping here let the browser commit the
-  // download (shelf flash, and sometimes a finished browser save for images).
-  if (!interceptEnabled || !lastAppRunning || !shouldIntercept(item)) return;
-  const take = (async () => {
+  // Pause synchronously (reversible), verify asynchronously, then commit.
+  // The old order - await storage + a native ping, THEN cancel - lost the
+  // race on small files, which kept finishing in the browser. And cancelling
+  // before the ping risked the opposite failure: the app is actually closed,
+  // the handoff goes nowhere, and the user's download simply vanishes.
+  // Pause-first has neither problem: too-late pauses throw and the browser
+  // keeps the file; a dead app resumes the pause.
+  if (!interceptEnabled || !shouldIntercept(item)) return;
+  void (async () => {
+    try {
+      await api.downloads.pause(item.id);
+    } catch {
+      return; // already finished; leave it to the browser
+    }
+    const pong = await pingGrabLine();
+    if (!pong || !pong.appRunning) {
+      try {
+        await api.downloads.resume(item.id);
+      } catch {
+        /* the browser may have finished it during the pause - fine */
+      }
+      return;
+    }
     try {
       await api.downloads.cancel(item.id);
       await api.downloads.erase({ id: item.id });
     } catch {
-      return; // too late; browser already owns it
+      return; // too late to take over; the browser finished it
     }
     await handoffDownloadItem(item);
   })();
-  void take;
 });
-
-// Chrome: also cancel during filename determination so "Save image as…" and
-// tiny files that finish before onCreated's async cancel can still be taken.
-if (api.downloads.onDeterminingFilename) {
-  try {
-    api.downloads.onDeterminingFilename.addListener((item, suggest) => {
-      if (!interceptEnabled || !lastAppRunning || !shouldIntercept(item)) {
-        suggest();
-        return;
-      }
-      suggest();
-      void api.downloads.cancel(item.id).then(
-        () => api.downloads.erase({ id: item.id }).catch(() => {}),
-        () => {},
-      );
-      void handoffDownloadItem(item);
-    });
-  } catch {
-    /* older Chromium */
-  }
-}
 
 // ----------------------------------- proactive interception (Firefox, F1.5b)
 // downloads.onCreated (above) fires only after the browser has already
@@ -483,50 +467,40 @@ if (api.downloads.onDeterminingFilename) {
 // this listener simply isn't installed and the onCreated path (with the shelf
 // hidden via setUiOptions) stands.
 
-// MIME types the browser treats as downloads (or that users expect GrabLine to
-// take). Intentionally excludes text/html, css, javascript so normal browsing
-// is untouched. image/* is NOT listed: viewing a photo in a tab must still
-// work; Save-Image-As is caught by downloads.onCreated / attachment below.
+// Content-types with no inline viewer: the browser always downloads these, so
+// taking them over matches its own decision. An allowlist by design - anything
+// the browser renders itself (html, pdf, images, video, audio) must NEVER be
+// here, or ordinary browsing breaks: a video/* match on this list once
+// cancelled the fetches that in-page players stream through. Media the user
+// actually wants saved still arrives here as Content-Disposition: attachment,
+// or as a downloads.onCreated item handled above.
 const DOWNLOAD_CONTENT_TYPES =
-  /^(?:application\/(?:octet-stream|pdf|zip|gzip|x-gzip|x-tar|x-rar-compressed|vnd\.rar|x-7z-compressed|x-bzip2|x-xz|x-msdownload|x-msdos-program|vnd\.microsoft\.portable-executable|x-apple-diskimage|x-iso9660-image|x-bittorrent|x-debian-package|vnd\.android\.package-archive|msword|vnd\.(?:ms-|openxmlformats-)|epub\+zip|vnd\.oasis\.opendocument)|video\/|audio\/)/i;
-
-// Top-level / iframe navigations to these extensions are almost always file
-// downloads (or media the user wants in GrabLine), not HTML documents.
-const DOWNLOAD_URL_EXT =
-  /\.(?:zip|rar|7z|gz|tgz|xz|exe|msi|dmg|iso|pdf|mp4|m4v|mkv|webm|mov|avi|mp3|m4a|flac|wav|ogg|opus|aac|torrent|apk|deb|rpm|epub|docx?|xlsx?|pptx?)(?:$|[?#])/i;
+  /^application\/(?:octet-stream|zip|gzip|x-gzip|x-tar|x-rar-compressed|vnd\.rar|x-7z-compressed|x-bzip2|x-xz|x-msdownload|x-msdos-program|vnd\.microsoft\.portable-executable|x-apple-diskimage|x-iso9660-image|x-bittorrent|x-debian-package|vnd\.android\.package-archive)/i;
 
 function isForcedDownload(details) {
+  // The unambiguous server signal first: Content-Disposition: attachment always
+  // means "download", and overrides any inline rendering.
   const disposition = (headerValue(details.responseHeaders, "content-disposition") ?? "")
     .trim()
     .toLowerCase();
-  // Content-Disposition: attachment always means "download" - covers images,
-  // PDFs, and anything else the server forced out of the inline viewer.
   if (disposition.startsWith("attachment")) return true;
+  // The MIME allowlist applies only to frame navigations. On xhr/fetch/object
+  // traffic, octet-stream and friends are routine (APIs, wasm, range probes),
+  // so anything short of an explicit attachment stays untouched there.
+  if (details.type !== "main_frame" && details.type !== "sub_frame") return false;
   const type = (headerValue(details.responseHeaders, "content-type") ?? "")
     .split(";")[0]
     .trim()
     .toLowerCase();
-  if (type.startsWith("text/html") || type === "application/xhtml+xml") return false;
-  if (DOWNLOAD_CONTENT_TYPES.test(type)) return true;
-  // Frame navigations to a clear file URL (video, archive, pdf, …). Skip
-  // image extensions here so opening a .jpg in a tab still renders it.
-  if (
-    (details.type === "main_frame" || details.type === "sub_frame") &&
-    DOWNLOAD_URL_EXT.test(details.url || "")
-  ) {
-    return true;
-  }
-  return false;
+  return DOWNLOAD_CONTENT_TYPES.test(type);
 }
 
 async function interceptResponse(details) {
-  // Prefer the cached app-running flag so cancel is not delayed by a ping.
-  // Re-check in the background; if the app died, the next download falls
-  // through to the browser again via lastAppRunning.
-  if (!lastAppRunning) {
-    const pong = await pingGrabLine();
-    if (!pong || !pong.appRunning) return {};
-  }
+  // Only take a download away from the browser when the app is actually up to
+  // receive it - otherwise the file would just vanish. Forced downloads are
+  // rare, so this ping never touches ordinary browsing.
+  const pong = await pingGrabLine();
+  if (!pong || !pong.appRunning) return {};
   const [active] = await api.tabs
     .query({ active: true, lastFocusedWindow: true })
     .catch(() => []);
@@ -540,9 +514,9 @@ async function interceptResponse(details) {
 }
 
 // Stays synchronous for the common case (returns {} at once), so navigation is
-// never delayed; only an actual download awaits the handoff.
+// never delayed; only an actual download awaits the ping/handoff.
 function onDownloadHeaders(details) {
-  if (!interceptEnabled || !lastAppRunning || details.tabId < 0) return {};
+  if (!interceptEnabled || details.tabId < 0) return {};
   if (!isForcedDownload(details)) return {};
   return interceptResponse(details);
 }
@@ -552,9 +526,10 @@ try {
     onDownloadHeaders,
     {
       urls: ["<all_urls>"],
-      // Frames catch navigations; xhr/other/object catch "Save link" / forced
-      // attachment fetches that never become a top-level document. Never
-      // listen on type "image" or "media" - that would break inline photos
+      // Frames catch download navigations; xhr/other/object catch forced
+      // attachment responses that never become a top-level document (those
+      // types only ever act on Content-Disposition: attachment, see above).
+      // Never listen on type "image" or "media" - that breaks inline photos
       // and in-page players.
       types: ["main_frame", "sub_frame", "object", "xmlhttprequest", "other"],
     },
@@ -605,10 +580,6 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.cmd === "ping") {
     pingGrabLine().then(sendResponse);
     return true;
-  }
-  if (message?.cmd === "interceptActive") {
-    sendResponse({ active: interceptEnabled && lastAppRunning });
-    return false;
   }
   if (message?.cmd === "recent") {
     askGrabLine({ type: "recent", limit: 5 }).then(sendResponse);

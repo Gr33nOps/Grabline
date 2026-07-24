@@ -311,9 +311,14 @@ class SegmentedDownload:
         if total:
             with open(part, "r+b") as handle:
                 handle.seek(0, os.SEEK_END)
-                if handle.tell() != total:
-                    # Prefer a sparse allocate when the OS supports it so a
-                    # multi-GB download does not spend seconds zero-filling.
+                current = handle.tell()
+                if current > total:
+                    # fallocate never shrinks, so an oversized leftover part
+                    # must be truncated or _finalize fails its size check.
+                    handle.truncate(total)
+                elif current < total:
+                    # Prefer fallocate when the OS supports it so a multi-GB
+                    # download does not spend seconds zero-filling.
                     try:
                         os.posix_fallocate(handle.fileno(), 0, total)
                     except (AttributeError, OSError):

@@ -467,44 +467,9 @@
     kit.showFeedback(button, reply, hideButton);
   });
 
-  // When takeover is on, steal clicks on download links before the browser
-  // starts its own save (a[download], middle-click, or obvious file URLs).
-  let interceptClicks = true;
-  api.storage.local.get("intercept").then(({ intercept = true }) => {
-    interceptClicks = intercept;
-  });
-  api.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.intercept) {
-      interceptClicks = changes.intercept.newValue ?? true;
-    }
-  });
-
-  async function takeoverClick(event) {
-    if (!interceptClicks || event.defaultPrevented) return;
-    // Left click or middle click; ignore modified left-clicks that open a tab.
-    if (event.button === 0 && (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) {
-      return;
-    }
-    if (event.button !== 0 && event.button !== 1) return;
-    const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
-    if (!anchor) return;
-    const url = anchor.href;
-    if (!url || !/^https?:/i.test(url)) return;
-    const forced = anchor.hasAttribute("download") || FILE_LINK.test(url);
-    if (!forced) return;
-    // Stop the browser first (awaiting would lose the race), then hand off.
-    event.preventDefault();
-    event.stopPropagation();
-    const status = await grablineSend({ cmd: "interceptActive" });
-    if (status?.active) {
-      await grablineSend({ cmd: "grab", url, credentials: true });
-      return;
-    }
-    // GrabLine isn't ready - restore a normal navigation/download.
-    if (event.button === 1) window.open(url, "_blank", "noopener");
-    else window.location.assign(url);
-  }
-
-  document.addEventListener("click", (event) => void takeoverClick(event), true);
-  document.addEventListener("auxclick", (event) => void takeoverClick(event), true);
+  // No click stealing here on purpose. An earlier build intercepted clicks on
+  // "file-looking" links (.jpg, .pdf, .mp4, …) which broke ordinary browsing -
+  // image galleries and inline PDF/video viewers stopped opening. Clicks now
+  // always navigate normally; if the navigation turns out to be a download,
+  // the background's webRequest / downloads.onCreated takeover picks it up.
 })();
