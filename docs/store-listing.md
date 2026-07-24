@@ -15,7 +15,7 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 | Category | Productivity → Tools (CWS) / Download Management (AMO) |
 | Homepage | https://github.com/Gr33nOps/GrabLine |
 | Support | https://github.com/Gr33nOps/GrabLine/issues |
-| Contributions URL (AMO) | https://paypal.me/GoEdits |
+| Contributions URL (AMO) | https://ko-fi.com/zain021xd |
 | Privacy policy URL | https://github.com/Gr33nOps/GrabLine/blob/main/PRIVACY.md |
 | Firefox add-on ID | `grabline@grabline.dev` (pinned in the manifest) |
 

@@ -50,7 +50,7 @@ from app.ui import chrome, components, design, guard, theme, threads
 from app.ui.format import human_bytes
 
 _PROJECT_URL = "https://github.com/Gr33nOps/GrabLine"
-_SUPPORT_URL = "https://paypal.me/GoEdits"
+_SUPPORT_URL = "https://ko-fi.com/zain021xd"
 
 
 def _note(text: str) -> QLabel:
