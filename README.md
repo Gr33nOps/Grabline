@@ -10,11 +10,12 @@ Parallel connections, resume, torrents, cloud links, and a browser quality picke
 
 [![Download][download-badge]][releases]
 [![Firefox Add on][amo-badge]][amo]
+[![Ko-fi][kofi-badge]][support]
 [![License: AGPL 3.0][license-badge]][license]
 ![Platforms][platform-badge]
 [![Tests][ci-badge]][ci]
 
-**[Download][releases]** · **[Website][website]** · **[Firefox add on][amo]** · [Install guide](docs/install.md)
+**[Download][releases]** · **[Website][website]** · **[Firefox add on][amo]** · **[Buy me a coffee][support]** · [Install guide](docs/install.md)
 
 <br />
 
@@ -28,7 +29,7 @@ Paste a URL, drop one on the window, or click the GrabLine button in your browse
 Files run over many connections (up to 32). Videos and audio open a quality panel (4K to 144p, MP3, M4A or FLAC, subtitles, trim) on 1000+ sites via yt dlp. Magnets, torrent files, SFTP, FTP, S3, WebDAV, and public Drive or Dropbox links open in the same app.
 
 No ads. No paid tier. No usage telemetry to us. AGPL 3.0.
-GrabLine is built in spare time. If it saves you hassle, [buy me a coffee][support] — it keeps the project alive.
+GrabLine is built in spare time. If it saves you hassle, [buy me a coffee][support]. It keeps the project alive.
 
 ### More of the UI
 
@@ -144,11 +145,13 @@ packaging/       PyInstaller + OS installers
 
 Ground rules enforced in CI: no `shell=True`, Native Messaging only (no listen port), FFmpeg and Deno downloads pinned by SHA 256.
 
+## Support the project
+
+GrabLine is free and open source, with no ads and no telemetry. If it helps you, [buy me a coffee on Ko-fi][support]. Stars on GitHub help too.
+
 ## License
 
 [AGPL 3.0](LICENSE). yt dlp (Unlicense) and PySide6 (LGPL) are compatible dependencies; FFmpeg is fetched on the user’s machine when needed and is not shipped inside the installers. See [PRIVACY.md](PRIVACY.md).
-
-Love GrabLine? [Support the project on Ko-fi][support].
 
 [releases]: https://github.com/Gr33nOps/GrabLine/releases/latest
 [website]: https://gr33nops.github.io/GrabLine/
@@ -158,6 +161,7 @@ Love GrabLine? [Support the project on Ko-fi][support].
 [ci]: https://github.com/Gr33nOps/GrabLine/actions/workflows/ci.yml
 [download-badge]: https://img.shields.io/github/v/release/Gr33nOps/GrabLine?label=Download&color=0170fd&sort=semver
 [amo-badge]: https://img.shields.io/amo/v/grabline-connect?label=Firefox%20Add-on&color=ff7139
+[kofi-badge]: https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-ff5e5b?logo=ko-fi&logoColor=white
 [license-badge]: https://img.shields.io/badge/License-AGPL%203.0-blue
 [platform-badge]: https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
 [ci-badge]: https://img.shields.io/github/actions/workflow/status/Gr33nOps/GrabLine/ci.yml?branch=main&label=tests

@@ -580,6 +580,33 @@
         color: var(--ink);
       }
 
+      .support-band {
+        margin-top: 8px;
+        padding: 28px 28px 30px;
+        border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+        border-radius: var(--radius);
+        background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+        display: grid;
+        gap: 14px;
+        justify-items: start;
+      }
+      .support-band h2 {
+        margin: 0;
+        font-size: 1.45rem;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .support-band p {
+        margin: 0;
+        max-width: 42rem;
+        color: var(--muted);
+        font-size: 1.02rem;
+        line-height: 1.55;
+      }
+      .support-band .cta-row {
+        margin-top: 4px;
+      }
+
       @media (max-width: 900px) {
         .nav-links {
           display: none;
@@ -681,6 +708,8 @@
             <a href="#how">How it works</a>
             <a href="#quality">Video</a>
             <a href="#features">Features</a>
+            <a href="#download">Download</a>
+            <a href="#support">Support</a>
             <a href="#faq">FAQ</a>
             <a href="https://github.com/Gr33nOps/GrabLine">GitHub</a>
           </div>
@@ -860,6 +889,26 @@
               ·
               <a href="https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/">Firefox add on</a>
             </p>
+          </div>
+        </section>
+
+        <section class="sec" id="support">
+          <div class="wrap">
+            <div class="sec-head">
+              <span class="eyebrow">Support</span>
+              <h2>GrabLine stays free. Tips keep it moving.</h2>
+            </div>
+            <div class="support-band">
+              <p>
+                No ads, no accounts, no telemetry. The app is built in spare time.
+                If GrabLine helps you download faster or with less hassle, a coffee
+                on Ko-fi really helps keep updates coming.
+              </p>
+              <div class="cta-row">
+                <a class="btn btn-primary" href="https://ko-fi.com/zain021xd">Buy me a coffee</a>
+                <a class="btn btn-ghost" href="https://github.com/Gr33nOps/GrabLine">Star on GitHub</a>
+              </div>
+            </div>
           </div>
         </section>
 
