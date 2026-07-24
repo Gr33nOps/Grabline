@@ -344,11 +344,10 @@ api.tabs.onUpdated.addListener((tabId, changeInfo) => {
 // cancelled the moment it starts and the app re-requests it.
 
 function shouldIntercept(item) {
-  // Take over every real download regardless of type (exe, torrent, any
-  // extension) - true IDM behavior. The only ones we must leave alone are
-  // URLs the app can't re-fetch: blob:/data:/filesystem: downloads are
-  // generated in the page and exist only inside the browser, and a
-  // browser-initiated download URL (item.finalUrl) beats the shelf's url.
+  // Take over every real download regardless of type (exe, torrent, image,
+  // video, any extension) - true IDM behavior. The only ones we must leave
+  // alone are URLs the app can't re-fetch: blob:/data:/filesystem: downloads
+  // are generated in the page and exist only inside the browser.
   const url = item.finalUrl || item.url || "";
   return /^https?:/i.test(url);
 }
@@ -362,16 +361,16 @@ function shouldIntercept(item) {
 // isn't running, so native browser downloads stay visible.
 let lastAppRunning = false;
 
-// A synchronous mirror of the intercept toggle: the blocking webRequest handler
-// below must decide without awaiting storage, so it reads this instead.
+// Synchronous mirrors so downloads.onCreated / blocking webRequest can decide
+// without awaiting storage or a native ping (those awaits were the reason
+// images and media still flashed in the browser download UI).
 let interceptEnabled = true;
 void api.storage.local.get("intercept").then(({ intercept = true }) => {
   interceptEnabled = intercept;
 });
 
 async function updateDownloadUi() {
-  const { intercept = true } = await api.storage.local.get("intercept");
-  const visible = !(intercept && lastAppRunning);
+  const visible = !(interceptEnabled && lastAppRunning);
   try {
     if (api.downloads.setUiOptions) await api.downloads.setUiOptions({ enabled: visible });
     else if (api.downloads.setShelfEnabled) api.downloads.setShelfEnabled(visible);
@@ -387,6 +386,25 @@ function noteAppRunning(running) {
   }
 }
 
+// Keep lastAppRunning fresh so a download that starts while the service
+// worker is cold can still be cancelled synchronously.
+function warmAppStatus() {
+  void pingGrabLine();
+}
+api.runtime.onStartup.addListener(warmAppStatus);
+api.runtime.onInstalled.addListener(warmAppStatus);
+warmAppStatus();
+if (api.alarms) {
+  try {
+    void api.alarms.create("grabline-ping", { periodInMinutes: 1 });
+    api.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name === "grabline-ping") warmAppStatus();
+    });
+  } catch {
+    /* alarms permission optional - cold starts still ping above */
+  }
+}
+
 api.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.intercept) {
     interceptEnabled = changes.intercept.newValue ?? true;
@@ -394,32 +412,66 @@ api.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-api.downloads.onCreated.addListener(async (item) => {
-  // On by default, but only take a download away from the browser when the
-  // GrabLine app is actually running to receive it - otherwise the file would
-  // just vanish. If the app is off, the browser download proceeds normally.
-  const { intercept = true } = await api.storage.local.get("intercept");
-  if (!intercept || !shouldIntercept(item)) return;
-  const pong = await pingGrabLine();
-  if (!pong || !pong.appRunning) return;
-  try {
-    await api.downloads.cancel(item.id);
-    await api.downloads.erase({ id: item.id });
-  } catch {
-    return; // too late to take over; let the browser finish it
-  }
-  // A synthetic tab carries the referring page AND a human name: the page
-  // title (the movie/video the user is looking at), else the filename the
-  // browser had chosen. Without this the app only has the URL leaf, which on
-  // CDNs is a random hash - the "downloads named random numbers" report.
+async function handoffDownloadItem(item) {
+  const url = item.finalUrl || item.url;
+  if (!claimHandoff(url)) return;
   const [active] = await api.tabs.query({ active: true, lastFocusedWindow: true });
   const chosenName = (item.filename || "").split(/[\\/]/).pop() || null;
   await sendToGrabLine(
-    item.finalUrl || item.url,
+    url,
     { url: item.referrer || active?.url || null, title: active?.title || chosenName },
     { credentials: true },
   );
+}
+
+// Deduplicate onCreated + onDeterminingFilename both firing for one save.
+const recentHandoffs = new Map();
+function claimHandoff(url) {
+  const now = Date.now();
+  for (const [u, at] of recentHandoffs) {
+    if (now - at > 4000) recentHandoffs.delete(u);
+  }
+  if (!url || recentHandoffs.has(url)) return false;
+  recentHandoffs.set(url, now);
+  return true;
+}
+
+api.downloads.onCreated.addListener((item) => {
+  // Sync gate only: awaiting storage/ping here let the browser commit the
+  // download (shelf flash, and sometimes a finished browser save for images).
+  if (!interceptEnabled || !lastAppRunning || !shouldIntercept(item)) return;
+  const take = (async () => {
+    try {
+      await api.downloads.cancel(item.id);
+      await api.downloads.erase({ id: item.id });
+    } catch {
+      return; // too late; browser already owns it
+    }
+    await handoffDownloadItem(item);
+  })();
+  void take;
 });
+
+// Chrome: also cancel during filename determination so "Save image as…" and
+// tiny files that finish before onCreated's async cancel can still be taken.
+if (api.downloads.onDeterminingFilename) {
+  try {
+    api.downloads.onDeterminingFilename.addListener((item, suggest) => {
+      if (!interceptEnabled || !lastAppRunning || !shouldIntercept(item)) {
+        suggest();
+        return;
+      }
+      suggest();
+      void api.downloads.cancel(item.id).then(
+        () => api.downloads.erase({ id: item.id }).catch(() => {}),
+        () => {},
+      );
+      void handoffDownloadItem(item);
+    });
+  } catch {
+    /* older Chromium */
+  }
+}
 
 // ----------------------------------- proactive interception (Firefox, F1.5b)
 // downloads.onCreated (above) fires only after the browser has already
@@ -431,33 +483,50 @@ api.downloads.onCreated.addListener(async (item) => {
 // this listener simply isn't installed and the onCreated path (with the shelf
 // hidden via setUiOptions) stands.
 
-// Content-types with no inline viewer: the browser always downloads these, so
-// taking them over matches its own decision. An allowlist by design - a
-// navigation to anything the browser renders itself (html, pdf, images, media)
-// is never in this set, so ordinary browsing is untouched.
+// MIME types the browser treats as downloads (or that users expect GrabLine to
+// take). Intentionally excludes text/html, css, javascript so normal browsing
+// is untouched. image/* is NOT listed: viewing a photo in a tab must still
+// work; Save-Image-As is caught by downloads.onCreated / attachment below.
 const DOWNLOAD_CONTENT_TYPES =
-  /^application\/(?:octet-stream|zip|gzip|x-gzip|x-tar|x-rar-compressed|vnd\.rar|x-7z-compressed|x-bzip2|x-xz|x-msdownload|x-msdos-program|vnd\.microsoft\.portable-executable|x-apple-diskimage|x-iso9660-image|x-bittorrent|x-debian-package|vnd\.android\.package-archive)/i;
+  /^(?:application\/(?:octet-stream|pdf|zip|gzip|x-gzip|x-tar|x-rar-compressed|vnd\.rar|x-7z-compressed|x-bzip2|x-xz|x-msdownload|x-msdos-program|vnd\.microsoft\.portable-executable|x-apple-diskimage|x-iso9660-image|x-bittorrent|x-debian-package|vnd\.android\.package-archive|msword|vnd\.(?:ms-|openxmlformats-)|epub\+zip|vnd\.oasis\.opendocument)|video\/|audio\/)/i;
+
+// Top-level / iframe navigations to these extensions are almost always file
+// downloads (or media the user wants in GrabLine), not HTML documents.
+const DOWNLOAD_URL_EXT =
+  /\.(?:zip|rar|7z|gz|tgz|xz|exe|msi|dmg|iso|pdf|mp4|m4v|mkv|webm|mov|avi|mp3|m4a|flac|wav|ogg|opus|aac|torrent|apk|deb|rpm|epub|docx?|xlsx?|pptx?)(?:$|[?#])/i;
 
 function isForcedDownload(details) {
-  // The unambiguous server signal first: Content-Disposition: attachment always
-  // means "download", and overrides any inline rendering.
   const disposition = (headerValue(details.responseHeaders, "content-disposition") ?? "")
     .trim()
     .toLowerCase();
+  // Content-Disposition: attachment always means "download" - covers images,
+  // PDFs, and anything else the server forced out of the inline viewer.
   if (disposition.startsWith("attachment")) return true;
   const type = (headerValue(details.responseHeaders, "content-type") ?? "")
     .split(";")[0]
     .trim()
     .toLowerCase();
-  return DOWNLOAD_CONTENT_TYPES.test(type);
+  if (type.startsWith("text/html") || type === "application/xhtml+xml") return false;
+  if (DOWNLOAD_CONTENT_TYPES.test(type)) return true;
+  // Frame navigations to a clear file URL (video, archive, pdf, …). Skip
+  // image extensions here so opening a .jpg in a tab still renders it.
+  if (
+    (details.type === "main_frame" || details.type === "sub_frame") &&
+    DOWNLOAD_URL_EXT.test(details.url || "")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 async function interceptResponse(details) {
-  // Only take a download away from the browser when the app is actually up to
-  // receive it - otherwise the file would just vanish. Forced downloads are
-  // rare, so this ping never touches ordinary browsing.
-  const pong = await pingGrabLine();
-  if (!pong || !pong.appRunning) return {};
+  // Prefer the cached app-running flag so cancel is not delayed by a ping.
+  // Re-check in the background; if the app died, the next download falls
+  // through to the browser again via lastAppRunning.
+  if (!lastAppRunning) {
+    const pong = await pingGrabLine();
+    if (!pong || !pong.appRunning) return {};
+  }
   const [active] = await api.tabs
     .query({ active: true, lastFocusedWindow: true })
     .catch(() => []);
@@ -471,9 +540,9 @@ async function interceptResponse(details) {
 }
 
 // Stays synchronous for the common case (returns {} at once), so navigation is
-// never delayed; only an actual download awaits the ping/handoff.
+// never delayed; only an actual download awaits the handoff.
 function onDownloadHeaders(details) {
-  if (!interceptEnabled || details.tabId < 0) return {};
+  if (!interceptEnabled || !lastAppRunning || details.tabId < 0) return {};
   if (!isForcedDownload(details)) return {};
   return interceptResponse(details);
 }
@@ -481,7 +550,14 @@ function onDownloadHeaders(details) {
 try {
   api.webRequest.onHeadersReceived.addListener(
     onDownloadHeaders,
-    { urls: ["<all_urls>"], types: ["main_frame", "sub_frame"] },
+    {
+      urls: ["<all_urls>"],
+      // Frames catch navigations; xhr/other/object catch "Save link" / forced
+      // attachment fetches that never become a top-level document. Never
+      // listen on type "image" or "media" - that would break inline photos
+      // and in-page players.
+      types: ["main_frame", "sub_frame", "object", "xmlhttprequest", "other"],
+    },
     ["blocking", "responseHeaders"],
   );
 } catch {
@@ -521,6 +597,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         quality: message.quality ?? null,
         fallbackUrls,
         title: message.title ?? null,
+        credentials: Boolean(message.credentials),
       });
     })().then(sendResponse);
     return true; // async response
@@ -528,6 +605,10 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.cmd === "ping") {
     pingGrabLine().then(sendResponse);
     return true;
+  }
+  if (message?.cmd === "interceptActive") {
+    sendResponse({ active: interceptEnabled && lastAppRunning });
+    return false;
   }
   if (message?.cmd === "recent") {
     askGrabLine({ type: "recent", limit: 5 }).then(sendResponse);

@@ -28,9 +28,10 @@ whole extension is meant to be readable in one sitting.
   popup, since a button on every avatar and thumbnail is noise and right-click
   plus the gallery grabber already cover images. There is a per-site off
   switch and a master switch in the popup.
-- **Optional download takeover** (off by default): browser downloads of
-  media and archive types are cancelled and re-dispatched to GrabLine for
-  segmented downloading.
+- **Download takeover** (on by default): browser downloads of
+  media, images (Save As), archives and other files are cancelled and
+  re-dispatched to GrabLine for segmented downloading. Toggle off in the
+  popup to keep the browser's own download UI.
 
 It talks to the desktop app over Native Messaging only: the browser launches
 GrabLine's host process and pipes JSON over stdio. There is no localhost

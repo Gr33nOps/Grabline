@@ -38,6 +38,7 @@
     "contextMenus",
     "nativeMessaging",
     "storage",
+    "alarms",
     "webRequest",
     "webRequestBlocking",
     "downloads",

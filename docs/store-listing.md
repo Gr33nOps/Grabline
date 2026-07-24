@@ -39,7 +39,7 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 > - **Hover button** on videos, audio, and large images (the button is the GrabLine logo)
 > - **Per-tab media list**: every stream (.m3u8/.mpd) and media file the page loaded
 > - **Download all images** on a page into a selection grid
-> - **Optional download takeover** (off by default)
+> - **Download takeover** (on by default): browser downloads are cancelled and handed to GrabLine
 >
 > On sites the Smart Engine knows (YouTube and 1000+ more), the app opens a
 > Download Info dialog to confirm the file and pick quality (4K to 144p, MP3/M4A),
@@ -58,10 +58,10 @@ python scripts/package_extension.py     # → dist/grabline-connect-{chrome,fire
 |---|---|
 | `nativeMessaging` | The single purpose of the extension: hand URLs to the local GrabLine app. Nothing else can do this. |
 | `contextMenus` | The "Download with GrabLine" / "Download all images" right-click entries. |
-| `storage` | User toggles (per-site overlay off-switch, interception opt-in) and the per-tab sniffed-media list (`storage.session`, gone when the tab closes). |
-| `webRequest` + `<all_urls>` | Read response headers to list a tab's media and streams in the popup, and to recognize a starting media/archive download for the opt-in takeover. Nothing leaves the browser. |
-| `webRequestBlocking` (Firefox) | The **opt-in** takeover cancels a media/archive response at the network layer so the desktop app can fetch it instead, with no flash of a browser download. Chrome ignores blocking `webRequest` in MV3, so there the `downloads` API does the takeover. Off by default. |
-| `downloads` | The takeover path on Chrome: cancel a starting browser download and re-dispatch it to the app. Off by default. |
+| `storage` | User toggles (per-site overlay off-switch, interception) and the per-tab sniffed-media list (`storage.session`, gone when the tab closes). |
+| `webRequest` + `<all_urls>` | Read response headers to list a tab's media and streams in the popup, and to recognize a starting download for takeover. Nothing leaves the browser. |
+| `webRequestBlocking` (Firefox) | Takeover cancels a forced download at the network layer so the desktop app can fetch it instead, with no flash of a browser download. Chrome ignores blocking `webRequest` in MV3, so there the `downloads` API does the takeover. On by default. |
+| `downloads` | The takeover path on Chromium: cancel a starting browser download and re-dispatch it to the app. On by default. |
 | `tabs` | Page URL/title accompany a handed-off URL so the app can name files sensibly. |
 | Content scripts on `<all_urls>` | The hover button and the image collector must run where the media is. They render one button in a closed shadow root and send nothing anywhere except the local app. |
 

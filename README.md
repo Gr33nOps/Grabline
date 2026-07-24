@@ -72,7 +72,7 @@ No ads. No paid tier. No usage telemetry to us. AGPL 3.0.
 
 * Firefox: signed on [AMO][amo].
 * Chrome, Edge, Brave and others: pair from **Browser Setup** inside the app.
-* Hover button, right click download, per tab sniffed streams, optional download takeover (off by default on some paths; see the in app toggles).
+* Hover button, right click download, per tab sniffed streams, download takeover (on by default; toggle in the extension popup).
 
 </details>
 
