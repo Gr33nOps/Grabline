@@ -1,0 +1,41 @@
+name: Pages
+
+# Deploys the website/ landing page to GitHub Pages.
+# One-time setup: repo Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions". The site then publishes on every push to main.
+
+# No paths filter: main is rebuilt as a single amended commit and
+# force-pushed on release, and GitHub can't diff a rewritten ref - a paths
+# filter silently skips the run (the site never updated after the first
+# deploy). Main only moves on release, so this is ~one deploy per release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; let a newer run supersede an in-progress one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      # Pages must be enabled once in Settings → Pages → Source: GitHub Actions.
+      # GITHUB_TOKEN cannot create the site (Resource not accessible by integration).
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website
+      - id: deployment
+        uses: actions/deploy-pages@v4
