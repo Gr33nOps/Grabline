@@ -50,6 +50,7 @@ from app.ui import chrome, components, design, guard, theme, threads
 from app.ui.format import human_bytes
 
 _PROJECT_URL = "https://github.com/Gr33nOps/GrabLine"
+_SUPPORT_URL = "https://github.com/sponsors/Gr33nOps"
 
 
 def _note(text: str) -> QLabel:
@@ -960,7 +961,11 @@ class SettingsDialog(chrome.Dialog):
         about_layout.addLayout(head)
         about_layout.addSpacing(6)
         about_layout.addWidget(
-            _note("A free, open-source download manager under the AGPL-3.0 license. No telemetry.")
+            _note(
+                "A free, open-source download manager under the AGPL-3.0 license. "
+                "No ads, no telemetry. If GrabLine helps you, you can support development "
+                "with any amount."
+            )
         )
         links_row = QHBoxLayout()
         update_btn = QPushButton(t("Check for updates"))
@@ -972,11 +977,14 @@ class SettingsDialog(chrome.Dialog):
         releases_btn.clicked.connect(lambda: self._open_url(f"{_PROJECT_URL}/releases"))
         report_btn = QPushButton(t("Report an issue"))
         report_btn.clicked.connect(lambda: self._open_url(f"{_PROJECT_URL}/issues"))
+        support_btn = QPushButton(t("Support GrabLine"))
+        support_btn.clicked.connect(lambda: self._open_url(_SUPPORT_URL))
         diag_btn = QPushButton(t("Copy diagnostics"))
         diag_btn.clicked.connect(self._copy_diagnostics)
         links_row.addWidget(project_btn)
         links_row.addWidget(releases_btn)
         links_row.addWidget(report_btn)
+        links_row.addWidget(support_btn)
         links_row.addWidget(diag_btn)
         links_row.addStretch(1)
         about_layout.addLayout(links_row)
