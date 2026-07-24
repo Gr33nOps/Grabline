@@ -2,12 +2,17 @@
 when a single download is selected.
 
 It is a persistent header (icon, name, status, progress) over a tab strip -
-Overview / Details / Media (or Contents) / Activity - and a fixed action bar.
+Overview / Details / Media (or Contents / Peers) - and a compact action bar.
 Tabs that don't apply to the selection are hidden, so a PDF shows two and a
-video shows four. Widgets are built once; only their text and visibility change
+video shows three. Widgets are built once; only their text and visibility change
 as the selection or live progress updates, so nothing flickers. The expensive
 reads (the full Job row, timestamps, an ffprobe of a media file, an archive's
 entry list) happen only when the selection changes, never on the 0.5s tick.
+
+Repeated facts live in one place: Overview holds live or session summary,
+Details holds file path and source, Media holds codec metadata. Actions that
+already exist on the row context menu (redownload, copy URL/path/hash) stay
+off the footer - Open, Folder, Rename, and Remove are enough here.
 """
 
 from __future__ import annotations
@@ -80,11 +85,10 @@ _CAPTIONS = (
     N_("ETA"),
     N_("Downloaded"),
     N_("Remaining"),
-    N_("Progress"),
-    N_("Size"),
-    N_("Type"),
     N_("Finished"),
+    N_("Elapsed"),
     N_("Retries"),
+    N_("Type"),
     N_("Size on disk"),
     N_("Location"),
     N_("Added"),
@@ -96,7 +100,7 @@ _CAPTIONS = (
     N_("Segments"),
     N_("Priority"),
     N_("Queue"),
-    N_("Category"),
+    N_("Speed limit"),
     N_("Resolution"),
     N_("Duration"),
     N_("FPS"),
@@ -112,12 +116,8 @@ _CAPTIONS = (
     N_("Up speed"),
     N_("Uploaded"),
     N_("Ratio"),
-    N_("Elapsed"),
-    N_("Speed limit"),
     N_("File"),
     N_("Source"),
-    N_("History"),
-    N_("Statistics"),
 )
 
 
@@ -223,10 +223,6 @@ class DetailDrawer(QFrame):
         ffmpeg: str | None,
         on_open_file: Callable[[JobView], None],
         on_open_folder: Callable[[JobView], None],
-        on_redownload: Callable[[JobView], None],
-        on_copy_url: Callable[[JobView], None],
-        on_copy_path: Callable[[JobView], None],
-        on_copy_hash: Callable[[JobView], None],
         on_rename: Callable[[JobView], None],
         on_remove: Callable[[JobView], None],
         on_extract: Callable[[JobView], None],
@@ -247,10 +243,6 @@ class DetailDrawer(QFrame):
         self._on = {
             "open": on_open_file,
             "folder": on_open_folder,
-            "redownload": on_redownload,
-            "copy_url": on_copy_url,
-            "copy_path": on_copy_path,
-            "copy_hash": on_copy_hash,
             "rename": on_rename,
             "remove": on_remove,
             "extract": on_extract,
@@ -330,7 +322,10 @@ class DetailDrawer(QFrame):
         self._tab_group = QButtonGroup(self)
         self._tab_group.setExclusive(True)
         self._tabs: list[QPushButton] = []
-        tab_labels = (N_("Overview"), N_("Details"), N_("Media"), N_("Activity"))
+        # Media is kind-adaptive (Media / Contents / Peers); Activity was folded
+        # into Overview so finished downloads aren't a thin fourth page of
+        # timestamps that Details already shows.
+        tab_labels = (N_("Overview"), N_("Details"), N_("Media"))
         for index, label in enumerate(tab_labels):
             btn = QPushButton(t(label))
             btn.setCheckable(True)
@@ -374,10 +369,8 @@ class DetailDrawer(QFrame):
                 "ETA",
                 "Downloaded",
                 "Remaining",
-                "Progress",
-                "Size",
-                "Type",
                 "Finished",
+                "Elapsed",
                 "Retries",
             )
         )
@@ -398,7 +391,13 @@ class DetailDrawer(QFrame):
         olay.addWidget(self._spark_card)
         self._ov_error = self._long_block(olay, N_("Error"))
         self._ov_notes = self._long_block(olay, N_("Notes"))
+        self._tags_box = QWidget()
+        self._tags_layout = QHBoxLayout(self._tags_box)
+        self._tags_layout.setContentsMargins(0, 0, 0, 0)
+        self._tags_layout.setSpacing(4)
+        olay.addWidget(self._tags_box)
         self._security_btn = QPushButton(t("Security check…"))
+        self._security_btn.setProperty("flat", "true")
         self._security_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._security_btn.clicked.connect(lambda: self._fire("security"))
         olay.addWidget(self._security_btn)
@@ -407,7 +406,7 @@ class DetailDrawer(QFrame):
 
         # -- Details ---------------------------------------------------------
         det, dlay = self._scroll_page()
-        self._file_grid = _StatGrid(("Type", "Size on disk", "Location", "Added", "Finished"))
+        self._file_grid = _StatGrid(("Type", "Size on disk", "Location", "Added"))
         self._group(dlay, "File", self._file_grid)
         self._source_grid = _StatGrid(
             (
@@ -419,7 +418,7 @@ class DetailDrawer(QFrame):
                 "Segments",
                 "Priority",
                 "Queue",
-                "Category",
+                "Speed limit",
             )
         )
         self._group(dlay, "Source", self._source_grid)
@@ -427,7 +426,7 @@ class DetailDrawer(QFrame):
         dlay.addStretch(1)
         self._pages.addWidget(det)
 
-        # -- Media / Contents ------------------------------------------------
+        # -- Media / Contents / Peers ----------------------------------------
         med, mlay = self._scroll_page()
         self._media_title = components.role_label(
             t("MEDIA"), "caption", size=design.FONT["caption"]
@@ -470,20 +469,6 @@ class DetailDrawer(QFrame):
         mlay.addStretch(1)
         self._pages.addWidget(med)
 
-        # -- Activity --------------------------------------------------------
-        act, alay = self._scroll_page()
-        self._history_grid = _StatGrid(("Added", "Finished", "Elapsed"))
-        self._group(alay, "History", self._history_grid)
-        self._stats_grid = _StatGrid(("Average", "Peak", "Retries", "Connections", "Speed limit"))
-        self._group(alay, "Statistics", self._stats_grid)
-        self._tags_box = QWidget()
-        self._tags_layout = QHBoxLayout(self._tags_box)
-        self._tags_layout.setContentsMargins(0, 6, 0, 0)
-        self._tags_layout.setSpacing(4)
-        alay.addWidget(self._tags_box)
-        alay.addStretch(1)
-        self._pages.addWidget(act)
-
         return self._pages
 
     def _long_block(self, layout: QVBoxLayout, caption: str) -> QLabel:
@@ -510,13 +495,11 @@ class DetailDrawer(QFrame):
         grid.setContentsMargins(10, 8, 10, 8)
         grid.setHorizontalSpacing(6)
         grid.setVerticalSpacing(6)
+        # Essentials only. Redownload / copy URL / path / hash live on the
+        # table's right-click menu so the drawer stays a short action strip.
         specs = (
             ("open", "open", t("Open"), t("Open the file"), False),
             ("folder", "folder", t("Folder"), t("Open the containing folder"), False),
-            ("redownload", "duplicate", t("Redownload"), t("Download this again"), False),
-            ("copy_url", "copy", t("Copy URL"), t("Copy the download URL"), False),
-            ("copy_path", "note", t("Copy path"), t("Copy the file path"), False),
-            ("copy_hash", "shield", t("Copy hash"), t("Copy the SHA-256 checksum"), False),
             ("rename", "rename", t("Rename"), t("Rename the file"), False),
             ("remove", "trash", t("Remove"), t("Remove from the list (file stays on disk)"), True),
         )
@@ -585,16 +568,14 @@ class DetailDrawer(QFrame):
         self._name.setText(view.display_name)
 
         path = Path(view.dest_dir) / view.filename
-        created, updated = self._times
-        finished = _fmt_datetime(updated) if view.status is JobStatus.COMPLETED else ""
+        created, _updated = self._times
 
-        # Details -> File
+        # Details -> File (identity + path; finished time lives on Overview)
         self._file_grid.clear()
         self._file_grid.set("Type", _type_label(view.filename))
         self._file_grid.set("Size on disk", self._disk_size(path))
         self._file_grid.set("Location", _wrappable(view.dest_dir))
         self._file_grid.set("Added", _fmt_datetime(created))
-        self._file_grid.set("Finished", finished)
 
         # Details -> Source
         self._source_grid.clear()
@@ -612,23 +593,13 @@ class DetailDrawer(QFrame):
         self._source_grid.set("Segments", self._segment_count(view))
         self._source_grid.set("Priority", self._priority_label())
         self._source_grid.set("Queue", self._queue_name(view.queue_id))
-        self._source_grid.set("Category", self._category(view))
+        if view.speed_limit_kbps:
+            self._source_grid.set("Speed limit", f"{view.speed_limit_kbps} KB/s")
         self._det_url.setText(_wrappable(view.url))
         url_box = self._det_url.parentWidget()
         if url_box is not None:
             url_box.setVisible(bool(view.url))
 
-        # Activity -> History + Statistics
-        self._history_grid.clear()
-        self._history_grid.set("Added", _fmt_datetime(created))
-        self._history_grid.set("Finished", finished)
-        self._history_grid.set("Elapsed", _elapsed(created, updated) if finished else "")
-        self._stats_grid.clear()
-        self._stats_grid.set("Retries", str(view.retry_count) if view.retry_count else "")
-        if view.kind is not JobKind.TORRENT:
-            self._stats_grid.set("Connections", str(self.manager.connections))
-        if view.speed_limit_kbps:
-            self._stats_grid.set("Speed limit", f"{view.speed_limit_kbps} KB/s")
         self._rebuild_tags(view)
 
     def _update_progress(self, view: JobView) -> None:
@@ -656,6 +627,7 @@ class DetailDrawer(QFrame):
 
     def _update_overview(self, view: JobView, speed_bps: float, new: bool) -> None:
         downloading = view.status is JobStatus.DOWNLOADING
+        created, updated = self._times
         self._spark_card.setVisible(downloading)
         if downloading and not new:
             self._spark.push(speed_bps)
@@ -668,6 +640,7 @@ class DetailDrawer(QFrame):
             self._spark_val.setText(motion.fmt_speed(speed_bps))
             self._overview.set("Speed", motion.fmt_speed(speed_bps))
             self._overview.set("Average", motion.fmt_speed(average) if average > 0 else "")
+            self._overview.set("Peak", motion.fmt_speed(peak) if peak > 0 else "")
             eta = ""
             if speed_bps > 1 and view.total_size:
                 eta = motion.fmt_eta((view.total_size - view.downloaded) / speed_bps)
@@ -677,21 +650,17 @@ class DetailDrawer(QFrame):
                 self._overview.set(
                     "Remaining", human_bytes(max(0, view.total_size - view.downloaded))
                 )
-                self._overview.set("Progress", f"{int(view.downloaded / view.total_size * 100)}%")
         else:
-            if view.total_size:
-                self._overview.set("Size", human_bytes(view.total_size))
-            self._overview.set("Type", _type_label(view.filename))
+            # Header already shows size + percent; Overview covers timing and
+            # the session speeds that Details does not.
             if view.status is JobStatus.COMPLETED:
-                self._overview.set("Finished", _fmt_datetime(self._times[1]))
-            if peak > 0:
+                self._overview.set("Finished", _fmt_datetime(updated))
+                self._overview.set("Elapsed", _elapsed(created, updated))
+            if average > 0:
                 self._overview.set("Average", motion.fmt_speed(average))
+            if peak > 0:
                 self._overview.set("Peak", motion.fmt_speed(peak))
             self._overview.set("Retries", str(view.retry_count) if view.retry_count else "")
-
-        # Activity statistics mirror the live average/peak.
-        self._stats_grid.set("Average", motion.fmt_speed(average) if average > 0 else "")
-        self._stats_grid.set("Peak", motion.fmt_speed(peak) if peak > 0 else "")
 
         self._ov_error.setText(view.error or "")
         err_box = self._ov_error.parentWidget()
@@ -708,7 +677,6 @@ class DetailDrawer(QFrame):
         path = Path(view.dest_dir) / view.filename
         done = view.status is JobStatus.COMPLETED and path.exists()
         self._act_btns["open"].setEnabled(done)
-        self._act_btns["copy_hash"].setEnabled(done)
         self._act_btns["rename"].setEnabled(path.exists())
 
     # ------------------------------------------------- third tab: media/peers
@@ -847,22 +815,6 @@ class DetailDrawer(QFrame):
         if self._job is None or self._job.priority == 0:
             return "Normal"
         return "High" if self._job.priority > 0 else "Low"
-
-    def _category(self, view: JobView) -> str:
-        if not self.manager.settings.categories_enabled:
-            return ""
-        folder = Path(view.dest_dir).name
-        known = {
-            "Video",
-            "Music",
-            "Images",
-            "Documents",
-            "Archives",
-            "Programs",
-            "Games",
-            "Torrents",
-        }
-        return folder if folder in known else ""
 
     def _rebuild_tags(self, view: JobView) -> None:
         while self._tags_layout.count():

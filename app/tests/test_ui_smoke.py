@@ -1353,10 +1353,6 @@ def _drawer(manager: DownloadManager, ffmpeg: str | None = None) -> DetailDrawer
         ffmpeg=ffmpeg,
         on_open_file=noop,
         on_open_folder=noop,
-        on_redownload=noop,
-        on_copy_url=noop,
-        on_copy_path=noop,
-        on_copy_hash=noop,
         on_rename=noop,
         on_remove=noop,
         on_extract=noop,
@@ -1403,12 +1399,15 @@ def test_detail_drawer_populates_real_fields(db: Database, tmp_path: Path):
 
         assert cell("_file_grid", "Type") == "BIN file"
         assert cell("_file_grid", "Size on disk") == "4.0 KB"
+        assert cell("_file_grid", "Added")  # a formatted timestamp
         assert cell("_source_grid", "Server") == "files.example.com"
         assert cell("_source_grid", "Protocol") == "HTTPS"
         assert cell("_source_grid", "Connections") == str(manager.connections)
-        assert cell("_history_grid", "Added")  # a formatted timestamp
         # No ffmpeg and not an archive -> the third tab is hidden.
         assert drawer._tabs[2].isHidden()
+        # Activity was folded into Overview; footer is the short action strip.
+        assert set(drawer._act_btns) == {"open", "folder", "rename", "remove"}
+        assert len(drawer._tabs) == 3
     finally:
         manager.shutdown()
 

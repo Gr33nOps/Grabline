@@ -323,10 +323,6 @@ class MainWindow(QMainWindow):
             ffmpeg=find_ffmpeg(self.settings),
             on_open_file=self._open_view_file,
             on_open_folder=self._open_view_folder,
-            on_redownload=lambda v: self.begin_add_url(v.url, allow_duplicate=True),
-            on_copy_url=self._copy_view_url,
-            on_copy_path=self._copy_view_path,
-            on_copy_hash=lambda v: self._copy_hash(Path(v.dest_dir) / v.filename),
             on_rename=self._rename_view,
             on_remove=self._remove_from_drawer,
             on_extract=lambda v: self._extract(Path(v.dest_dir) / v.filename),
@@ -1828,7 +1824,11 @@ class MainWindow(QMainWindow):
         open_file = menu.addAction(t("Open file"))
         open_file.setEnabled(view.status is JobStatus.COMPLETED and file_path.exists())
         open_folder = menu.addAction(t("Open folder"))
+        rename_file = menu.addAction(t("Rename…"))
+        rename_file.setEnabled(file_path.exists())
         copy_url = menu.addAction(t("Copy URL"))
+        copy_path = menu.addAction(t("Copy path"))
+        copy_path.setEnabled(file_path.exists())
         copy_magnet = menu.addAction(t("Copy magnet link"))
         copy_magnet.setVisible(view.kind is JobKind.TORRENT)
         redownload = menu.addAction(t("Download again"))
@@ -1922,10 +1922,12 @@ class MainWindow(QMainWindow):
         elif chosen is open_folder:
             if not reveal.open_folder(file_path):
                 self.statusBar().showMessage(t("Could not open the folder"), 3000)
+        elif chosen is rename_file:
+            self._rename_view(view)
         elif chosen is copy_url:
-            if self.clipboard_suppressor is not None:
-                self.clipboard_suppressor(view.url)  # don't offer our own copy back
-            QGuiApplication.clipboard().setText(view.url)
+            self._copy_view_url(view)
+        elif chosen is copy_path:
+            self._copy_view_path(view)
         elif chosen is copy_magnet:
             self._copy_magnet(view)
         elif chosen is redownload:
