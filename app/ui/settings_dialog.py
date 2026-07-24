@@ -963,8 +963,8 @@ class SettingsDialog(chrome.Dialog):
         about_layout.addWidget(
             _note(
                 "A free, open-source download manager under the AGPL-3.0 license. "
-                "No ads, no telemetry. If GrabLine helps you, you can support development "
-                "with any amount."
+                "No ads, no telemetry. Built in spare time. If GrabLine helps you, "
+                "a coffee keeps development going."
             )
         )
         links_row = QHBoxLayout()
@@ -977,7 +977,7 @@ class SettingsDialog(chrome.Dialog):
         releases_btn.clicked.connect(lambda: self._open_url(f"{_PROJECT_URL}/releases"))
         report_btn = QPushButton(t("Report an issue"))
         report_btn.clicked.connect(lambda: self._open_url(f"{_PROJECT_URL}/issues"))
-        support_btn = QPushButton(t("Support GrabLine"))
+        support_btn = QPushButton(t("Buy me a coffee"))
         support_btn.clicked.connect(lambda: self._open_url(_SUPPORT_URL))
         diag_btn = QPushButton(t("Copy diagnostics"))
         diag_btn.clicked.connect(self._copy_diagnostics)

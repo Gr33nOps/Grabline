@@ -28,7 +28,7 @@ Paste a URL, drop one on the window, or click the GrabLine button in your browse
 Files run over many connections (up to 32). Videos and audio open a quality panel (4K to 144p, MP3, M4A or FLAC, subtitles, trim) on 1000+ sites via yt dlp. Magnets, torrent files, SFTP, FTP, S3, WebDAV, and public Drive or Dropbox links open in the same app.
 
 No ads. No paid tier. No usage telemetry to us. AGPL 3.0.
-If it helps you, you can [support development][support] with any amount.
+GrabLine is built in spare time. If it saves you hassle, [buy me a coffee][support] — it keeps the project alive.
 
 ### More of the UI
 
@@ -148,7 +148,7 @@ Ground rules enforced in CI: no `shell=True`, Native Messaging only (no listen p
 
 [AGPL 3.0](LICENSE). yt dlp (Unlicense) and PySide6 (LGPL) are compatible dependencies; FFmpeg is fetched on the user’s machine when needed and is not shipped inside the installers. See [PRIVACY.md](PRIVACY.md).
 
-[Support GrabLine][support] stays optional forever.
+Love GrabLine? [Support the project on Ko-fi][support].
 
 [releases]: https://github.com/Gr33nOps/GrabLine/releases/latest
 [website]: https://gr33nops.github.io/GrabLine/
