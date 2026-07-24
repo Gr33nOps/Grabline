@@ -469,8 +469,8 @@ def test_fresh_job_reuses_resolve_probe_without_second_round_trip(
     job.resumable = True
     job.etag = '"reuse-etag"'
     db.update_job_probe(job)
-    job = db.get_job(job.id)
-    assert job is not None
+    reloaded = db.get_job(job.id)
+    assert reloaded is not None
 
     calls: list[str] = []
 
@@ -480,7 +480,7 @@ def test_fresh_job_reuses_resolve_probe_without_second_round_trip(
 
     monkeypatch.setattr(downloader_mod, "probe", boom)
 
-    status = SegmentedDownload(db, job, connections=4).run()
+    status = SegmentedDownload(db, reloaded, connections=4).run()
 
     assert status is JobStatus.COMPLETED
     assert calls == []

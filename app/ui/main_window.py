@@ -1179,7 +1179,7 @@ class MainWindow(QMainWindow):
             message += t(", skipped {count}", count=len(items))
         self.statusBar().showMessage(message, 10000)
         if items:
-            detail = "\n".join(f"• {url}: {reason}" for url, reason in items[10])
+            detail = "\n".join(f"• {url}: {reason}" for url, reason in items[:10])
             if len(items) > 10:
                 detail += t("\n… and {count} more", count=len(items) - 10)
             QMessageBox.information(self, t("Import finished"), f"{message}.\n\n{detail}")
