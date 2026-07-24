@@ -1,11 +1,12 @@
 <div align="center">
 
-<img src="website/assets/logo.png" width="96" height="96" alt="GrabLine logo" />
+<img src="website/assets/logo.png" width="88" height="88" alt="GrabLine logo" />
 
 # GrabLine
 
 Free, open source download manager for Windows, macOS and Linux.
-Splits each transfer across parallel connections, resumes after an interruption, and pairs with your browser for video and audio quality picks.
+
+Parallel connections, resume, torrents, cloud links, and a browser quality picker for video and audio.
 
 [![Download][download-badge]][releases]
 [![Firefox Add on][amo-badge]][amo]
@@ -13,34 +14,35 @@ Splits each transfer across parallel connections, resumes after an interruption,
 ![Platforms][platform-badge]
 [![Tests][ci-badge]][ci]
 
-**[Download][releases]** · **[Website](https://gr33nops.github.io/GrabLine/)** · **[Firefox add on][amo]** · [Install guide](docs/install.md)
+**[Download][releases]** · **[Website][website]** · **[Firefox add on][amo]** · [Install guide](docs/install.md)
 
-<img src="docs/screenshots/queue.png" width="860" alt="GrabLine downloads window with live speeds" />
+<br />
+
+<img src="docs/screenshots/queue.png" width="920" alt="GrabLine main window with active downloads" />
 
 </div>
 
-[releases]: https://github.com/Gr33nOps/GrabLine/releases/latest
-[amo]: https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/
-[license]: LICENSE
-[ci]: https://github.com/Gr33nOps/GrabLine/actions/workflows/ci.yml
-[download-badge]: https://img.shields.io/github/v/release/Gr33nOps/GrabLine?label=Download&color=0170fd&sort=semver
-[amo-badge]: https://img.shields.io/amo/v/grabline-connect?label=Firefox%20Add-on&color=ff7139
-[license-badge]: https://img.shields.io/badge/License-AGPL%203.0-blue
-[platform-badge]: https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
-[ci-badge]: https://img.shields.io/github/actions/workflow/status/Gr33nOps/GrabLine/ci.yml?branch=main&label=tests
+<br />
 
 Paste a URL, drop one on the window, or click the GrabLine button in your browser.
 Files run over many connections (up to 128). Videos and audio open a quality panel (4K to 144p, MP3, M4A or FLAC, subtitles, trim) on 1000+ sites via yt dlp. Magnets, torrent files, SFTP, FTP, S3, WebDAV, and public Drive or Dropbox links open in the same app.
 
 No ads. No paid tier. No usage telemetry to us. AGPL 3.0.
 
-<p align="center">
-  <img src="docs/screenshots/dashboard.png" width="720" alt="GrabLine dashboard with live speed, volume, and graphs" />
-</p>
+### More of the UI
 
-<p align="center">
-  <img src="docs/screenshots/quality.png" width="300" alt="GrabLine video quality picker" />
-</p>
+<table>
+  <tr>
+    <td width="62%" valign="top" align="center">
+      <img src="docs/screenshots/dashboard.png" width="100%" alt="GrabLine live dashboard with speed and graphs" /><br />
+      <sub>Live dashboard</sub>
+    </td>
+    <td width="38%" valign="top" align="center">
+      <img src="docs/screenshots/quality.png" width="100%" alt="GrabLine video quality picker" /><br />
+      <sub>Quality picker</sub>
+    </td>
+  </tr>
+</table>
 
 ## What you get
 
@@ -144,3 +146,14 @@ Ground rules enforced in CI: no `shell=True`, Native Messaging only (no listen p
 ## License
 
 [AGPL 3.0](LICENSE). yt dlp (Unlicense) and PySide6 (LGPL) are compatible dependencies; FFmpeg is fetched on the user’s machine when needed and is not shipped inside the installers. See [PRIVACY.md](PRIVACY.md).
+
+[releases]: https://github.com/Gr33nOps/GrabLine/releases/latest
+[website]: https://gr33nops.github.io/GrabLine/
+[amo]: https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/
+[license]: LICENSE
+[ci]: https://github.com/Gr33nOps/GrabLine/actions/workflows/ci.yml
+[download-badge]: https://img.shields.io/github/v/release/Gr33nOps/GrabLine?label=Download&color=0170fd&sort=semver
+[amo-badge]: https://img.shields.io/amo/v/grabline-connect?label=Firefox%20Add-on&color=ff7139
+[license-badge]: https://img.shields.io/badge/License-AGPL%203.0-blue
+[platform-badge]: https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
+[ci-badge]: https://img.shields.io/github/actions/workflow/status/Gr33nOps/GrabLine/ci.yml?branch=main&label=tests
