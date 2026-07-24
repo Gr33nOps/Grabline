@@ -42,10 +42,10 @@ without publishing.
 ## GitHub Packages
 
 Each release also publishes the Linux AppImage, `.deb`, and tarball to
-[GitHub Packages](https://github.com/Gr33nOps/Grabline/pkgs/container/grabline)
+[GitHub Packages](https://github.com/Gr33nOps/GrabLine/pkgs/container/grabline)
 (`ghcr.io/gr33nops/grabline`) via [`.github/workflows/packages.yml`](../.github/workflows/packages.yml).
 That fills the Packages block on the repository page. Installers for end users
-still come from the [Releases](https://github.com/Gr33nOps/Grabline/releases) page.
+still come from the [Releases](https://github.com/Gr33nOps/GrabLine/releases) page.
 
 ## Build one locally
 
