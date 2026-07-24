@@ -12,10 +12,10 @@ For how to report a finding, see [SECURITY.md](../SECURITY.md).
 
 **Content checks are advisory; app-integrity checks are enforced.**
 
-- *Advisory* — is this file malware? is this URL flagged? is it plain HTTP?
+- *Advisory*: is this file malware? is this URL flagged? is it plain HTTP?
   These warn and never block. A flagged file is still your file. This is a
   download manager, not an antivirus, and it does not decide what you may keep.
-- *Enforced* — can this archive member escape the download folder? can this
+- *Enforced*: can this archive member escape the download folder? can this
   message queue a `file://` URL? can this manifest make FFmpeg read your disk?
   These are not opinions about content; they are the app refusing to be turned
   against you, and they always trigger.
@@ -39,30 +39,30 @@ what comes back over the wire.
 
 ## What is enforced (and where)
 
-- **Filenames** — `app/core/naming.py::sanitize_filename` replaces path
+- **Filenames**: `app/core/naming.py:sanitize_filename` replaces path
   separators, `:` (NTFS ADS), control characters and null bytes, refuses
-  Windows reserved names, and strips trailing dots/spaces. Every write path —
+  Windows reserved names, and strips trailing dots/spaces. Every write path :
   direct downloads, HLS output, yt-dlp `outtmpl`, torrent layouts, archive
-  destinations — routes a remote-derived name through it or through
+  destinations: routes a remote-derived name through it or through
   `filename_from_url`, which does the same.
-- **Archive extraction** — `app/core/archive.py` refuses any member whose
+- **Archive extraction**: `app/core/archive.py` refuses any member whose
   resolved path leaves the destination (`_is_within`), for zip, tar **and** the
   external-tool formats; tar additionally uses Python 3.12's `data` filter,
   which strips setuid bits, device nodes, and symlinks pointing outside the
   tree. Total declared and streamed output is capped, so a small archive can't
   expand to fill the disk.
-- **Native messaging** — `app/native_host/` validates every field before it
+- **Native messaging**: `app/native_host/` validates every field before it
   reaches the handoffs table: URLs must be `http(s)` (or a `magnet:` carrying
   `xt=`), header values have CR/LF stripped, everything is length-capped, the
   wire message is capped at 1 MB, and a non-object message is rejected.
-- **Subprocesses** — every spawn in the tree is an argument list (the `S1`
+- **Subprocesses**: every spawn in the tree is an argument list (the `S1`
   convention), never a shell string. The user completion script receives the
   finished file's path as one discrete final argument, so a filename like
   `; rm -rf ~` is one literal string, never a shell token.
-- **FFmpeg** — the HLS/DASH engine restricts input protocols to
+- **FFmpeg**: the HLS/DASH engine restricts input protocols to
   `http,https,tcp,tls,crypto,data`, so a remote manifest cannot reference
-  `file://` (local read), `concat:`/`subfile:` or `gopher:` — the protocols
-  behind FFmpeg's known local-file-disclosure and SSRF issues — regardless of
+  `file://` (local read), `concat:`/`subfile:` or `gopher:`: the protocols
+  behind FFmpeg's known local-file-disclosure and SSRF issues: regardless of
   how old the system FFmpeg on `PATH` happens to be. When GrabLine fetches the
   segments itself (the default path, so a gated CDN that rejects FFmpeg's own
   requests still works), FFmpeg only remuxes local temp files the app wrote: the
@@ -70,9 +70,9 @@ what comes back over the wire.
   them, and the protocol list is narrowed to `file,crypto,data`, so `file` can
   only reach the app's own temp directory, never a path the remote manifest
   chose.
-- **TLS** — certificate verification is on for every HTTP client and is never
+- **TLS**: certificate verification is on for every HTTP client and is never
   disabled anywhere in the tree. A self-signed host fails closed.
-- **Provisioning** — the fetched FFmpeg and Deno binaries are verified against
+- **Provisioning**: the fetched FFmpeg and Deno binaries are verified against
   hardcoded SHA-256 pins and downloaded over HTTPS from their expected hosts.
 
 ## What is advisory (and stays that way)
@@ -83,11 +83,11 @@ deliberate product decision, not an oversight.
 
 ## What is deliberately not defended
 
-- The user against their own machine — a typed completion command, a pasted
+- The user against their own machine: a typed completion command, a pasted
   `file://`/`user:pass@` URL, a huge download the user chose.
 - The engines are not sandboxed in containers (out of scope; would break the
   product). yt-dlp, FFmpeg, and libtorrent run with the app's own privileges.
-- No app-level authentication — GrabLine is a single-user desktop app.
+- No app-level authentication: GrabLine is a single-user desktop app.
 - Attacks that require local admin the attacker would already have.
 
 ## Reporting a vulnerability
@@ -108,29 +108,29 @@ desktop app, not a server.
 
 | # | CWE | Severity | Finding | Fix | Proof test |
 |---|---|---|---|---|---|
-| F1 | CWE-409 | Medium | A small archive could expand without bound and fill the disk (decompression bomb). | Cap declared and streamed uncompressed output; refuse absurd archives. | `test_archive_security::test_zip_bomb_refused` |
-| F2 | CWE-22 | Medium | `.rar`/`.7z` extraction trusted the external tool with no in-app traversal guard (zip/tar had one). | List entries first, refuse any that escape the target — parity with zip/tar. | `test_archive_security::test_external_traversal_refused` |
-| F3 | CWE-668 | Medium | The HLS engine let a remote manifest pick any FFmpeg input protocol (`file:`, `concat:`, …), a local-file-read/SSRF path on old system FFmpeg. | Restrict input protocols to what HLS needs. | `test_hls::test_ffmpeg_protocol_whitelist` |
-| F4 | CWE-312 | Medium | Exporting the download list wrote extension **session cookies** (`http_headers`) to plaintext JSON. | Strip sensitive headers from the export. | `test_listio::test_export_strips_session_cookies` |
-| F5 | CWE-522 | Low | Exporting settings kept a `proxy` value that may embed `user:pass`. | Redact credentials from the exported proxy URL. | `test_settings::test_export_redacts_proxy_credentials` |
-| F6 | CWE-732 | Low | The data folder and SQLite DB (which hold API keys and cookies) were world-readable on POSIX. | Create the data dir `0700` and the DB `0600` on POSIX. | `test_paths::test_data_dir_is_private` |
+| F1 | CWE-409 | Medium | A small archive could expand without bound and fill the disk (decompression bomb). | Cap declared and streamed uncompressed output; refuse absurd archives. | `test_archive_security:test_zip_bomb_refused` |
+| F2 | CWE-22 | Medium | `.rar`/`.7z` extraction trusted the external tool with no in-app traversal guard (zip/tar had one). | List entries first, refuse any that escape the target: parity with zip/tar. | `test_archive_security:test_external_traversal_refused` |
+| F3 | CWE-668 | Medium | The HLS engine let a remote manifest pick any FFmpeg input protocol (`file:`, `concat:`, …), a local-file-read/SSRF path on old system FFmpeg. | Restrict input protocols to what HLS needs. | `test_hls:test_ffmpeg_protocol_whitelist` |
+| F4 | CWE-312 | Medium | Exporting the download list wrote extension **session cookies** (`http_headers`) to plaintext JSON. | Strip sensitive headers from the export. | `test_listio:test_export_strips_session_cookies` |
+| F5 | CWE-522 | Low | Exporting settings kept a `proxy` value that may embed `user:pass`. | Redact credentials from the exported proxy URL. | `test_settings:test_export_redacts_proxy_credentials` |
+| F6 | CWE-732 | Low | The data folder and SQLite DB (which hold API keys and cookies) were world-readable on POSIX. | Create the data dir `0700` and the DB `0600` on POSIX. | `test_paths:test_data_dir_is_private` |
 
 ### Audited, already safe (no change)
 
-- **Native messaging** — scheme allow-list, CRLF header stripping, length caps,
+- **Native messaging**: scheme allow-list, CRLF header stripping, length caps,
   1 MB message cap, JSON-object enforcement. (B2)
-- **Zip/tar traversal** — `_is_within` guard plus stdlib sanitization plus the
+- **Zip/tar traversal**: `_is_within` guard plus stdlib sanitization plus the
   tar `data` filter (symlinks/setuid/devices stripped). (B4)
-- **Filename sanitization** — `sanitize_filename` neutralizes `../`, absolute
+- **Filename sanitization**: `sanitize_filename` neutralizes `../`, absolute
   paths, null bytes, `:`/ADS, backslashes, reserved names and trailing dots;
   every write routes through it. (B1)
-- **Subprocesses** — argument lists throughout; the completion script appends
+- **Subprocesses**: argument lists throughout; the completion script appends
   the path as a discrete argument. (B5)
-- **TLS** — never disabled; self-signed fails closed. (B7)
-- **Provisioning** — FFmpeg and Deno fetched over HTTPS against hardcoded
+- **TLS**: never disabled; self-signed fails closed. (B7)
+- **Provisioning**: FFmpeg and Deno fetched over HTTPS against hardcoded
   SHA-256 pins. (B3)
-- **No dangerous eval** — no `eval`/`exec`/`pickle`/`yaml.load`/`marshal`/
+- **No dangerous eval**: no `eval`/`exec`/`pickle`/`yaml.load`/`marshal`/
   remote import of untrusted data. (whole tree)
-- **Dependencies** — `pip-audit` reports no known vulnerabilities.
-- **Log hygiene** — no credentials, cookies, keys or tokens in log calls. (B6)
-- **Cloud logins** — kept in the system keychain, never in the DB. (B6)
+- **Dependencies**: `pip-audit` reports no known vulnerabilities.
+- **Log hygiene**: no credentials, cookies, keys or tokens in log calls. (B6)
+- **Cloud logins**: kept in the system keychain, never in the DB. (B6)

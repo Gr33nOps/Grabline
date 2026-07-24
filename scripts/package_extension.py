@@ -4,7 +4,7 @@ Chrome Web Store and AMO each want a slightly different manifest than the
 cross-browser one we develop with:
 
 - **chrome**: no ``key`` (the store assigns identity and rejects manifests
-  that carry one — unpacked dev installs keep using the in-repo manifest),
+  that carry one: unpacked dev installs keep using the in-repo manifest),
   no ``browser_specific_settings``, background as ``service_worker`` only.
 - **firefox**: keeps ``browser_specific_settings`` (the pinned gecko id),
   background as ``scripts`` (event page) only, no ``key``.

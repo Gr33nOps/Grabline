@@ -241,7 +241,6 @@
   "GrabLine update": "GrabLine güncellemesi",
   "GrabLine {tag} is available (you have {version}).\n\nUpdate now downloads the installer and opens it.": "GrabLine {tag} kullanılabilir (mevcut sürümünüz {version}).\n\nŞimdi güncelle, yükleyiciyi indirir ve açar.",
   "Graphs and per-server breakdowns are on the Dashboard. Statistics stay on this machine.": "Grafikler ve sunucu bazlı dökümler Panodadır. İstatistikler bu makinede kalır.",
-  "Graphs — last 60 seconds": "Grafikler — son 60 saniye",
   "Has notes": "Notu var",
   "Hashing pieces …": "Parçaların karması hesaplanıyor…",
   "Hashing {name} …": "{name} karması hesaplanıyor…",
@@ -308,7 +307,7 @@
   "NAT-PMP port mapping": "NAT-PMP bağlantı noktası eşleme",
   "Name": "Ad",
   "Name:": "Ad:",
-  "Named queues — concurrency, order, schedules, and dependencies — are managed on the Queue page. The global download limit is under Downloads.": "Adlandırılmış kuyruklar — eşzamanlılık, sıra, zamanlamalar ve bağımlılıklar — Kuyruk sayfasında yönetilir. Genel indirme sınırı İndirilenler altındadır.",
+  "Named queues (concurrency, order, schedules, and dependencies) are managed on the Queue page. The global download limit is under Downloads.": "Adlandırılmış kuyruklar (eşzamanlılık, sıra, zamanlamalar ve bağımlılıklar) Kuyruk sayfasında yönetilir. Genel indirme sınırı İndirilenler altındadır.",
   "Network": "Ağ",
   "Network (system)": "Ağ (sistem)",
   "New downloads of this type join this queue automatically": "Bu türdeki yeni indirmeler otomatik olarak bu kuyruğa katılır",
@@ -842,7 +841,7 @@
   "VirusTotal: {malicious} of {total} engines flagged this file.": "VirusTotal: {total} motordan {malicious} tanesi bu dosyayı işaretledi.",
   "YouTube is temporarily blocking automated access from your connection (a bot check). Wait a little and try again, or try a different network.": "YouTube bağlantınızdan otomatik erişimi geçici olarak engelliyor (bot denetimi). Biraz bekleyip yeniden deneyin veya farklı bir ağ deneyin.",
   "YouTube needs a JavaScript runtime to unlock this video's formats. GrabLine installs one (Deno) automatically; if this keeps happening, install Node.js and restart GrabLine.": "YouTube bu videonun biçimlerini açmak için bir JavaScript çalışma zamanı ister. GrabLine otomatik olarak bir tane (Deno) kurar; sürerse Node.js kurup GrabLine'ı yeniden başlatın.",
-  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "YouTube kullanılabilir bir video biçimi döndürmedi. Genellikle geçicidir — kısa süre sonra yeniden deneyin. Yalnızca «GrabLine tarayıcı oturumumu kullansın» açıkken başarısız olursa kapatın: JavaScript çalışma zamanı olmayan bir PC'de tarayıcı çerezleri YouTube'un indirilebilir biçimleri gizlemesine yol açabilir.",
+  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "YouTube kullanılabilir bir video biçimi döndürmedi. Genellikle geçicidir: kısa süre sonra yeniden deneyin. Yalnızca «GrabLine tarayıcı oturumumu kullansın» açıkken başarısız olursa kapatın: JavaScript çalışma zamanı olmayan bir PC'de tarayıcı çerezleri YouTube'un indirilebilir biçimleri gizlemesine yol açabilir.",
   "host, or the S3 endpoint (e.g. s3.us-west.amazonaws.com)": "ana bilgisayar veya S3 uç noktası (örn. s3.us-west.amazonaws.com)",
   "password, key passphrase, or S3 secret key": "parola, anahtar parolası veya S3 gizli anahtarı",
   "the file or folder to share": "paylaşılacak dosya veya klasör",
@@ -859,5 +858,6 @@
   "Changing the language asks you to restart GrabLine so the UI can rebuild.": "Dili değiştirdiğinizde arayüzün yeniden kurulması için GrabLine’ı yeniden başlatmanız istenir.",
   "Restart now": "Şimdi yeniden başlat",
   "Later": "Sonra",
-  "Could not restart GrabLine. Please quit and open it again.": "GrabLine yeniden başlatılamadı. Lütfen kapatıp yeniden açın."
+  "Could not restart GrabLine. Please quit and open it again.": "GrabLine yeniden başlatılamadı. Lütfen kapatıp yeniden açın.",
+  "Graphs: last 60 seconds": "Grafikler: son 60 saniye"
 }

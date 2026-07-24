@@ -241,7 +241,6 @@
   "GrabLine update": "تحديث GrabLine",
   "GrabLine {tag} is available (you have {version}).\n\nUpdate now downloads the installer and opens it.": "الإصدار {tag} من GrabLine متاح (لديك {version}).\n\nسيقوم \"التحديث الآن\" بتنزيل المُثبِّت وفتحه.",
   "Graphs and per-server breakdowns are on the Dashboard. Statistics stay on this machine.": "الرسوم البيانية والتفصيلات لكل خادم موجودة في لوحة المعلومات. تبقى الإحصائيات على هذا الجهاز.",
-  "Graphs — last 60 seconds": "الرسوم البيانية — آخر 60 ثانية",
   "Has notes": "به ملاحظات",
   "Hashing pieces …": "حساب بصمة القطع…",
   "Hashing {name} …": "حساب بصمة {name}…",
@@ -308,7 +307,7 @@
   "NAT-PMP port mapping": "تعيين منافذ NAT-PMP",
   "Name": "الاسم",
   "Name:": "الاسم:",
-  "Named queues — concurrency, order, schedules, and dependencies — are managed on the Queue page. The global download limit is under Downloads.": "تُدار قوائم الانتظار المسمّاة — التزامن والترتيب والجداول والاعتماديات — من صفحة قائمة الانتظار. أما الحد العام للتنزيل فتحت التنزيلات.",
+  "Named queues (concurrency, order, schedules, and dependencies) are managed on the Queue page. The global download limit is under Downloads.": "تُدار قوائم الانتظار المسمّاة (التزامن والترتيب والجداول والاعتماديات) من صفحة قائمة الانتظار. أما الحد العام للتنزيل فتحت التنزيلات.",
   "Network": "الشبكة",
   "Network (system)": "الشبكة (النظام)",
   "New downloads of this type join this queue automatically": "التنزيلات الجديدة من هذا النوع تنضم إلى قائمة الانتظار هذه تلقائيًا",
@@ -842,7 +841,7 @@
   "VirusTotal: {malicious} of {total} engines flagged this file.": "VirusTotal: أشار {malicious} من أصل {total} محركات إلى هذا الملف.",
   "YouTube is temporarily blocking automated access from your connection (a bot check). Wait a little and try again, or try a different network.": "يحظر YouTube مؤقتًا الوصول الآلي من اتصالك (فحص روبوتات). انتظر قليلًا وحاول مجددًا، أو جرّب شبكة أخرى.",
   "YouTube needs a JavaScript runtime to unlock this video's formats. GrabLine installs one (Deno) automatically; if this keeps happening, install Node.js and restart GrabLine.": "يحتاج YouTube إلى بيئة تشغيل JavaScript لفتح صيغ هذا الفيديو. يثبّت GrabLine واحدًا (Deno) تلقائيًا؛ إن استمر ذلك، ثبّت Node.js وأعد تشغيل GrabLine.",
-  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "لم يُرجع YouTube صيغة فيديو قابلة للاستخدام. عادةً ما يكون مؤقتًا — أعد المحاولة قريبًا. إن فشل فقط مع تفعيل «السماح لـ GrabLine باستخدام جلسة متصفحي»، عطّله: على جهاز بلا بيئة تشغيل JavaScript، قد تخفي كوكيز المتصفح الصيغ القابلة للتنزيل من YouTube.",
+  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "لم يُرجع YouTube صيغة فيديو قابلة للاستخدام. عادةً ما يكون مؤقتًا: أعد المحاولة قريبًا. إن فشل فقط مع تفعيل «السماح لـ GrabLine باستخدام جلسة متصفحي»، عطّله: على جهاز بلا بيئة تشغيل JavaScript، قد تخفي كوكيز المتصفح الصيغ القابلة للتنزيل من YouTube.",
   "host, or the S3 endpoint (e.g. s3.us-west.amazonaws.com)": "المضيف، أو نقطة نهاية S3 (مثل s3.us-west.amazonaws.com)",
   "password, key passphrase, or S3 secret key": "كلمة مرور، عبارة مفتاح المرور، أو المفتاح السري لـ S3",
   "the file or folder to share": "الملف أو المجلد للمشاركة",
@@ -859,5 +858,6 @@
   "Changing the language asks you to restart GrabLine so the UI can rebuild.": "عند تغيير اللغة يُطلب منك إعادة تشغيل GrabLine لإعادة بناء الواجهة.",
   "Restart now": "أعد التشغيل الآن",
   "Later": "لاحقًا",
-  "Could not restart GrabLine. Please quit and open it again.": "تعذّر إعادة تشغيل GrabLine. أغلقه وافتحه مرة أخرى."
+  "Could not restart GrabLine. Please quit and open it again.": "تعذّر إعادة تشغيل GrabLine. أغلقه وافتحه مرة أخرى.",
+  "Graphs: last 60 seconds": "الرسوم البيانية: آخر 60 ثانية"
 }

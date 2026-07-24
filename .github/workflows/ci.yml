@@ -23,15 +23,15 @@ jobs:
           set -euo pipefail
           # Bounded apt: stuck mirrors were holding the whole job for 30+ minutes.
           sudo apt-get \
-            -o Acquire::Retries=3 \
-            -o Acquire::http::Timeout=30 \
-            -o Acquire::https::Timeout=30 \
-            -o Acquire::ftp::Timeout=30 \
+            -o Acquire:Retries=3 \
+            -o Acquire:http:Timeout=30 \
+            -o Acquire:https:Timeout=30 \
+            -o Acquire:ftp:Timeout=30 \
             update
           sudo DEBIAN_FRONTEND=noninteractive apt-get \
-            -o Acquire::Retries=3 \
-            -o Acquire::http::Timeout=30 \
-            -o Acquire::https::Timeout=30 \
+            -o Acquire:Retries=3 \
+            -o Acquire:http:Timeout=30 \
+            -o Acquire:https:Timeout=30 \
             install -y --no-install-recommends \
             libegl1 libgl1 libxkbcommon0 ffmpeg
 
@@ -41,10 +41,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Shell-surface gate (S1 — no shell=True anywhere)
+      - name: Shell-surface gate (S1: no shell=True anywhere)
         run: |
           if grep -rn --include='*.py' 'shell=True' app packaging extension 2>/dev/null; then
-            echo "::error::shell=True is forbidden by security requirement S1"
+            echo ":error:shell=True is forbidden by security requirement S1"
             exit 1
           fi
           echo "S1 gate passed"

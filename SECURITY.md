@@ -3,9 +3,9 @@
 ## Reporting a vulnerability
 
 If you find something that lets a malicious server, web page, archive, or
-browser message act outside GrabLine's trust boundaries — for example writing
+browser message act outside GrabLine's trust boundaries: for example writing
 outside the download folder, running shell commands from remote input, or
-exfiltrating secrets — please report it **privately** through GitHub Security
+exfiltrating secrets: please report it **privately** through GitHub Security
 Advisories:
 
 **Security → Report a vulnerability** on

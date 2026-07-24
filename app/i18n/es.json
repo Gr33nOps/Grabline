@@ -241,7 +241,6 @@
   "GrabLine update": "Actualización de GrabLine",
   "GrabLine {tag} is available (you have {version}).\n\nUpdate now downloads the installer and opens it.": "GrabLine {tag} está disponible (tienes {version}).\n\nActualizar ahora descarga el instalador y lo abre.",
   "Graphs and per-server breakdowns are on the Dashboard. Statistics stay on this machine.": "Los gráficos y los desgloses por servidor están en el Panel. Las estadísticas permanecen en este equipo.",
-  "Graphs — last 60 seconds": "Gráficos — últimos 60 segundos",
   "Has notes": "Tiene notas",
   "Hashing pieces …": "Calculando hash de las partes…",
   "Hashing {name} …": "Calculando hash de {name}…",
@@ -308,7 +307,7 @@
   "NAT-PMP port mapping": "Asignación de puertos NAT-PMP",
   "Name": "Nombre",
   "Name:": "Nombre:",
-  "Named queues — concurrency, order, schedules, and dependencies — are managed on the Queue page. The global download limit is under Downloads.": "Las colas con nombre —concurrencia, orden, horarios y dependencias— se gestionan en la página Cola. El límite global de descargas está en Descargas.",
+  "Named queues (concurrency, order, schedules, and dependencies) are managed on the Queue page. The global download limit is under Downloads.": "Las colas con nombre (concurrencia, orden, horarios y dependencias) se gestionan en la página Cola. El límite global de descargas está en Descargas.",
   "Network": "Red",
   "Network (system)": "Red (sistema)",
   "New downloads of this type join this queue automatically": "Las descargas nuevas de este tipo entran en esta cola automáticamente",
@@ -859,5 +858,6 @@
   "Changing the language asks you to restart GrabLine so the UI can rebuild.": "Al cambiar el idioma se te pide reiniciar GrabLine para reconstruir la interfaz.",
   "Restart now": "Reiniciar ahora",
   "Later": "Más tarde",
-  "Could not restart GrabLine. Please quit and open it again.": "No se pudo reiniciar GrabLine. Cierra la aplicación y ábrela de nuevo."
+  "Could not restart GrabLine. Please quit and open it again.": "No se pudo reiniciar GrabLine. Cierra la aplicación y ábrela de nuevo.",
+  "Graphs: last 60 seconds": "Gráficos: últimos 60 segundos"
 }

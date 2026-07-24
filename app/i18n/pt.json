@@ -241,7 +241,6 @@
   "GrabLine update": "Atualização do GrabLine",
   "GrabLine {tag} is available (you have {version}).\n\nUpdate now downloads the installer and opens it.": "O GrabLine {tag} está disponível (você tem {version}).\n\nAtualizar agora baixa o instalador e o abre.",
   "Graphs and per-server breakdowns are on the Dashboard. Statistics stay on this machine.": "Gráficos e detalhamentos por servidor estão no Painel. As estatísticas ficam nesta máquina.",
-  "Graphs — last 60 seconds": "Gráficos — últimos 60 segundos",
   "Has notes": "Tem notas",
   "Hashing pieces …": "Calculando hash das partes…",
   "Hashing {name} …": "Calculando hash de {name}…",
@@ -308,7 +307,7 @@
   "NAT-PMP port mapping": "Mapeamento de portas NAT-PMP",
   "Name": "Nome",
   "Name:": "Nome:",
-  "Named queues — concurrency, order, schedules, and dependencies — are managed on the Queue page. The global download limit is under Downloads.": "Filas nomeadas — simultaneidade, ordem, agendamentos e dependências — são gerenciadas na página Fila. O limite global de download está em Downloads.",
+  "Named queues (concurrency, order, schedules, and dependencies) are managed on the Queue page. The global download limit is under Downloads.": "Filas nomeadas (simultaneidade, ordem, agendamentos e dependências) são gerenciadas na página Fila. O limite global de download está em Downloads.",
   "Network": "Rede",
   "Network (system)": "Rede (sistema)",
   "New downloads of this type join this queue automatically": "Novos downloads deste tipo entram nesta fila automaticamente",
@@ -842,7 +841,7 @@
   "VirusTotal: {malicious} of {total} engines flagged this file.": "VirusTotal: {malicious} de {total} mecanismos sinalizaram este arquivo.",
   "YouTube is temporarily blocking automated access from your connection (a bot check). Wait a little and try again, or try a different network.": "O YouTube está bloqueando temporariamente o acesso automatizado da sua conexão (verificação antibot). Espere um pouco e tente de novo, ou use outra rede.",
   "YouTube needs a JavaScript runtime to unlock this video's formats. GrabLine installs one (Deno) automatically; if this keeps happening, install Node.js and restart GrabLine.": "O YouTube precisa de um runtime JavaScript para liberar os formatos deste vídeo. O GrabLine instala um (Deno) automaticamente; se continuar, instale o Node.js e reinicie o GrabLine.",
-  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "O YouTube não devolveu um formato de vídeo utilizável. Costuma ser temporário — tente de novo em breve. Se só falhar com «Deixar o GrabLine usar minha sessão do navegador» ligado, desligue: num PC sem runtime JavaScript, cookies do navegador podem fazer o YouTube esconder os formatos baixáveis.",
+  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "O YouTube não devolveu um formato de vídeo utilizável. Costuma ser temporário: tente de novo em breve. Se só falhar com «Deixar o GrabLine usar minha sessão do navegador» ligado, desligue: num PC sem runtime JavaScript, cookies do navegador podem fazer o YouTube esconder os formatos baixáveis.",
   "host, or the S3 endpoint (e.g. s3.us-west.amazonaws.com)": "host, ou o endpoint S3 (p. ex. s3.us-west.amazonaws.com)",
   "password, key passphrase, or S3 secret key": "senha, frase-senha da chave ou chave secreta S3",
   "the file or folder to share": "o arquivo ou pasta a compartilhar",
@@ -859,5 +858,6 @@
   "Changing the language asks you to restart GrabLine so the UI can rebuild.": "Ao mudar o idioma, pedimos para reiniciar o GrabLine para reconstruir a interface.",
   "Restart now": "Reiniciar agora",
   "Later": "Mais tarde",
-  "Could not restart GrabLine. Please quit and open it again.": "Não foi possível reiniciar o GrabLine. Feche e abra novamente."
+  "Could not restart GrabLine. Please quit and open it again.": "Não foi possível reiniciar o GrabLine. Feche e abra novamente.",
+  "Graphs: last 60 seconds": "Gráficos: últimos 60 segundos"
 }

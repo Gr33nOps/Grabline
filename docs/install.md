@@ -1,6 +1,6 @@
 # Installing GrabLine
 
-Packaged builds include everything — no Python, no extra dependencies.
+Packaged builds include everything: no Python, no extra dependencies.
 Pick your system below, or grab files from the
 [latest release](https://github.com/Gr33nOps/GrabLine/releases/latest).
 
@@ -35,7 +35,7 @@ Exact clicks are under each section.
    magnet links and `.torrent` files.
 4. Finish. GrabLine is in the Start menu and searchable from the taskbar.
 
-Installing over an existing copy is fine — the installer closes a running
+Installing over an existing copy is fine: the installer closes a running
 GrabLine first and keeps your settings and download list.
 
 ### Portable
@@ -54,7 +54,7 @@ Windows; use the installer if you want those.
 1. Open the `.dmg` and drag **GrabLine** onto the **Applications** shortcut.
 2. Eject the disk image and open GrabLine from Applications.
 3. macOS says **"GrabLine cannot be opened because the developer cannot be
-   verified"**. Click **Cancel** — not "Move to Bin".
+   verified"**. Click **Cancel**: not "Move to Bin".
 4. **Right-click** (or Control-click) GrabLine in Applications → **Open** →
    **Open** in the dialog that follows.
 
@@ -65,7 +65,7 @@ Windows; use the installer if you want those.
    finds it.
 
 Running the wrong architecture's build is the usual cause of "the app quit
-unexpectedly" on first launch — check the chip and download the matching file.
+unexpectedly" on first launch: check the chip and download the matching file.
 
 ---
 
@@ -73,7 +73,7 @@ unexpectedly" on first launch — check the chip and download the matching file.
 
 | File | Use it when |
 |---|---|
-| `grabline_<version>_amd64.deb` | Debian, Ubuntu, Mint, Pop!\_OS — anything with `apt`. |
+| `grabline_<version>_amd64.deb` | Debian, Ubuntu, Mint, Pop!\_OS: anything with `apt`. |
 | `Grabline-<version>-x86_64.AppImage` | Any distribution, no install, one file. |
 | `Grabline-<version>-linux-x86_64.tar.gz` | Your system has no FUSE, so the AppImage will not start. |
 
@@ -116,7 +116,7 @@ button on videos and hands your browser's downloads over.
 
 | Browser | How |
 |---|---|
-| **Firefox** | Install [GrabLine Connect](https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/) — one click, reviewed and signed by Mozilla. |
+| **Firefox** | Install [GrabLine Connect](https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/): one click, reviewed and signed by Mozilla. |
 | **Chrome, Edge, Brave, other Chromium** | In GrabLine: sidebar **⋯** → **Browser Setup** → **Add GrabLine to \<browser\>**. It opens the extension folder and `chrome://extensions`; turn on **Developer mode** and click **Load unpacked**. |
 
 GrabLine registers the connector between app and browser on first launch. If
@@ -140,7 +140,7 @@ Music, Images, Documents, Archives, Programs, Games and Torrents. Change that
 in **Settings → Downloads**.
 
 Copying that folder to another machine moves your queue and settings with it.
-Nothing is uploaded anywhere — there is no account and no telemetry.
+Nothing is uploaded anywhere: there is no account and no telemetry.
 
 ---
 
@@ -154,5 +154,5 @@ Nothing is uploaded anywhere — there is no account and no telemetry.
 | **Linux (AppImage/tarball)** | Delete the file or folder. |
 
 Uninstalling removes the program and the browser pairing. It leaves your
-downloads alone, and leaves the data folder above — delete it by hand if you
+downloads alone, and leaves the data folder above: delete it by hand if you
 want the settings and history gone too.

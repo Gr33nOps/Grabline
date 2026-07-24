@@ -14,7 +14,7 @@
   function cleanTitle(title) {
     return (title || "")
       .replace(
-        /\s*[-|•·—–]\s*(YouTube|Instagram|Vimeo|TikTok|Twitter|X|Facebook|Dailymotion|Twitch|SoundCloud|Reddit)\s*$/i,
+        /\s*[-|•·:-]\s*(YouTube|Instagram|Vimeo|TikTok|Twitter|X|Facebook|Dailymotion|Twitch|SoundCloud|Reddit)\s*$/i,
         "",
       )
       .trim();

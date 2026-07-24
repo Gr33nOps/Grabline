@@ -204,7 +204,7 @@
   "Extracting {name} …": "正在解压 {name}…",
   "FFmpeg (needed for MP3, merging, and streams)": "FFmpeg（MP3、合并和流媒体所需）",
   "FFmpeg installed and verified:\n{path}": "FFmpeg 已安装并验证：\n{path}",
-  "FFmpeg not found - install it in Settings to enable MP3, merging, and streams": "未找到 FFmpeg——请在设置中安装以启用 MP3、合并和流媒体功能",
+  "FFmpeg not found - install it in Settings to enable MP3, merging, and streams": "未找到 FFmpeg: 请在设置中安装以启用 MP3、合并和流媒体功能",
   "FFmpeg path override:": "FFmpeg 路径覆盖：",
   "FPS": "帧率",
   "Failed": "失败",
@@ -241,7 +241,6 @@
   "GrabLine update": "GrabLine 更新",
   "GrabLine {tag} is available (you have {version}).\n\nUpdate now downloads the installer and opens it.": "GrabLine {tag} 已发布（当前版本为 {version}）。\n\n立即更新将下载安装程序并打开它。",
   "Graphs and per-server breakdowns are on the Dashboard. Statistics stay on this machine.": "图表和按服务器的明细在仪表盘上。统计数据仅保留在本机。",
-  "Graphs — last 60 seconds": "图表 — 最近 60 秒",
   "Has notes": "有备注",
   "Hashing pieces …": "正在计算分片哈希…",
   "Hashing {name} …": "正在计算 {name} 的哈希值…",
@@ -308,7 +307,7 @@
   "NAT-PMP port mapping": "NAT-PMP 端口映射",
   "Name": "名称",
   "Name:": "名称：",
-  "Named queues — concurrency, order, schedules, and dependencies — are managed on the Queue page. The global download limit is under Downloads.": "命名队列——并发、顺序、计划和依赖——在“队列”页面中管理。全局下载上限在“下载”中。",
+  "Named queues (concurrency, order, schedules, and dependencies) are managed on the Queue page. The global download limit is under Downloads.": "命名队列（并发、顺序、计划和依赖）在“队列”页面中管理。全局下载上限在“下载”中。",
   "Network": "网络",
   "Network (system)": "网络（系统）",
   "New downloads of this type join this queue automatically": "此类型的新下载会自动加入此队列",
@@ -842,7 +841,7 @@
   "VirusTotal: {malicious} of {total} engines flagged this file.": "VirusTotal：{total} 个引擎中有 {malicious} 个标记了此文件。",
   "YouTube is temporarily blocking automated access from your connection (a bot check). Wait a little and try again, or try a different network.": "YouTube 正在暂时阻止来自您连接的自动化访问（机器人检查）。请稍候再试，或换用其他网络。",
   "YouTube needs a JavaScript runtime to unlock this video's formats. GrabLine installs one (Deno) automatically; if this keeps happening, install Node.js and restart GrabLine.": "YouTube 需要 JavaScript 运行时才能解锁此视频的格式。GrabLine 会自动安装一个（Deno）；若仍出现，请安装 Node.js 并重启 GrabLine。",
-  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "YouTube 未返回可用的视频格式。通常是暂时的——请稍后再试。若仅在开启“让 GrabLine 使用我的浏览器会话”时失败，请关闭：在没有 JavaScript 运行时的电脑上，浏览器 Cookie 可能让 YouTube 隐藏可下载格式。",
+  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "YouTube 未返回可用的视频格式。通常是暂时的: 请稍后再试。若仅在开启“让 GrabLine 使用我的浏览器会话”时失败，请关闭：在没有 JavaScript 运行时的电脑上，浏览器 Cookie 可能让 YouTube 隐藏可下载格式。",
   "host, or the S3 endpoint (e.g. s3.us-west.amazonaws.com)": "主机，或 S3 端点（例如 s3.us-west.amazonaws.com）",
   "password, key passphrase, or S3 secret key": "密码、密钥口令或 S3 密钥",
   "the file or folder to share": "要分享的文件或文件夹",
@@ -859,5 +858,6 @@
   "Changing the language asks you to restart GrabLine so the UI can rebuild.": "更改语言后需要重启 GrabLine，以便重新构建界面。",
   "Restart now": "立即重启",
   "Later": "稍后",
-  "Could not restart GrabLine. Please quit and open it again.": "无法重启 GrabLine。请退出后重新打开。"
+  "Could not restart GrabLine. Please quit and open it again.": "无法重启 GrabLine。请退出后重新打开。",
+  "Graphs: last 60 seconds": "图表: 最近 60 秒"
 }

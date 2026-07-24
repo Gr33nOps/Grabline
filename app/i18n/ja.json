@@ -241,7 +241,6 @@
   "GrabLine update": "GrabLine の更新",
   "GrabLine {tag} is available (you have {version}).\n\nUpdate now downloads the installer and opens it.": "GrabLine {tag} が利用可能です（現在 {version} をお使いです）。\n\n「今すぐ更新」でインストーラーをダウンロードして開きます。",
   "Graphs and per-server breakdowns are on the Dashboard. Statistics stay on this machine.": "グラフとサーバー別の内訳はダッシュボードにあります。統計はこのマシンに保存されます。",
-  "Graphs — last 60 seconds": "グラフ — 直近 60 秒",
   "Has notes": "メモあり",
   "Hashing pieces …": "ピースのハッシュを計算中…",
   "Hashing {name} …": "{name} のハッシュを計算中…",
@@ -308,7 +307,7 @@
   "NAT-PMP port mapping": "NAT-PMP ポートマッピング",
   "Name": "名前",
   "Name:": "名前:",
-  "Named queues — concurrency, order, schedules, and dependencies — are managed on the Queue page. The global download limit is under Downloads.": "名前付きキュー（同時実行数・順序・スケジュール・依存関係）はキューページで管理します。全体のダウンロード上限は「ダウンロード」にあります。",
+  "Named queues (concurrency, order, schedules, and dependencies) are managed on the Queue page. The global download limit is under Downloads.": "名前付きキュー（同時実行数・順序・スケジュール・依存関係）はキューページで管理します。全体のダウンロード上限は「ダウンロード」にあります。",
   "Network": "ネットワーク",
   "Network (system)": "ネットワーク（システム）",
   "New downloads of this type join this queue automatically": "この種類の新規ダウンロードは自動的にこのキューに入ります",
@@ -842,7 +841,7 @@
   "VirusTotal: {malicious} of {total} engines flagged this file.": "VirusTotal: {total} エンジン中 {malicious} がこのファイルを検出しました。",
   "YouTube is temporarily blocking automated access from your connection (a bot check). Wait a little and try again, or try a different network.": "YouTube が接続からの自動アクセスを一時的にブロックしています（ボットチェック）。少し待って再試行するか、別のネットワークを試してください。",
   "YouTube needs a JavaScript runtime to unlock this video's formats. GrabLine installs one (Deno) automatically; if this keeps happening, install Node.js and restart GrabLine.": "YouTube はこの動画の形式を解除するために JavaScript ランタイムが必要です。GrabLine は自動で (Deno) をインストールします。続く場合は Node.js を入れて GrabLine を再起動してください。",
-  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "YouTube が利用可能な動画形式を返しませんでした。多くの場合一時的です — しばらくして再試行してください。「GrabLine にブラウザセッションを使わせる」をオンにしているときだけ失敗する場合はオフにしてください。JavaScript ランタイムのない PC では、ブラウザの Cookie が YouTube にダウンロード可能な形式を隠させることがあります。",
+  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "YouTube が利用可能な動画形式を返しませんでした。多くの場合一時的です: しばらくして再試行してください。「GrabLine にブラウザセッションを使わせる」をオンにしているときだけ失敗する場合はオフにしてください。JavaScript ランタイムのない PC では、ブラウザの Cookie が YouTube にダウンロード可能な形式を隠させることがあります。",
   "host, or the S3 endpoint (e.g. s3.us-west.amazonaws.com)": "ホスト、または S3 エンドポイント（例: s3.us-west.amazonaws.com）",
   "password, key passphrase, or S3 secret key": "パスワード、鍵パスフレーズ、または S3 シークレットキー",
   "the file or folder to share": "共有するファイルまたはフォルダ",
@@ -859,5 +858,6 @@
   "Changing the language asks you to restart GrabLine so the UI can rebuild.": "言語を変更すると、UI を再構築するために GrabLine の再起動を求められます。",
   "Restart now": "今すぐ再起動",
   "Later": "後で",
-  "Could not restart GrabLine. Please quit and open it again.": "GrabLine を再起動できませんでした。終了してからもう一度開いてください。"
+  "Could not restart GrabLine. Please quit and open it again.": "GrabLine を再起動できませんでした。終了してからもう一度開いてください。",
+  "Graphs: last 60 seconds": "グラフ: 直近 60 秒"
 }

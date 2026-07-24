@@ -1,6 +1,6 @@
 """Tintable monochrome SVG icons. One path set, rendered to a QIcon in any
 color, so the same glyph works in light and dark and as an active/inactive nav
-item. Paths are 16x16, 1.5 stroke, rounded — the set from the redesign.
+item. Paths are 16x16, 1.5 stroke, rounded: the set from the redesign.
 """
 
 from __future__ import annotations

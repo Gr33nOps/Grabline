@@ -241,7 +241,6 @@
   "GrabLine update": "GrabLine اپ ڈیٹ",
   "GrabLine {tag} is available (you have {version}).\n\nUpdate now downloads the installer and opens it.": "GrabLine {tag} دستیاب ہے (آپ کے پاس {version} ہے )۔\n\nابھی اپ ڈیٹ کریں انسٹالر ڈاؤن لوڈ کریں اور اسے کھولیں ۔",
   "Graphs and per-server breakdowns are on the Dashboard. Statistics stay on this machine.": "گرافز اور فی سرور کی تفصیلات ڈیش بورڈ پر موجود ہیں ۔ اعدادوشمار اس مشین پر باقی ہیں ۔",
-  "Graphs — last 60 seconds": "گرافز — آخری 60 سیکنڈز",
   "Has notes": "نوٹ موجود ہیں",
   "Hashing pieces …": "ٹکڑے ٹکڑے کرنا… hashing pieces …",
   "Hashing {name} …": "ہیشنگ {name} …",
@@ -308,7 +307,7 @@
   "NAT-PMP port mapping": "NAT - PMP پورٹ میپنگ",
   "Name": "نام",
   "Name:": "نام:",
-  "Named queues — concurrency, order, schedules, and dependencies — are managed on the Queue page. The global download limit is under Downloads.": "نامزد قطاریں — ہم آہنگی، آرڈر، نظام الاوقات اور انحصار — قطار کے صفحے پر منظم کی جاتی ہیں ۔ عالمی ڈاؤن لوڈ کی حد ڈاؤن لوڈز کے تحت ہے ۔",
+  "Named queues (concurrency, order, schedules, and dependencies) are managed on the Queue page. The global download limit is under Downloads.": "نامزد قطاریں (ہم آہنگی، آرڈر، نظام الاوقات اور انحصار) قطار کے صفحے پر منظم کی جاتی ہیں ۔ عالمی ڈاؤن لوڈ کی حد ڈاؤن لوڈز کے تحت ہے ۔",
   "Network": "نیٹ ورک",
   "Network (system)": "نیٹ ورک (سسٹم)",
   "New downloads of this type join this queue automatically": "اس قسم کے نئے ڈاؤن لوڈز خود بخود اس قطار میں شامل ہو جاتے ہیں",
@@ -859,5 +858,6 @@
   "Changing the language asks you to restart GrabLine so the UI can rebuild.": "زبان بدلنے پر GrabLine کو دوبارہ شروع کرنے کو کہا جاتا ہے تاکہ انٹرفیس نئے سرے سے بن سکے۔",
   "Restart now": "ابھی دوبارہ شروع کریں",
   "Later": "بعد میں",
-  "Could not restart GrabLine. Please quit and open it again.": "GrabLine دوبارہ شروع نہیں ہو سکا۔ براہ کرم بند کریں اور دوبارہ کھولیں۔"
+  "Could not restart GrabLine. Please quit and open it again.": "GrabLine دوبارہ شروع نہیں ہو سکا۔ براہ کرم بند کریں اور دوبارہ کھولیں۔",
+  "Graphs: last 60 seconds": "گرافز: آخری 60 سیکنڈز"
 }

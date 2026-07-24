@@ -241,7 +241,6 @@
   "GrabLine update": "GrabLine 업데이트",
   "GrabLine {tag} is available (you have {version}).\n\nUpdate now downloads the installer and opens it.": "GrabLine {tag}을(를) 사용할 수 있습니다(현재 버전: {version}).\n\n지금 업데이트를 누르면 설치 프로그램을 다운로드하여 엽니다.",
   "Graphs and per-server breakdowns are on the Dashboard. Statistics stay on this machine.": "그래프와 서버별 분석은 대시보드에 있습니다. 통계는 이 컴퓨터에만 저장됩니다.",
-  "Graphs — last 60 seconds": "그래프 — 최근 60초",
   "Has notes": "메모 있음",
   "Hashing pieces …": "조각 해시 계산 중…",
   "Hashing {name} …": "{name} 해시 계산 중…",
@@ -308,7 +307,7 @@
   "NAT-PMP port mapping": "NAT-PMP 포트 매핑",
   "Name": "이름",
   "Name:": "이름:",
-  "Named queues — concurrency, order, schedules, and dependencies — are managed on the Queue page. The global download limit is under Downloads.": "이름이 지정된 대기열(동시 실행 수, 순서, 일정, 종속성)은 대기열 페이지에서 관리합니다. 전역 다운로드 제한은 다운로드에 있습니다.",
+  "Named queues (concurrency, order, schedules, and dependencies) are managed on the Queue page. The global download limit is under Downloads.": "이름이 지정된 대기열(동시 실행 수, 순서, 일정, 종속성)은 대기열 페이지에서 관리합니다. 전역 다운로드 제한은 다운로드에 있습니다.",
   "Network": "네트워크",
   "Network (system)": "네트워크(시스템)",
   "New downloads of this type join this queue automatically": "이 유형의 새 다운로드는 자동으로 이 대기열에 추가됩니다",
@@ -842,7 +841,7 @@
   "VirusTotal: {malicious} of {total} engines flagged this file.": "VirusTotal: {total}개 중 {malicious}개 엔진이 이 파일을 표시했습니다.",
   "YouTube is temporarily blocking automated access from your connection (a bot check). Wait a little and try again, or try a different network.": "YouTube가 연결에서 자동 접근을 일시적으로 차단하고 있습니다(봇 검사). 잠시 기다렸다가 다시 시도하거나 다른 네트워크를 사용하세요.",
   "YouTube needs a JavaScript runtime to unlock this video's formats. GrabLine installs one (Deno) automatically; if this keeps happening, install Node.js and restart GrabLine.": "YouTube가 이 동영상의 형식을 잠금 해제하려면 JavaScript 런타임이 필요합니다. GrabLine이 하나(Deno)를 자동 설치합니다. 계속되면 Node.js를 설치하고 GrabLine을 다시 시작하세요.",
-  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "YouTube가 사용 가능한 동영상 형식을 반환하지 않았습니다. 대개 일시적입니다 — 곧 다시 시도하세요. 'GrabLine이 내 브라우저 세션을 사용하도록 허용'이 켜져 있을 때만 실패하면 끄세요. JavaScript 런타임이 없는 PC에서는 브라우저 쿠키 때문에 YouTube가 다운로드 가능한 형식을 숨길 수 있습니다.",
+  "YouTube didn't return a usable video format. This is usually temporary - try again shortly. If it only fails with 'Let GrabLine use my browser session' turned on, turn it off: on a PC without a JavaScript runtime, browser cookies can make YouTube hide the downloadable formats.": "YouTube가 사용 가능한 동영상 형식을 반환하지 않았습니다. 대개 일시적입니다: 곧 다시 시도하세요. 'GrabLine이 내 브라우저 세션을 사용하도록 허용'이 켜져 있을 때만 실패하면 끄세요. JavaScript 런타임이 없는 PC에서는 브라우저 쿠키 때문에 YouTube가 다운로드 가능한 형식을 숨길 수 있습니다.",
   "host, or the S3 endpoint (e.g. s3.us-west.amazonaws.com)": "호스트, 또는 S3 엔드포인트(예: s3.us-west.amazonaws.com)",
   "password, key passphrase, or S3 secret key": "비밀번호, 키 암호 또는 S3 비밀 키",
   "the file or folder to share": "공유할 파일 또는 폴더",
@@ -859,5 +858,6 @@
   "Changing the language asks you to restart GrabLine so the UI can rebuild.": "언어를 바꾸면 UI를 다시 구성하기 위해 GrabLine 재시작을 요청합니다.",
   "Restart now": "지금 다시 시작",
   "Later": "나중에",
-  "Could not restart GrabLine. Please quit and open it again.": "GrabLine을 다시 시작할 수 없습니다. 종료한 뒤 다시 열어 주세요."
+  "Could not restart GrabLine. Please quit and open it again.": "GrabLine을 다시 시작할 수 없습니다. 종료한 뒤 다시 열어 주세요.",
+  "Graphs: last 60 seconds": "그래프: 최근 60초"
 }

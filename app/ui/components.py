@@ -332,7 +332,7 @@ class GraphCard(QFrame):
 def cap_field_widths(root: QWidget, width: int = 320) -> None:
     """Stop enum-ish fields (combos, spinners, time pickers) stretching to
     the form's full width: a three-option dropdown does not need 800px.
-    Free-text inputs keep growing — paths and URLs genuinely want room."""
+    Free-text inputs keep growing: paths and URLs genuinely want room."""
     from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox, QTimeEdit
 
     for cls in (QComboBox, QSpinBox, QDoubleSpinBox, QTimeEdit):

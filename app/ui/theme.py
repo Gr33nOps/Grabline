@@ -16,7 +16,7 @@ from app.ui import design
 
 THEMES = ("system", "light", "dark")
 
-#: The palette currently applied — widgets that custom-paint read this.
+#: The palette currently applied: widgets that custom-paint read this.
 _current: design.Palette = design.LIGHT
 
 

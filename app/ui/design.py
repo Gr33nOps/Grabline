@@ -2,7 +2,7 @@
 type, and the global Qt stylesheet.
 
 The accent is the blue from the app logo (`#0170fd`), a touch brighter in dark
-mode so it pops. Every screen and dialog reads its look from here — change a
+mode so it pops. Every screen and dialog reads its look from here: change a
 token and the whole app follows. ``stylesheet(theme)`` returns a QSS string
 that restyles the standard Qt widgets (buttons, inputs, tabs, tables, menus,
 scrollbars, dialogs) to match, so even screens we haven't hand-built yet look
@@ -219,7 +219,7 @@ def qpalette(p: Palette) -> QPalette:
 
 
 def stylesheet(p: Palette) -> str:
-    """The global QSS. Kept flat and calm — borders over shadows — so it reads
+    """The global QSS. Kept flat and calm (borders over shadows) so it reads
     the same on Windows, macOS and Linux."""
     return f"""
     * {{
@@ -288,7 +288,7 @@ def stylesheet(p: Palette) -> str:
         border-color: {p.accent};
     }}
     QLineEdit:disabled, QSpinBox:disabled, QComboBox:disabled {{ color: {p.text3}; }}
-    QComboBox::drop-down {{ border: none; width: 18px; }}
+    QComboBox:drop-down {{ border: none; width: 18px; }}
     QComboBox QAbstractItemView {{
         background: {p.surface};
         color: {p.text};
@@ -300,25 +300,25 @@ def stylesheet(p: Palette) -> str:
 
     /* --- checkboxes / radios --- */
     QCheckBox, QRadioButton {{ spacing: 8px; color: {p.text}; }}
-    QCheckBox::indicator, QRadioButton::indicator {{
+    QCheckBox:indicator, QRadioButton:indicator {{
         width: 15px; height: 15px;
         border: 1px solid {p.border}; background: {p.surface};
     }}
-    QCheckBox::indicator {{ border-radius: 3px; }}
-    QRadioButton::indicator {{ border-radius: 8px; }}
-    QCheckBox::indicator:hover, QRadioButton::indicator:hover {{ border-color: {p.accent}; }}
-    QCheckBox::indicator:checked, QRadioButton::indicator:checked {{
+    QCheckBox:indicator {{ border-radius: 3px; }}
+    QRadioButton:indicator {{ border-radius: 8px; }}
+    QCheckBox:indicator:hover, QRadioButton:indicator:hover {{ border-color: {p.accent}; }}
+    QCheckBox:indicator:checked, QRadioButton:indicator:checked {{
         background: {p.accent}; border-color: {p.accent};
     }}
 
     /* --- tabs --- */
-    QTabWidget::pane {{ border: 1px solid {p.border}; border-radius: {RADIUS["md"]}px; top: -1px; }}
-    QTabBar::tab {{
+    QTabWidget:pane {{ border: 1px solid {p.border}; border-radius: {RADIUS["md"]}px; top: -1px; }}
+    QTabBar:tab {{
         background: transparent; color: {p.text2};
         padding: 7px 14px; border: none; margin-right: 2px;
     }}
-    QTabBar::tab:hover {{ color: {p.text}; }}
-    QTabBar::tab:selected {{
+    QTabBar:tab:hover {{ color: {p.text}; }}
+    QTabBar:tab:selected {{
         color: {p.accent}; border-bottom: 2px solid {p.accent};
     }}
 
@@ -331,7 +331,7 @@ def stylesheet(p: Palette) -> str:
         gridline-color: {p.border2};
         outline: none;
     }}
-    QTableWidget::item, QTreeWidget::item, QListWidget::item {{
+    QTableWidget:item, QTreeWidget:item, QListWidget:item {{
         padding: 3px 4px; border: none;
     }}
     /* The downloads table is the content plane, not a floating card: no
@@ -343,13 +343,13 @@ def stylesheet(p: Palette) -> str:
        on - row hover and selection in the table, the card behind it on the
        Queue page. Name any bare wrapper this and it stays out of the way. */
     QWidget#BareContainer {{ background: transparent; }}
-    QTableView::item:hover, QTreeView::item:hover, QListView::item:hover {{
+    QTableView:item:hover, QTreeView:item:hover, QListView:item:hover {{
         background: {p.row_hover};
     }}
-    QTableView::item:selected, QTreeView::item:selected, QListView::item:selected {{
+    QTableView:item:selected, QTreeView:item:selected, QListView:item:selected {{
         background: {p.row_sel}; color: {p.text};
     }}
-    QHeaderView::section {{
+    QHeaderView:section {{
         background: {p.surface2};
         color: {p.text3};
         border: none;
@@ -361,46 +361,46 @@ def stylesheet(p: Palette) -> str:
     /* --- scrollbars --- */
     QScrollBar:vertical {{ background: transparent; width: 9px; margin: 2px; }}
     QScrollBar:horizontal {{ background: transparent; height: 9px; margin: 2px; }}
-    QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
+    QScrollBar:handle:vertical, QScrollBar:handle:horizontal {{
         background: {p.border}; border-radius: 4px; min-height: 24px; min-width: 24px;
     }}
-    QScrollBar::handle:hover {{ background: {p.text3}; }}
-    QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
-    QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
+    QScrollBar:handle:hover {{ background: {p.text3}; }}
+    QScrollBar:add-line, QScrollBar:sub-line {{ height: 0; width: 0; }}
+    QScrollBar:add-page, QScrollBar:sub-page {{ background: transparent; }}
 
     /* --- menus --- */
     QMenuBar {{ background: {p.toolbar}; color: {p.text}; }}
-    QMenuBar::item {{ background: transparent; padding: 5px 10px; }}
-    QMenuBar::item:selected {{ background: {p.row_hover}; border-radius: {RADIUS["sm"]}px; }}
+    QMenuBar:item {{ background: transparent; padding: 5px 10px; }}
+    QMenuBar:item:selected {{ background: {p.row_hover}; border-radius: {RADIUS["sm"]}px; }}
     QMenu {{
         background: {p.surface}; color: {p.text};
         border: 1px solid {p.border}; border-radius: {RADIUS["md"]}px; padding: 4px;
     }}
-    QMenu::item {{ padding: 6px 22px 6px 12px; border-radius: {RADIUS["sm"]}px; }}
-    QMenu::item:selected {{ background: {p.accent_dim}; color: {p.text}; }}
-    QMenu::item:disabled {{ color: {p.text3}; }}
-    QMenu::separator {{ height: 1px; background: {p.border2}; margin: 4px 8px; }}
+    QMenu:item {{ padding: 6px 22px 6px 12px; border-radius: {RADIUS["sm"]}px; }}
+    QMenu:item:selected {{ background: {p.accent_dim}; color: {p.text}; }}
+    QMenu:item:disabled {{ color: {p.text3}; }}
+    QMenu:separator {{ height: 1px; background: {p.border2}; margin: 4px 8px; }}
 
     /* --- progress --- */
     QProgressBar {{
         background: {p.border}; border: none; border-radius: 2px;
         height: 5px; text-align: center; color: {p.text2};
     }}
-    QProgressBar::chunk {{ background: {p.accent}; border-radius: 2px; }}
+    QProgressBar:chunk {{ background: {p.accent}; border-radius: 2px; }}
 
     /* --- group boxes --- */
     QGroupBox {{
         border: 1px solid {p.border}; border-radius: {RADIUS["md"]}px;
         margin-top: 10px; padding: 10px 12px 8px;
     }}
-    QGroupBox::title {{
+    QGroupBox:title {{
         subcontrol-origin: margin; left: 10px; padding: 0 4px;
         color: {p.text2};
     }}
 
     QDialog, QMainWindow {{ background: {p.bg}; }}
     QStatusBar {{ background: {p.toolbar}; color: {p.text2}; }}
-    QStatusBar::item {{ border: none; }}
+    QStatusBar:item {{ border: none; }}
     QLabel {{ background: transparent; }}
 
     /* --- app chrome (object names so a theme swap re-applies them) --- */
@@ -415,11 +415,11 @@ def stylesheet(p: Palette) -> str:
     QFrame#SettingsNav {{ background: {p.surface2}; border-right: 1px solid {p.border}; }}
     QFrame#SettingsFooter {{ background: transparent; border-top: 1px solid {p.border}; }}
     QListWidget#SettingsList {{ border: none; background: transparent; }}
-    QListWidget#SettingsList::item {{
+    QListWidget#SettingsList:item {{
         padding: 8px 10px; border-radius: {RADIUS["sm"]}px; color: {p.text2}; margin: 1px 0;
     }}
-    QListWidget#SettingsList::item:selected {{ background: {p.accent_dim}; color: {p.accent}; }}
-    QListWidget#SettingsList::item:hover {{ background: {p.row_hover}; }}
+    QListWidget#SettingsList:item:selected {{ background: {p.accent_dim}; color: {p.accent}; }}
+    QListWidget#SettingsList:item:hover {{ background: {p.row_hover}; }}
     QLabel#AppLogo {{ background: {p.accent}; border-radius: {RADIUS["md"]}px; }}
 
     /* --- cards + semantic labels (property selectors, re-apply on theme swap) --- */

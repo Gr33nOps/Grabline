@@ -626,7 +626,7 @@ class SettingsDialog(chrome.Dialog):
         queue_form.addRow(t("Default queue:"), self.default_queue_combo)
         queue_form.addRow(
             _note(
-                "Named queues — concurrency, order, schedules, and dependencies — are managed "
+                "Named queues (concurrency, order, schedules, and dependencies) are managed "
                 "on the Queue page. The global download limit is under Downloads."
             )
         )

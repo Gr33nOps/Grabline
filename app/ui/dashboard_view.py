@@ -87,7 +87,7 @@ class DashboardView(QWidget):
             )
         )
 
-        root.addWidget(components.SectionLabel(t("Graphs — last 60 seconds")))
+        root.addWidget(components.SectionLabel(t("Graphs: last 60 seconds")))
         grid = QGridLayout()
         grid.setSpacing(10)
         self.g_download = components.GraphCard(t("Download"), [p.g_dl], motion.fmt_speed)

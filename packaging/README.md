@@ -11,8 +11,8 @@ platform it targets.
 PyInstaller freezes **two** executables into one shared bundle
 ([`grabline.spec`](grabline.spec)):
 
-- `grabline` — the windowed desktop GUI.
-- `grabline-host` — the **console** Native Messaging host. It's separate
+- `grabline`: the windowed desktop GUI.
+- `grabline-host`: the **console** Native Messaging host. It's separate
   because a windowed GUI exe has no working stdio on Windows, which the
   browser needs to talk to the host. The installed browser manifests point
   straight at this binary (`native_host.install.frozen_host_path()`).
@@ -60,5 +60,5 @@ bash packaging/linux/build_appimage.sh 1.3.5
 ## Not signed (yet)
 
 Installers are unsigned, so Windows SmartScreen and macOS Gatekeeper warn on
-first launch. Signing needs paid certificates (Windows ~US$100–400/yr, Apple
+first launch. Signing needs paid certificates (Windows ~US$100-400/yr, Apple
 Developer US$99/yr); add the signing steps to the workflow once those exist.

@@ -29,7 +29,7 @@ transfers from a local server over a 12-second window.
 **The app animated things that were not moving.** The 60fps ticker had no
 idea whether its subscribers had anything to draw. A sparkline whose samples
 are all zero paints no line at all, and the toolbar had one of those on every
-page, scrolling forever — including while the window was hidden to the tray.
+page, scrolling forever: including while the window was hidden to the tray.
 Widgets now subscribe only while visible *and* holding a non-zero sample.
 
 **The dashboard sampled for nobody.** Its tick ran twice a second whether or
@@ -39,7 +39,7 @@ only what the graphs need for their rolling history. `MainWindow.refresh()`
 likewise returns early while the window is hidden, and catches up on show.
 
 **Everything was built before anything was shown.** Settings is the most
-expensive widget in the app — 18 sections, ~100 fields, ~500ms — in a window
+expensive widget in the app (18 sections, ~100 fields, ~500ms) in a window
 most sessions never open. It and the Queue page are now built on first visit.
 The Dashboard stays eager because its sampler is what gives the graphs their
 history.
@@ -54,7 +54,7 @@ half the repaints.
 Worth recording, so nobody optimizes these twice:
 
 - **Segment progress is already batched.** One checkpoint thread coalesces
-  every worker's progress and writes it in a single transaction — 8.6 flushes
+  every worker's progress and writes it in a single transaction: 8.6 flushes
   a second for five downloads, not one write per chunk.
 - **SQLite is already configured** for this workload: WAL, `synchronous`
   NORMAL, a busy timeout.
