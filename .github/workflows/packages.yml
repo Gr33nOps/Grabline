@@ -127,12 +127,12 @@ jobs:
           mv "$APPIMAGE" "GrabLine-${V}-x86_64.AppImage"
           mv "$DEB" "grabline_${V}_amd64.deb"
           mv "$TARBALL" "GrabLine-${V}-linux-x86_64.tar.gz"
-          cat > Dockerfile <<EOF
-FROM alpine:3.20
-COPY GrabLine-${V}-x86_64.AppImage grabline_${V}_amd64.deb GrabLine-${V}-linux-x86_64.tar.gz /installers/
-WORKDIR /installers
-CMD ["ls", "-lah", "/installers"]
-EOF
+          {
+            echo "FROM alpine:3.20"
+            echo "COPY GrabLine-${V}-x86_64.AppImage grabline_${V}_amd64.deb GrabLine-${V}-linux-x86_64.tar.gz /installers/"
+            echo "WORKDIR /installers"
+            echo 'CMD ["ls", "-lah", "/installers"]'
+          } > Dockerfile
           docker build \
             --label "org.opencontainers.image.source=${SRC}" \
             --label "org.opencontainers.image.url=${SRC}" \
