@@ -153,7 +153,7 @@ Ground rules enforced in CI: no `shell=True`, Native Messaging only (no listen p
 [releases]: https://github.com/Gr33nOps/GrabLine/releases/latest
 [website]: https://gr33nops.github.io/GrabLine/
 [amo]: https://addons.mozilla.org/en-US/firefox/addon/grabline-connect/
-[sponsors]: https://github.com/sponsors/Gr33nOps
+[sponsors]: https://paypal.me/GoEdits
 [license]: LICENSE
 [ci]: https://github.com/Gr33nOps/GrabLine/actions/workflows/ci.yml
 [download-badge]: https://img.shields.io/github/v/release/Gr33nOps/GrabLine?label=Download&color=0170fd&sort=semver
