@@ -45,7 +45,7 @@ from app.core import i18n, launcher, paths
 from app.core.errors import DownloadError
 from app.core.ffmpeg import ensure_ffmpeg, find_ffmpeg
 from app.core.i18n import N_, t
-from app.core.settings import SESSION_BROWSERS, Settings
+from app.core.settings import MAX_CONNECTIONS, SESSION_BROWSERS, Settings
 from app.ui import chrome, components, design, guard, theme, threads
 from app.ui.format import human_bytes
 
@@ -322,7 +322,7 @@ class SettingsDialog(chrome.Dialog):
         # ---- Download Engine -------------------------------------------------
         engine_form = self._add_form_tab(tabs, t("Download Engine"))
         self.connections_spin = QSpinBox()
-        self.connections_spin.setRange(1, 128)
+        self.connections_spin.setRange(1, MAX_CONNECTIONS)
         engine_form.addRow(t("Connections per download:"), self.connections_spin)
         self.speed_spin = QSpinBox()
         self.speed_spin.setRange(0, 1_000_000)

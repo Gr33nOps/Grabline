@@ -696,7 +696,6 @@
   "End:": "结束：",
   "Extract": "解压",
   "Fetch first && last pieces early (faster preview)": "优先获取首尾分片（更快预览）",
-  "Fetching metadata…": "正在获取元数据…",
   "File…": "文件…",
   "Filter by text…": "按文本过滤…",
   "Filters": "筛选",
@@ -859,5 +858,6 @@
   "Restart now": "立即重启",
   "Later": "稍后",
   "Could not restart GrabLine. Please quit and open it again.": "无法重启 GrabLine。请退出后重新打开。",
-  "Graphs: last 60 seconds": "图表: 最近 60 秒"
+  "Graphs: last 60 seconds": "图表: 最近 60 秒",
+  "Starting…": "正在开始…"
 }

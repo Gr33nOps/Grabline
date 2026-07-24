@@ -696,7 +696,6 @@
   "End:": "समाप्ति:",
   "Extract": "निकालें",
   "Fetch first && last pieces early (faster preview)": "पहले और अंतिम टुकड़े जल्दी लाएँ (तेज़ पूर्वावलोकन)",
-  "Fetching metadata…": "मेटाडेटा लाया जा रहा है…",
   "File…": "फ़ाइल…",
   "Filter by text…": "टेक्स्ट से फ़िल्टर…",
   "Filters": "फ़िल्टर",
@@ -859,5 +858,6 @@
   "Restart now": "अभी पुनः आरंभ करें",
   "Later": "बाद में",
   "Could not restart GrabLine. Please quit and open it again.": "GrabLine पुनः आरंभ नहीं हो सका। कृपया बंद करके फिर खोलें।",
-  "Graphs: last 60 seconds": "ग्राफ़: पिछले 60 सेकंड"
+  "Graphs: last 60 seconds": "ग्राफ़: पिछले 60 सेकंड",
+  "Starting…": "शुरू हो रहा है…"
 }

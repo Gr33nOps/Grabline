@@ -1,7 +1,8 @@
 """The Downloads detail drawer: a 324px "download inspector" beside the table
 when a single download is selected.
 
-It is a persistent header (icon, name, status, progress) over a tab strip -
+It is a persistent header (icon, name, status, progress, and for segmented
+direct downloads a compact per-connection bar strip) over a tab strip -
 Overview / Details / Media (or Contents / Peers) - and a compact action bar.
 Tabs that don't apply to the selection are hidden, so a PDF shows two and a
 video shows three. Widgets are built once; only their text and visibility change
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -42,13 +44,17 @@ from app.core import archive
 from app.core.i18n import N_, t
 from app.core.manager import DownloadManager, JobView
 from app.core.mediainfo import MediaSummary, read_media_info
-from app.core.models import Job, JobKind, JobStatus
+from app.core.models import Job, JobKind, JobStatus, Segment
 from app.ui import components, design, motion, theme
 from app.ui.format import duration_text, human_bytes
 from app.ui.icons import svg_icon, type_icon_name
 from app.ui.work_threads import FileOpThread
 
 log = logging.getLogger(__name__)
+
+#: How many per-connection bars the header shows. More than this gets noisy in
+#: a 324px drawer; extras still run, they just aren't listed individually.
+_MAX_CONN_BARS = 8
 
 #: Long URLs and paths have no spaces, so a word-wrapping label can't break
 #: them - it demands its full width and pushes the panel past the edge. Insert
@@ -215,6 +221,105 @@ class _StatGrid(QWidget):
         return any(not label.isHidden() for _c, label in self._rows.values())
 
 
+class _ConnectionBars(QWidget):
+    """Thin per-segment progress rows under the main bar (IDM-style).
+
+    Built once with a fixed row budget; each refresh only updates fill + label
+    text so the header never rebuilds widgets mid-download.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 2, 0, 0)
+        root.setSpacing(4)
+        self._title = components.role_label(
+            t("Connections").upper(), "caption", size=design.FONT["caption"]
+        )
+        root.addWidget(self._title)
+        self._rows: list[tuple[QWidget, QLabel, motion.SmoothProgressBar]] = []
+        self._prev: dict[int, tuple[int, float]] = {}
+        for _ in range(_MAX_CONN_BARS):
+            row = QWidget()
+            lay = QHBoxLayout(row)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(8)
+            label = components.role_label("", "muted", size=design.FONT["caption"])
+            label.setMinimumWidth(88)
+            label.setMaximumWidth(110)
+            bar = motion.SmoothProgressBar()
+            bar.setFixedHeight(3)
+            lay.addWidget(bar, 1)
+            lay.addWidget(label, 0, Qt.AlignmentFlag.AlignVCenter)
+            root.addWidget(row)
+            row.hide()
+            self._rows.append((row, label, bar))
+        self.hide()
+
+    def clear(self) -> None:
+        self._prev.clear()
+        for row, _label, bar in self._rows:
+            row.hide()
+            bar.set_value(0.0, immediate=True)
+        self.hide()
+
+    def update_segments(
+        self,
+        segments: Sequence[Segment],
+        *,
+        status: JobStatus,
+        color: str | None,
+    ) -> None:
+        # One-range downloads aren't interesting as a connection strip.
+        if len(segments) < 2:
+            self.clear()
+            return
+        # Prefer still-active ranges while downloading so the visible set is
+        # useful; otherwise keep plan order.
+        ordered = list(segments)
+        if status is JobStatus.DOWNLOADING:
+            ordered.sort(key=lambda s: (s.is_complete, s.index))
+        shown = ordered[:_MAX_CONN_BARS]
+        now = time.monotonic()
+        live_ids = {seg.id for seg in shown}
+        for seg_id in list(self._prev):
+            if seg_id not in live_ids:
+                del self._prev[seg_id]
+
+        for index, (row, label, bar) in enumerate(self._rows):
+            if index >= len(shown):
+                row.hide()
+                continue
+            seg = shown[index]
+            size = (seg.end - seg.start + 1) if seg.end is not None else None
+            if status is JobStatus.COMPLETED and size:
+                fraction = 1.0
+            elif size and size > 0:
+                fraction = min(1.0, seg.downloaded / size)
+            else:
+                fraction = 0.0
+            bar.set_color(color)
+            bar.set_value(fraction, immediate=(status is not JobStatus.DOWNLOADING))
+
+            speed_text = ""
+            if status is JobStatus.DOWNLOADING:
+                prev = self._prev.get(seg.id)
+                self._prev[seg.id] = (seg.downloaded, now)
+                if prev is not None:
+                    prev_bytes, prev_at = prev
+                    dt = now - prev_at
+                    if dt > 0.05:
+                        rate = max(0.0, (seg.downloaded - prev_bytes) / dt)
+                        if rate > 0:
+                            speed_text = f" ({motion.fmt_speed(rate)})"
+            elif status is JobStatus.COMPLETED:
+                speed_text = ""
+
+            label.setText(t("Conn {n}{speed}", n=seg.index + 1, speed=speed_text))
+            row.show()
+        self.show()
+
+
 class DetailDrawer(QFrame):
     def __init__(
         self,
@@ -311,6 +416,8 @@ class DetailDrawer(QFrame):
 
         self._size = components.role_label("", "muted", size=design.FONT["small"])
         outer.addWidget(self._size)
+        self._conn_bars = _ConnectionBars()
+        outer.addWidget(self._conn_bars)
         return header
 
     def _build_tabstrip(self) -> QWidget:
@@ -396,9 +503,11 @@ class DetailDrawer(QFrame):
         self._tags_layout.setContentsMargins(0, 0, 0, 0)
         self._tags_layout.setSpacing(4)
         olay.addWidget(self._tags_box)
-        self._security_btn = QPushButton(t("Security check…"))
-        self._security_btn.setProperty("flat", "true")
-        self._security_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._security_btn = components.IconButton(
+            "shield",
+            t("Security check…"),
+            tooltip=t("Scan the file with the configured security tools"),
+        )
         self._security_btn.clicked.connect(lambda: self._fire("security"))
         olay.addWidget(self._security_btn)
         olay.addStretch(1)
@@ -532,6 +641,7 @@ class DetailDrawer(QFrame):
         new = self._view is None or self._view.id != view.id
         if new:
             self._spark.set_samples(history or ())
+            self._conn_bars.clear()
         self._view = view
         self._history = list(history or []) if new else self._history
         self._update(view, speed_bps, new)
@@ -540,6 +650,7 @@ class DetailDrawer(QFrame):
     def retint(self) -> None:
         for btn in self._act_btns.values():
             btn.retint()
+        self._security_btn.retint()
 
     # ----------------------------------------------------------------- update
 
@@ -555,6 +666,7 @@ class DetailDrawer(QFrame):
         self._pill.set_status(view.status.value)
         self._progress.set_color(design.status_color(palette, view.status.value))
         self._update_progress(view)
+        self._update_connections(view, palette)
         self._update_overview(view, speed_bps, new)
         # A torrent's swarm changes constantly, so refresh the Peers tab live
         # (the initial fill + visibility decision happened in _start_probe).
@@ -619,11 +731,27 @@ class DetailDrawer(QFrame):
                 # "Fetching metadata…" label that looked like a hang.
                 self._size.setText(t("{size} downloaded", size=human_bytes(view.downloaded)))
             else:
-                self._size.setText(t("Fetching metadata…"))
+                self._size.setText(t("Starting…"))
         else:
             self._progress.set_value(1.0 if view.status is JobStatus.COMPLETED else 0.0)
             self._percent.setText("")
             self._size.setText("")
+
+    def _update_connections(self, view: JobView, palette: design.Palette) -> None:
+        """Per-segment bars under the main progress - direct downloads only."""
+        if view.kind is not JobKind.DIRECT or view.status in (
+            JobStatus.QUEUED,
+            JobStatus.CANCELLED,
+            JobStatus.FAILED,
+        ):
+            self._conn_bars.clear()
+            return
+        segments = self.manager.db.segments_for(view.id)
+        self._conn_bars.update_segments(
+            segments,
+            status=view.status,
+            color=design.status_color(palette, view.status.value),
+        )
 
     def _update_overview(self, view: JobView, speed_bps: float, new: bool) -> None:
         downloading = view.status is JobStatus.DOWNLOADING

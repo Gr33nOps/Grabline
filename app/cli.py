@@ -149,7 +149,17 @@ def _create_job(
         if resolution.probe is not None and resolution.probe.filename
         else naming.filename_from_url(resolution.url)
     )
-    return db.create_job(resolution.url, str(dest_dir), filename)
+    job = db.create_job(resolution.url, str(dest_dir), filename)
+    probe = resolution.probe
+    if probe is not None:
+        job.final_url = probe.final_url
+        job.total_size = probe.total_size
+        job.resumable = probe.resumable
+        job.etag = probe.etag
+        job.last_modified = probe.last_modified
+        db.update_job_probe(job)
+        job = db.get_job(job.id) or job
+    return job
 
 
 def _create_task(db: Database, job: Job, args: argparse.Namespace) -> DownloadTask:

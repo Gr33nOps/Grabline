@@ -696,7 +696,6 @@
   "End:": "Конец:",
   "Extract": "Извлечь",
   "Fetch first && last pieces early (faster preview)": "Сначала первые и последние куски (быстрее превью)",
-  "Fetching metadata…": "Получение метаданных…",
   "File…": "Файл…",
   "Filter by text…": "Фильтр по тексту…",
   "Filters": "Фильтры",
@@ -859,5 +858,6 @@
   "Restart now": "Перезапустить сейчас",
   "Later": "Позже",
   "Could not restart GrabLine. Please quit and open it again.": "Не удалось перезапустить GrabLine. Закройте приложение и откройте снова.",
-  "Graphs: last 60 seconds": "Графики: последние 60 секунд"
+  "Graphs: last 60 seconds": "Графики: последние 60 секунд",
+  "Starting…": "Запуск…"
 }

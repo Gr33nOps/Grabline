@@ -22,8 +22,9 @@ from app.core.downloader import SegmentedDownload
 from app.core.errors import DownloadError
 from app.core.ffmpeg import find_ffmpeg
 from app.core.models import Job, JobKind, JobStatus, Queue
+from app.core.probe import ProbeResult
 from app.core.ratelimit import RateLimiter
-from app.core.settings import Settings
+from app.core.settings import MAX_CONNECTIONS, Settings
 from app.core.stats import SystemSampler
 from app.db.database import Database
 from app.engines.cloud import CloudDownload
@@ -353,7 +354,7 @@ class DownloadManager:
             return
         options = dict(job.options)
         if connections > 0:
-            options["connections"] = max(1, min(128, connections))
+            options["connections"] = max(1, min(MAX_CONNECTIONS, connections))
         else:
             options.pop("connections", None)
         self.db.update_job_options(job_id, options)
@@ -543,10 +544,13 @@ class DownloadManager:
         *,
         headers: Mapping[str, str] | None = None,
         mirrors: Sequence[str] | None = None,
+        probe: ProbeResult | None = None,
     ) -> Job:
         """Queue a direct (segmented) download. ``headers`` (cookies/referer
         from the browser) let a login-gated file download too; ``mirrors`` are
-        alternate URLs tried in order if this one fails for good."""
+        alternate URLs tried in order if this one fails for good. ``probe`` is
+        the resolve-time Range probe - when provided, the downloader skips a
+        second identical round-trip and starts workers immediately."""
         name = naming.sanitize_filename(filename) if filename else naming.filename_from_url(url)
         name = naming.apply_rename_rules(name, self.settings.rename_rules)
         options: dict[str, Any] = {"http_headers": dict(headers)} if headers else {}
@@ -560,6 +564,16 @@ class DownloadManager:
             queue_id=self._queue_for(name),
         )
         job = self._apply_add_defaults(job)
+        if probe is not None:
+            if probe.filename:
+                job.filename = naming.sanitize_filename(probe.filename)
+            job.final_url = probe.final_url
+            job.total_size = probe.total_size
+            job.resumable = probe.resumable
+            job.etag = probe.etag
+            job.last_modified = probe.last_modified
+            self.db.update_job_probe(job)
+            job = self.db.get_job(job.id) or job
         self._kick()
         return job
 
@@ -913,7 +927,7 @@ class DownloadManager:
         pinned = int(job.options.get("connections") or 0)
         # A pin keeps its full fixed count and stays out of the split; an
         # unpinned download runs its fair share, recomputed live by the pool.
-        fixed = max(1, min(128, pinned)) if pinned else self.connections
+        fixed = max(1, min(MAX_CONNECTIONS, pinned)) if pinned else self.connections
         return SegmentedDownload(
             self.db,
             job,

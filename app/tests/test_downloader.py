@@ -453,3 +453,36 @@ def test_fair_share_connections_splits_the_budget(db: Database):
         with manager._cond:
             manager._active.clear()
         manager.shutdown()
+
+
+def test_fresh_job_reuses_resolve_probe_without_second_round_trip(
+    server: MediaServer, db: Database, dest: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """add/resolve already probed the URL - starting must not Range-probe again."""
+    from app.core import downloader as downloader_mod
+    from app.core.probe import ProbeResult
+
+    data = payload(2 * MB, 19)
+    url = server.add("/reuse.bin", data)
+    job = db.create_job(url, str(dest), "reuse.bin")
+    job.final_url = url
+    job.total_size = len(data)
+    job.resumable = True
+    job.etag = '"reuse-etag"'
+    db.update_job_probe(job)
+    job = db.get_job(job.id)
+    assert job is not None
+
+    calls: list[str] = []
+
+    def boom(client, url, extra_headers=None):  # noqa: ARG001
+        calls.append(url)
+        raise AssertionError("probe must not run when the job already has probe fields")
+
+    monkeypatch.setattr(downloader_mod, "probe", boom)
+
+    status = SegmentedDownload(db, job, connections=4).run()
+
+    assert status is JobStatus.COMPLETED
+    assert calls == []
+    assert sha256_file(dest / "reuse.bin") == sha256(data)

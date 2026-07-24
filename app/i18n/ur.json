@@ -696,7 +696,6 @@
   "End:": "اختتام:",
   "Extract": "نکالنا",
   "Fetch first && last pieces early (faster preview)": "پہلے اور آخری ٹکڑوں کو جلد حاصل کریں (تیز پیش نظارہ)",
-  "Fetching metadata…": "میٹا ڈیٹا حاصل کیا جا رہا ہے…",
   "File…": "فائل…",
   "Filter by text…": "متن کے لحاظ سے فلٹر کریں…",
   "Filters": "فلٹرز",
@@ -859,5 +858,6 @@
   "Restart now": "ابھی دوبارہ شروع کریں",
   "Later": "بعد میں",
   "Could not restart GrabLine. Please quit and open it again.": "GrabLine دوبارہ شروع نہیں ہو سکا۔ براہ کرم بند کریں اور دوبارہ کھولیں۔",
-  "Graphs: last 60 seconds": "گرافز: آخری 60 سیکنڈز"
+  "Graphs: last 60 seconds": "گرافز: آخری 60 سیکنڈز",
+  "Starting…": "شروع ہو رہا ہے…"
 }

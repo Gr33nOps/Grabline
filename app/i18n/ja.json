@@ -696,7 +696,6 @@
   "End:": "終了:",
   "Extract": "展開",
   "Fetch first && last pieces early (faster preview)": "最初と最後のピースを先に取得（プレビューが速い）",
-  "Fetching metadata…": "メタデータを取得中…",
   "File…": "ファイル…",
   "Filter by text…": "テキストで絞り込み…",
   "Filters": "フィルタ",
@@ -859,5 +858,6 @@
   "Restart now": "今すぐ再起動",
   "Later": "後で",
   "Could not restart GrabLine. Please quit and open it again.": "GrabLine を再起動できませんでした。終了してからもう一度開いてください。",
-  "Graphs: last 60 seconds": "グラフ: 直近 60 秒"
+  "Graphs: last 60 seconds": "グラフ: 直近 60 秒",
+  "Starting…": "開始中…"
 }

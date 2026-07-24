@@ -83,7 +83,7 @@ from app.core.i18n import N_, t
 from app.core.manager import DownloadManager, JobView
 from app.core.models import JobKind, JobStatus
 from app.core.resolver import Resolution, Resolver
-from app.core.settings import Settings
+from app.core.settings import MAX_CONNECTIONS, Settings
 from app.engines import cloud as cloud_engine
 from app.engines import torrent as torrent_engine
 from app.engines.smart import generic_quality_options, option_for_label
@@ -1672,6 +1672,7 @@ class MainWindow(QMainWindow):
                 filename=filename,
                 headers=headers or None,
                 mirrors=list(fallbacks) or None,
+                probe=probe,
             )
         self.refresh()
 
@@ -2610,7 +2611,7 @@ class MainWindow(QMainWindow):
             ),
             value=0,
             minValue=0,
-            maxValue=128,
+            maxValue=MAX_CONNECTIONS,
         )
         if accepted:
             self.manager.set_job_connections(view.id, connections)

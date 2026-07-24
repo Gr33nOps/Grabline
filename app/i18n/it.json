@@ -696,7 +696,6 @@
   "End:": "Fine:",
   "Extract": "Estrai",
   "Fetch first && last pieces early (faster preview)": "Scarica prima i primi e ultimi pezzi (anteprima più veloce)",
-  "Fetching metadata…": "Recupero metadati…",
   "File…": "File…",
   "Filter by text…": "Filtra per testo…",
   "Filters": "Filtri",
@@ -859,5 +858,6 @@
   "Restart now": "Riavvia ora",
   "Later": "Più tardi",
   "Could not restart GrabLine. Please quit and open it again.": "Impossibile riavviare GrabLine. Chiudi e aprilo di nuovo.",
-  "Graphs: last 60 seconds": "Grafici: ultimi 60 secondi"
+  "Graphs: last 60 seconds": "Grafici: ultimi 60 secondi",
+  "Starting…": "Avvio…"
 }

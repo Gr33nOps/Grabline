@@ -696,7 +696,6 @@
   "End:": "النهاية:",
   "Extract": "استخراج",
   "Fetch first && last pieces early (faster preview)": "جلب القطع الأولى والأخيرة مبكرًا (معاينة أسرع)",
-  "Fetching metadata…": "جارٍ جلب البيانات الوصفية…",
   "File…": "ملف…",
   "Filter by text…": "تصفية حسب النص…",
   "Filters": "عوامل التصفية",
@@ -859,5 +858,6 @@
   "Restart now": "أعد التشغيل الآن",
   "Later": "لاحقًا",
   "Could not restart GrabLine. Please quit and open it again.": "تعذّر إعادة تشغيل GrabLine. أغلقه وافتحه مرة أخرى.",
-  "Graphs: last 60 seconds": "الرسوم البيانية: آخر 60 ثانية"
+  "Graphs: last 60 seconds": "الرسوم البيانية: آخر 60 ثانية",
+  "Starting…": "جارٍ البدء…"
 }

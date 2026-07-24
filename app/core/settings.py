@@ -12,6 +12,10 @@ from app.db.database import Database
 #: Browsers yt-dlp can read a cookie store from (F0.8).
 SESSION_BROWSERS = ("chrome", "firefox", "edge", "brave", "chromium", "opera", "safari")
 
+#: Parallel HTTP connections per download (settings + per-job pin clamps).
+DEFAULT_CONNECTIONS = 8
+MAX_CONNECTIONS = 32
+
 _AFTER_QUEUE_ACTIONS = ("nothing", "quit", "sleep", "shutdown", "hibernate", "lock")
 
 #: Records of things already done to this machine, not preferences - see reset().
@@ -152,11 +156,11 @@ class Settings:
 
     @property
     def connections(self) -> int:
-        return max(1, min(128, self._get_int("connections", 8)))
+        return max(1, min(MAX_CONNECTIONS, self._get_int("connections", DEFAULT_CONNECTIONS)))
 
     @connections.setter
     def connections(self, value: int) -> None:
-        self._db.set_setting("connections", str(value))
+        self._db.set_setting("connections", str(max(1, min(MAX_CONNECTIONS, int(value)))))
 
     @property
     def speed_limit_kbps(self) -> int:

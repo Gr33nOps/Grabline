@@ -377,6 +377,11 @@ def main() -> int:
     # download used to feel slow.
     def _warm_up() -> None:
         try:
+            # First httpx/yt-dlp client otherwise pays ~1.5s for the IPv6
+            # black-hole check on the critical path of the first download.
+            from app.core import net
+
+            net.ipv6_broken()
             import yt_dlp  # noqa: F401
             from yt_dlp.extractor import gen_extractor_classes
 

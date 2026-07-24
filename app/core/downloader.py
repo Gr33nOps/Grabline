@@ -225,8 +225,20 @@ class SegmentedDownload:
 
     def _prepare(self) -> None:
         job = self.job
-        result = probe(self._client, job.url)
         segments = self.db.segments_for(job.id)
+        # Resolve already probed this URL seconds ago. Reusing that result on a
+        # fresh job skips a second DNS+TLS+Range round-trip (often the whole
+        # multi-second "nothing happening" gap before workers start). Resume
+        # always re-probes so ETag / size changes still force a restart.
+        if segments:
+            result = probe(self._client, job.url)
+        else:
+            cached = self._probe_from_job()
+            if cached is not None:
+                log.debug("job %s: reusing resolve-time probe", job.id)
+                result = cached
+            else:
+                result = probe(self._client, job.url)
         part = job.part_path
         if segments and self._must_restart(result, segments, part):
             log.info("job %s: remote file changed or part missing; restarting", job.id)
@@ -250,6 +262,21 @@ class SegmentedDownload:
             segments = self.db.replace_segments(job.id, spans)
         self._segments = segments
         self._preallocate(part)
+
+    def _probe_from_job(self) -> ProbeResult | None:
+        """Rebuild a ProbeResult from fields written at add/resolve time."""
+        job = self.job
+        if job.final_url is None:
+            return None
+        return ProbeResult(
+            final_url=job.final_url,
+            resumable=job.resumable,
+            total_size=job.total_size,
+            etag=job.etag,
+            last_modified=job.last_modified,
+            filename=None,
+            content_type=None,
+        )
 
     def _must_restart(self, result: ProbeResult, segments: list[Segment], part: Path) -> bool:
         job = self.job
@@ -285,7 +312,12 @@ class SegmentedDownload:
             with open(part, "r+b") as handle:
                 handle.seek(0, os.SEEK_END)
                 if handle.tell() != total:
-                    handle.truncate(total)
+                    # Prefer a sparse allocate when the OS supports it so a
+                    # multi-GB download does not spend seconds zero-filling.
+                    try:
+                        os.posix_fallocate(handle.fileno(), 0, total)
+                    except (AttributeError, OSError):
+                        handle.truncate(total)
 
     # ------------------------------------------------------------ workers
 

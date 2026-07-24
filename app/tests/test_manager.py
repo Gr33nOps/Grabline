@@ -414,7 +414,7 @@ def test_pinned_connections_bypass_the_share_split(db: Database, dest: Path):
 
         manager.set_job_connections(job.id, 500)  # clamped
         fresh = db.get_job(job.id)
-        assert fresh is not None and fresh.options["connections"] == 128
+        assert fresh is not None and fresh.options["connections"] == 32
         manager.set_job_connections(job.id, 0)  # back to automatic
         fresh = db.get_job(job.id)
         assert fresh is not None and "connections" not in fresh.options

@@ -25,7 +25,7 @@ Parallel connections, resume, torrents, cloud links, and a browser quality picke
 <br />
 
 Paste a URL, drop one on the window, or click the GrabLine button in your browser.
-Files run over many connections (up to 128). Videos and audio open a quality panel (4K to 144p, MP3, M4A or FLAC, subtitles, trim) on 1000+ sites via yt dlp. Magnets, torrent files, SFTP, FTP, S3, WebDAV, and public Drive or Dropbox links open in the same app.
+Files run over many connections (up to 32). Videos and audio open a quality panel (4K to 144p, MP3, M4A or FLAC, subtitles, trim) on 1000+ sites via yt dlp. Magnets, torrent files, SFTP, FTP, S3, WebDAV, and public Drive or Dropbox links open in the same app.
 
 No ads. No paid tier. No usage telemetry to us. AGPL 3.0.
 
@@ -46,7 +46,7 @@ No ads. No paid tier. No usage telemetry to us. AGPL 3.0.
 
 ## What you get
 
-* **Accelerator:** up to 128 connections per file, dynamic segmentation, HTTP/2, resume that survives a hard kill, mirror failover.
+* **Accelerator:** up to 32 connections per file, dynamic segmentation, HTTP/2, resume that survives a hard kill, mirror failover.
 * **Browser button:** hover media or right click links; handoff over Native Messaging (no open ports).
 * **Video and audio:** yt dlp in process: quality picks, playlists, SponsorBlock, chapters, clip trim.
 * **Torrents:** libtorrent (same engine family as qBittorrent): magnets, DHT, sequential streaming, seed ratios, RSS.

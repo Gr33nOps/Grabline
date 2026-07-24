@@ -1408,6 +1408,35 @@ def test_detail_drawer_populates_real_fields(db: Database, tmp_path: Path):
         # Activity was folded into Overview; footer is the short action strip.
         assert set(drawer._act_btns) == {"open", "folder", "rename", "remove"}
         assert len(drawer._tabs) == 3
+        from app.ui.components import IconButton
+
+        assert isinstance(drawer._security_btn, IconButton)
+    finally:
+        manager.shutdown()
+
+
+def test_detail_drawer_connection_bars_for_segmented_download(db: Database, tmp_path: Path):
+    from app.core.models import JobStatus
+    from app.ui.components import IconButton
+
+    _qapp()
+    settings = Settings(db)
+    manager = DownloadManager(db, settings=settings, max_concurrent=0)
+    try:
+        job = db.create_job("https://cdn.example/file.bin", str(tmp_path), "file.bin")
+        db.update_job_total(job.id, 8_000)
+        segments = db.replace_segments(job.id, [(0, 3_999), (4_000, 7_999)])
+        db.update_segment_progress({segments[0].id: 4_000, segments[1].id: 1_000})
+        db.set_job_status(job.id, JobStatus.DOWNLOADING)
+        view = next(v for v in manager.snapshot() if v.id == job.id)
+
+        drawer = _drawer(manager)
+        drawer.show_view(view, 800_000.0, [])
+
+        assert drawer._conn_bars.isVisible()
+        visible = [row for row, _label, _bar in drawer._conn_bars._rows if row.isVisible()]
+        assert len(visible) == 2
+        assert isinstance(drawer._security_btn, IconButton)
     finally:
         manager.shutdown()
 

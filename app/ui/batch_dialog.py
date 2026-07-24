@@ -96,7 +96,7 @@ class BatchImportThread(QThread):
                 url, None, probe.content_type if probe is not None else None
             )
         )
-        self._manager.add_url(url, filename=filename)
+        self._manager.add_url(url, filename=filename, probe=probe)
         return None
 
 

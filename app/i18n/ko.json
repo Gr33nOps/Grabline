@@ -696,7 +696,6 @@
   "End:": "끝:",
   "Extract": "압축 해제",
   "Fetch first && last pieces early (faster preview)": "처음과 마지막 조각을 먼저 가져오기(빠른 미리보기)",
-  "Fetching metadata…": "메타데이터 가져오는 중…",
   "File…": "파일…",
   "Filter by text…": "텍스트로 필터…",
   "Filters": "필터",
@@ -859,5 +858,6 @@
   "Restart now": "지금 다시 시작",
   "Later": "나중에",
   "Could not restart GrabLine. Please quit and open it again.": "GrabLine을 다시 시작할 수 없습니다. 종료한 뒤 다시 열어 주세요.",
-  "Graphs: last 60 seconds": "그래프: 최근 60초"
+  "Graphs: last 60 seconds": "그래프: 최근 60초",
+  "Starting…": "시작 중…"
 }
